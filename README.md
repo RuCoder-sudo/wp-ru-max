@@ -6,9 +6,9 @@
   <img src="assets/banneruss.png" alt="WP Ru-max — отправка постов и уведомлений в MAX">
 </p>
 
-## 🇷🇺 WP Ru-max — интеграция WordPress с мессенджером MAX
+## Интеграция WordPress с мессенджером MAX
 
-**WP Ru-max** — это полнофункциональный плагин для WordPress, который подключает ваш сайт к российскому мессенджеру **MAX (max.ru)**. Автоматическая публикация записей, личные уведомления с любых форм и красивый чат-виджет.
+**WP Ru-max** Плагин для WordPress, который подключает ваш сайт к российскому мессенджеру **MAX (max.ru)**. Автоматическая публикация записей, личные уведомления с любых форм и красивый чат-виджет.
 
 ---
 
@@ -110,7 +110,7 @@ Sergey Soloshenko (RuCoder)
 📲 Telegram: @RussCoder
 🌐 https://рукодер.рф
 
-🇺🇸 WP Ru-max — WordPress Integration with MAX Messenger
+WordPress Integration with MAX Messenger
 WP Ru-max is a complete WordPress plugin that connects your site to the Russian messenger MAX (max.ru). Auto-publish posts, receive personal notifications from any forms, and add a chat widget.
 
 🚀 Features
