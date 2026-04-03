@@ -3,7 +3,7 @@
 [Русская версия](#-wp-ru-max--интеграция-wordpress-с-мессенджером-max) | [English version](#-wp-ru-max--wordpress-integration-with-max-messenger)
 
 <p align="center">
-  <img src="assets/banner.png" alt="WP Ru-max — отправка постов и уведомлений в MAX">
+  <img src="assets/banneruss.png" alt="WP Ru-max — отправка постов и уведомлений в MAX">
 </p>
 
 ## 🇷🇺 WP Ru-max — интеграция WordPress с мессенджером MAX
