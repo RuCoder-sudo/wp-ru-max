@@ -3,11 +3,13 @@
  * Система лицензирования WP Ru-max
  *
  * Принцип работы:
- * 1. Владелец генерирует ключ (generate-key.php) → SHA256-хэш добавляется в license-keys.json на GitHub
- * 2. Пользователь вводит ключ в плагине
- * 3. Плагин вычисляет SHA256(ключ) и сравнивает с файлом на GitHub
- * 4. При совпадении — плагин активируется навсегда (сохраняется локально)
- * 5. Брутфорс защищён: 5 попыток в час, после — блокировка на 60 минут
+ * 1. На сайте рукодер.рф установлен плагин WP Ru-max Key Manager
+ * 2. Владелец создаёт ключ в разделе «Ru-max Ключи» в своей админке
+ * 3. Покупатель вводит ключ во вкладке «Активация»
+ * 4. Плагин отправляет ключ на рукодер.рф для проверки
+ * 5. При успехе — активация сохраняется навсегда в БД WordPress
+ * 6. Повторная онлайн-проверка происходит раз в 7 дней
+ * 7. Брутфорс защищён: 5 попыток в час, потом блокировка
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -18,16 +20,20 @@ class WP_Ru_Max_License {
 
     private static $instance = null;
 
-    const OPTION_KEY         = 'wp_ru_max_license';
-    const RATE_LIMIT_KEY     = 'wp_ru_max_license_attempts';
-    const MAX_ATTEMPTS       = 5;
-    const BLOCK_MINUTES      = 60;
+    const OPTION_KEY      = 'wp_ru_max_license';
+    const RATE_LIMIT_KEY  = 'wp_ru_max_license_attempts';
+    const MAX_ATTEMPTS    = 5;
+    const BLOCK_MINUTES   = 60;
+    const RECHECK_DAYS    = 7;
 
-    // URL файла с SHA256-хэшами ключей на GitHub (raw)
-    const GITHUB_KEYS_URL    = 'https://raw.githubusercontent.com/RuCoder-sudo/wp-ru-max/main/license-keys.json';
+    // URL API проверки ключей (рукодер.рф в Punycode для надёжности)
+    const VERIFY_URL      = 'https://xn--d1acnqieq.xn--p1ai/wp-json/wp-ru-max-km/v1/verify';
+
+    // Секрет API — должен совпадать с WPRM_KM_DEFAULT_SECRET в Key Manager
+    const API_SECRET      = 'd0563fa8f8fce6879cdf697eed0460a82fa7977897fd364ec911c93ed8bb25b3';
 
     // Email владельца для получения запросов на ключ
-    const OWNER_EMAIL        = 'rucoder.rf@yandex.ru';
+    const OWNER_EMAIL     = 'rucoder.rf@yandex.ru';
 
     public static function instance() {
         if ( null === self::$instance ) {
@@ -67,7 +73,7 @@ class WP_Ru_Max_License {
         }
         $screen = get_current_screen();
         if ( $screen && strpos( $screen->id, 'wp-ru-max' ) !== false ) {
-            return; // Уже на странице плагина — не показываем
+            return;
         }
         $url = admin_url( 'admin.php?page=wp-ru-max&tab=activation' );
         ?>
@@ -96,13 +102,13 @@ class WP_Ru_Max_License {
             wp_send_json_error( 'Введите лицензионный ключ.' );
         }
 
-        // Проверка брутфорс-защиты
+        // Брутфорс-защита
         $rate_check = $this->check_rate_limit();
         if ( is_wp_error( $rate_check ) ) {
             wp_send_json_error( $rate_check->get_error_message() );
         }
 
-        // Проверка ключа через GitHub
+        // Проверка ключа через рукодер.рф
         $result = $this->verify_key( $key );
 
         if ( is_wp_error( $result ) ) {
@@ -110,16 +116,16 @@ class WP_Ru_Max_License {
             wp_send_json_error( $result->get_error_message() );
         }
 
-        // Ключ верный — сохраняем активацию
+        // Ключ верный — сохраняем
         $domain = parse_url( get_site_url(), PHP_URL_HOST );
         update_option( self::OPTION_KEY, array(
-            'status'       => 'active',
-            'key_hash'     => hash( 'sha256', strtolower( $key ) ),
-            'domain'       => $domain,
-            'activated_at' => current_time( 'mysql' ),
+            'status'        => 'active',
+            'key'           => $key,
+            'domain'        => $domain,
+            'activated_at'  => current_time( 'mysql' ),
+            'last_verified' => current_time( 'mysql' ),
         ) );
 
-        // Сбрасываем счётчик попыток
         delete_transient( self::RATE_LIMIT_KEY . '_' . $this->get_site_id() );
 
         WP_Ru_Max_Logger::log( 'license', 'success', 'Плагин успешно активирован на домене ' . $domain );
@@ -130,7 +136,7 @@ class WP_Ru_Max_License {
     }
 
     /**
-     * AJAX: запрос лицензионного ключа (форма с именем и почтой)
+     * AJAX: запрос лицензионного ключа (форма)
      */
     public function ajax_request_license() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
@@ -158,19 +164,17 @@ class WP_Ru_Max_License {
 
         $domain   = parse_url( get_site_url(), PHP_URL_HOST );
         $site_url = get_site_url();
-        $mailing_text = $mailing ? 'Да' : 'Нет';
 
         $subject = 'Запрос лицензии WP Ru-max — ' . $name;
-
         $body  = "=== НОВЫЙ ЗАПРОС ЛИЦЕНЗИИ WP Ru-max ===\n\n";
         $body .= "Имя:   " . $name . "\n";
         $body .= "Email: " . $email . "\n";
         $body .= "Сайт:  " . $site_url . "\n";
         $body .= "Домен: " . $domain . "\n\n";
         $body .= "Согласие на обработку данных: Да\n";
-        $body .= "Согласие на рассылку: " . $mailing_text . "\n";
+        $body .= "Согласие на рассылку: " . ( $mailing ? 'Да' : 'Нет' ) . "\n";
         $body .= "Дата запроса: " . current_time( 'd.m.Y H:i:s' ) . "\n\n";
-        $body .= "=== Для выдачи ключа перейдите в панель управления License Manager ===\n";
+        $body .= "=== Выдайте ключ на https://рукодер.рф/wp-admin/admin.php?page=wp-ru-max-keys ===\n";
 
         $headers = array(
             'Content-Type: text/plain; charset=UTF-8',
@@ -180,14 +184,14 @@ class WP_Ru_Max_License {
         $sent = wp_mail( self::OWNER_EMAIL, $subject, $body, $headers );
 
         if ( $sent ) {
-            wp_send_json_success( 'Запрос отправлен! Ожидайте — владелец пришлёт ключ на ваш email ' . $email . ' в ближайшее время.' );
+            wp_send_json_success( 'Запрос отправлен! Владелец пришлёт ключ на ' . $email . ' в ближайшее время.' );
         } else {
-            wp_send_json_error( 'Не удалось отправить запрос. Попробуйте написать напрямую: ' . self::OWNER_EMAIL );
+            wp_send_json_error( 'Не удалось отправить запрос. Напишите напрямую: ' . self::OWNER_EMAIL );
         }
     }
 
     /**
-     * AJAX: сброс лицензии (только для отладки, доступен только администратору)
+     * AJAX: сброс лицензии (только admin)
      */
     public function ajax_deactivate_license() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
@@ -199,46 +203,73 @@ class WP_Ru_Max_License {
     }
 
     /**
-     * Проверяет ключ по SHA256-хэшам на GitHub
+     * Проверяет ключ через REST API рукодер.рф
      */
     private function verify_key( $key ) {
-        $hash = hash( 'sha256', strtolower( $key ) );
+        $response = wp_remote_post( self::VERIFY_URL, array(
+            'timeout'   => 15,
+            'sslverify' => true,
+            'headers'   => array(
+                'Content-Type' => 'application/json',
+                'X-WPRM-Secret' => self::API_SECRET,
+            ),
+            'body' => json_encode( array( 'key' => $key ) ),
+        ) );
 
-        // Загружаем список хэшей с GitHub (с кэшем на 10 минут)
-        $cache_key  = 'wp_ru_max_gh_keys';
-        $keys_json  = get_transient( $cache_key );
-
-        if ( false === $keys_json ) {
-            $response = wp_remote_get( self::GITHUB_KEYS_URL, array(
-                'timeout'   => 10,
-                'sslverify' => true,
-                'headers'   => array( 'Cache-Control' => 'no-cache' ),
-            ) );
-
-            if ( is_wp_error( $response ) ) {
-                return new WP_Error( 'network_error', 'Не удалось связаться с сервером проверки. Проверьте интернет-соединение.' );
-            }
-
-            $code = wp_remote_retrieve_response_code( $response );
-            if ( $code !== 200 ) {
-                return new WP_Error( 'server_error', 'Сервер проверки недоступен (код ' . $code . '). Попробуйте позже.' );
-            }
-
-            $keys_json = wp_remote_retrieve_body( $response );
-            set_transient( $cache_key, $keys_json, 10 * MINUTE_IN_SECONDS );
+        if ( is_wp_error( $response ) ) {
+            return new WP_Error(
+                'network_error',
+                'Не удалось связаться с сервером активации. Проверьте интернет-соединение и попробуйте ещё раз.'
+            );
         }
 
-        $data = json_decode( $keys_json, true );
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
 
-        if ( ! is_array( $data ) || ! isset( $data['keys'] ) || ! is_array( $data['keys'] ) ) {
-            return new WP_Error( 'invalid_data', 'Ошибка чтения данных лицензий. Обратитесь к разработчику.' );
+        if ( $code === 429 ) {
+            return new WP_Error( 'rate_limited', 'Сервер временно заблокировал запросы. Попробуйте через 1 час.' );
         }
 
-        if ( in_array( $hash, $data['keys'], true ) ) {
+        if ( $code === 403 ) {
+            return new WP_Error( 'auth_error', 'Ошибка авторизации. Обратитесь к разработчику.' );
+        }
+
+        if ( ! empty( $body['valid'] ) ) {
             return true;
         }
 
-        return new WP_Error( 'invalid_key', 'Неверный лицензионный ключ. Проверьте правильность ввода или запросите новый ключ.' );
+        return new WP_Error( 'invalid_key', 'Неверный лицензионный ключ. Проверьте правильность ввода.' );
+    }
+
+    /**
+     * Периодическая перепроверка активного ключа (раз в 7 дней)
+     * Вызывайте при желании из admin_init
+     */
+    public static function recheck_if_needed() {
+        if ( ! self::is_active() ) {
+            return;
+        }
+        $data = self::get_data();
+        $last = strtotime( $data['last_verified'] ?? '2000-01-01' );
+        if ( ( time() - $last ) < ( self::RECHECK_DAYS * DAY_IN_SECONDS ) ) {
+            return;
+        }
+
+        $instance = self::instance();
+        $result   = $instance->verify_key( $data['key'] ?? '' );
+
+        if ( is_wp_error( $result ) ) {
+            // Ключ отозван или сервер недоступен — мягкая блокировка
+            // (не сбрасываем сразу, даём 1 попытку)
+            $data['recheck_failed'] = ( $data['recheck_failed'] ?? 0 ) + 1;
+            if ( $data['recheck_failed'] >= 2 ) {
+                $data['status'] = 'suspended';
+            }
+        } else {
+            $data['recheck_failed'] = 0;
+            $data['last_verified']  = current_time( 'mysql' );
+        }
+        update_option( self::OPTION_KEY, $data );
     }
 
     /**
@@ -248,17 +279,12 @@ class WP_Ru_Max_License {
         $transient_key = self::RATE_LIMIT_KEY . '_' . $this->get_site_id();
         $attempts      = get_transient( $transient_key );
 
-        if ( $attempts === false ) {
-            return true; // Нет данных — попытки ещё не было
-        }
-
-        if ( (int) $attempts >= self::MAX_ATTEMPTS ) {
+        if ( $attempts !== false && (int) $attempts >= self::MAX_ATTEMPTS ) {
             return new WP_Error(
                 'rate_limit',
-                'Слишком много неверных попыток. Повторите через ' . self::BLOCK_MINUTES . ' минут или запросите ключ у разработчика.'
+                'Слишком много неверных попыток. Повторите через ' . self::BLOCK_MINUTES . ' минут.'
             );
         }
-
         return true;
     }
 
@@ -268,7 +294,6 @@ class WP_Ru_Max_License {
     private function increment_attempts() {
         $transient_key = self::RATE_LIMIT_KEY . '_' . $this->get_site_id();
         $attempts      = get_transient( $transient_key );
-
         if ( $attempts === false ) {
             set_transient( $transient_key, 1, self::BLOCK_MINUTES * MINUTE_IN_SECONDS );
         } else {

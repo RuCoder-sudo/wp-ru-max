@@ -334,7 +334,7 @@ class WP_Ru_Max_Admin {
                     'instructions' => 'Инструкция',
                     'chat'         => 'Чат',
                     'history'      => 'История',
-                    'activation'   => WP_Ru_Max_License::is_active() ? '✔ Активирован' : '🔑 Активация',
+                    'activation'   => WP_Ru_Max_License::is_active() ? 'Активирован' : 'Активация',
                 );
                 foreach ( $tabs as $tab_key => $tab_label ) {
                     $class = ( $active_tab === $tab_key ) ? 'nav-tab nav-tab-active' : 'nav-tab';
@@ -392,7 +392,7 @@ class WP_Ru_Max_Admin {
                 <span class="dashicons dashicons-lock"></span>
                 <strong>Плагин не активирован.</strong>
                 Поле «Токен бота» заблокировано. Перейдите на вкладку
-                <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=activation' ) ); ?>">🔑 Активация</a>
+                <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=activation' ) ); ?>">Активация</a>
                 и введите лицензионный ключ для разблокировки.
             </div>
             <?php endif; ?>
@@ -409,8 +409,8 @@ class WP_Ru_Max_Admin {
                         <p class="description">Токен находится в разделе «Интеграция» в личном кабинете MAX для партнёров.</p>
                         <?php else : ?>
                         <div class="wp-ru-max-token-row">
-                            <input type="password" id="bot_token" name="bot_token" value="" class="regular-text wp-ru-max-locked-field" placeholder="🔒 Заблокировано — активируйте плагин" autocomplete="off" disabled readonly />
-                            <button type="button" class="button" disabled>🔒 Заблокировано</button>
+                            <input type="password" id="bot_token" name="bot_token" value="" class="regular-text wp-ru-max-locked-field" placeholder="Заблокировано — активируйте плагин" autocomplete="off" disabled readonly />
+                            <button type="button" class="button" disabled>Заблокировано</button>
                         </div>
                         <p class="description" style="color:#d63638;">
                             Для ввода токена необходимо <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=activation' ) ); ?>">активировать плагин</a>.
@@ -1085,7 +1085,7 @@ class WP_Ru_Max_Admin {
         <div class="wp-ru-max-card">
             <?php if ( $is_licensed ) : ?>
                 <div class="wp-ru-max-activation-success">
-                    <span class="wp-ru-max-success-icon">✔</span>
+                    <span class="wp-ru-max-success-icon">&#10003;</span>
                     <h2>Плагин активирован</h2>
                     <p>Все функции WP Ru-max доступны без ограничений.</p>
                     <table class="form-table" style="max-width:500px;">
@@ -1106,7 +1106,7 @@ class WP_Ru_Max_Admin {
 
             <?php else : ?>
 
-                <h2>🔑 Активация плагина</h2>
+                <h2>Активация плагина</h2>
                 <p>Для использования всех функций WP Ru-max введите лицензионный ключ. Если у вас нет ключа — запросите его ниже.</p>
 
                 <div class="wp-ru-max-activation-block">
@@ -1114,7 +1114,7 @@ class WP_Ru_Max_Admin {
 
                     <?php if ( $attempts <= 0 ) : ?>
                         <div class="wp-ru-max-notice notice-error" style="display:block;padding:12px 16px;border-left:4px solid #d63638;background:#fff;margin:12px 0;">
-                            ⛔ Слишком много неверных попыток. Повторить можно через <?php echo WP_Ru_Max_License::BLOCK_MINUTES; ?> минут.
+                            Слишком много неверных попыток. Повторить можно через <?php echo WP_Ru_Max_License::BLOCK_MINUTES; ?> минут.
                         </div>
                     <?php else : ?>
 
@@ -1269,7 +1269,7 @@ class WP_Ru_Max_Admin {
                     .css({ display:'block', padding:'12px 16px', background:'#fff',
                            borderLeft: success ? '4px solid #00a32a' : '4px solid #d63638',
                            marginTop:'12px' })
-                    .html( ( success ? '✅ ' : '❌ ' ) + msg );
+                    .html( msg );
             }
         })(jQuery);
         </script>
