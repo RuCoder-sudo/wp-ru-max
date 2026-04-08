@@ -26,6 +26,7 @@ class WP_Ru_Max {
 
     public function init() {
         WP_Ru_Max_License::instance();
+        WP_Ru_Max_License::recheck_if_needed();
         WP_Ru_Max_Admin::instance();
         WP_Ru_Max_Post_Sender::instance();
         WP_Ru_Max_Notifications::instance();
