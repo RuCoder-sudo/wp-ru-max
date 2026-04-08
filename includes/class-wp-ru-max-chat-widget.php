@@ -61,7 +61,7 @@ class WP_Ru_Max_Chat_Widget {
 
         $size     = isset( $settings['chat_widget_size'] )     ? $settings['chat_widget_size']     : 'medium';
         $url      = isset( $settings['chat_widget_url'] )      ? trim( $settings['chat_widget_url'] ) : '';
-        $message  = isset( $settings['chat_widget_message'] )  ? $settings['chat_widget_message']  : 'Здравствуйте! Мы всегда на связи. Кликните, чтобы нам написать!';
+        $message  = isset( $settings['chat_widget_message'] )  ? $settings['chat_widget_message']  : 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!';
         $position = isset( $settings['chat_widget_position'] ) ? $settings['chat_widget_position'] : 'right';
 
         $cfg = self::get_size_config( $size );
@@ -76,7 +76,7 @@ class WP_Ru_Max_Chat_Widget {
         $icon_url    = esc_url( WP_RU_MAX_PLUGIN_URL . 'assets/' . $img );
         ?>
 <div id="wp-ru-max-widget" style="position:fixed;bottom:20px;<?php echo esc_attr( $side_css ); ?>z-index:99999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-    <div id="wp-ru-max-balloon" style="position:absolute;bottom:<?php echo ( $px + 14 ); ?>px;<?php echo esc_attr( $balloon_css ); ?>background:#fff;border:1px solid #e0e0e0;border-radius:14px;padding:12px 16px;max-width:265px;min-width:150px;box-shadow:0 4px 24px rgba(0,0,0,0.15);display:none;word-break:break-word;">
+    <div id="wp-ru-max-balloon" style="position:absolute;bottom:<?php echo ( $px + 14 ); ?>px;<?php echo esc_attr( $balloon_css ); ?>background:#fff;border:1px solid #e0e0e0;border-radius:14px;padding:12px 16px;max-width:265px;min-width:265px;box-shadow:0 4px 24px rgba(0,0,0,0.15);display:none;word-break:break-word;">
         <div id="wp-ru-max-typing" style="color:#222;font-size:14px;line-height:1.5;"></div>
         <div style="position:absolute;bottom:-8px;<?php echo esc_attr( $arrow_css ); ?>width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:8px solid #fff;"></div>
     </div>
