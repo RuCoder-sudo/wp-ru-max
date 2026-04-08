@@ -76,7 +76,7 @@ class WP_Ru_Max {
                 'chat_widget_enabled'    => false,
                 'chat_widget_size'       => 'medium',
                 'chat_widget_url'        => '',
-                'chat_widget_message'    => 'Здравствуйте! Мы всегда на связи. Кликните, чтобы нам написать!',
+                'chat_widget_message'    => 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!',
                 'chat_widget_position'   => 'right',
             ) );
         }
