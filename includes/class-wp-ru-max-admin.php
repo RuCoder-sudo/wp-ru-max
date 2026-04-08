@@ -933,7 +933,7 @@ class WP_Ru_Max_Admin {
         $enabled  = ! empty( $settings['chat_widget_enabled'] );
         $size     = $settings['chat_widget_size'] ?? 'medium';
         $url      = $settings['chat_widget_url'] ?? '';
-        $message  = $settings['chat_widget_message'] ?? 'Здравствуйте! Мы всегда на связи. Кликните, чтобы нам написать!';
+        $message  = $settings['chat_widget_message'] ?? 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!';
         $position = $settings['chat_widget_position'] ?? 'right';
         ?>
         <div class="wp-ru-max-card">
