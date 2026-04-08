@@ -4,11 +4,11 @@
  * Plugin URI: https://github.com/RuCoder-sudo/wp-ru-max
  * Description: Интегрируйте свой сайт WordPress с Max - российский мессенджер с полным контролем.
  * Version: 1.0.10
- * Author: WP Ru-max
- * Author URI: https://рукодер.рф/wp-admin/
+ * Author: RuCoder
+ * Author URI: https://рукодер.рф/
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: WP Ru-max
+ * Text Domain: рукодер.рф
  * Domain Path: /languages
  * Requires at least: 5.8
  * Requires PHP: 7.4
