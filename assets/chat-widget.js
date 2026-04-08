@@ -2,7 +2,7 @@
 (function () {
     'use strict';
 
-    var message = typeof window.wpRuMaxMessage !== 'undefined' ? window.wpRuMaxMessage : 'Здравствуйте! Мы всегда на связи. Кликните, чтобы нам написать!';
+    var message = typeof window.wpRuMaxMessage !== 'undefined' ? window.wpRuMaxMessage : 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!';
     var typed = '';
     var charIndex = 0;
     var typeDelay = 45;
