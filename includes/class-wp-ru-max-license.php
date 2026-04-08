@@ -24,7 +24,7 @@ class WP_Ru_Max_License {
     const RATE_LIMIT_KEY  = 'wp_ru_max_license_attempts';
     const MAX_ATTEMPTS    = 5;
     const BLOCK_MINUTES   = 60;
-    const RECHECK_DAYS    = 7;
+    const RECHECK_DAYS    = 1;
 
     // URL API проверки ключей (рукодер.рф в Punycode для надёжности)
     const VERIFY_URL      = 'https://xn--d1acnqieq.xn--p1ai/wp-json/wp-ru-max-km/v1/verify';
@@ -259,11 +259,16 @@ class WP_Ru_Max_License {
         $result   = $instance->verify_key( $data['key'] ?? '' );
 
         if ( is_wp_error( $result ) ) {
-            // Ключ отозван или сервер недоступен — мягкая блокировка
-            // (не сбрасываем сразу, даём 1 попытку)
-            $data['recheck_failed'] = ( $data['recheck_failed'] ?? 0 ) + 1;
-            if ( $data['recheck_failed'] >= 2 ) {
+            $error_code = $result->get_error_code();
+            if ( $error_code === 'invalid_key' ) {
+                // Ключ отозван или недействителен — немедленная блокировка
                 $data['status'] = 'suspended';
+            } else {
+                // Сетевая ошибка — мягкая блокировка после 2 неудачных попыток
+                $data['recheck_failed'] = ( $data['recheck_failed'] ?? 0 ) + 1;
+                if ( $data['recheck_failed'] >= 2 ) {
+                    $data['status'] = 'suspended';
+                }
             }
         } else {
             $data['recheck_failed'] = 0;
