@@ -33,12 +33,15 @@ require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-chat-widget.php';
 require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-logger.php';
 require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-license.php';
 require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-admin.php';
+require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-updater.php';
 
 function wp_ru_max() {
     return WP_Ru_Max::instance();
 }
 
 wp_ru_max();
+
+new WP_Ru_Max_Updater( WP_RU_MAX_PLUGIN_FILE, WP_RU_MAX_VERSION );
 
 register_activation_hook( __FILE__, array( 'WP_Ru_Max', 'activate' ) );
 register_deactivation_hook( __FILE__, array( 'WP_Ru_Max', 'deactivate' ) );
