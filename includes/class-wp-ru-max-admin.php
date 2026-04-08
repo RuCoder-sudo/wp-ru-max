@@ -34,10 +34,17 @@ class WP_Ru_Max_Admin {
         $post_types = get_post_types( array( 'public' => true ) );
         foreach ( $post_types as $post_type ) {
             register_post_meta( $post_type, '_wp_ru_max_skip', array(
-                'show_in_rest'  => true,
-                'single'        => true,
-                'type'          => 'string',
-                'auth_callback' => function() { return current_user_can( 'edit_posts' ); },
+                'show_in_rest'      => array(
+                    'schema' => array(
+                        'type'    => 'string',
+                        'context' => array( 'view', 'edit' ),
+                    ),
+                ),
+                'single'            => true,
+                'type'              => 'string',
+                'default'           => '',
+                'sanitize_callback' => 'sanitize_text_field',
+                'auth_callback'     => function() { return current_user_can( 'edit_posts' ); },
             ) );
         }
     }
@@ -916,6 +923,7 @@ class WP_Ru_Max_Admin {
                 <li><a href="https://dev.max.ru" target="_blank" rel="noopener">Документация MAX API</a></li>
                 <li><a href="https://dev.max.ru/docs-api/methods/GET/me" target="_blank" rel="noopener">API метод GET /me</a></li>
                 <li><a href="https://docs.fstrk.io/knowledge_base/channels/max" target="_blank" rel="noopener">Инструкция Fasttrack по MAX</a></li>
+                <li><a href="https://рукодер.рф/" target="_blank" rel="noopener">Разработка сайтов под ключ</a></li>
             </ul>
         </div>
         <?php
