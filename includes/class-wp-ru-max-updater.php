@@ -143,7 +143,7 @@ class WP_Ru_Max_Updater {
     }
 
     /**
-     * 
+     * После установки — переименовать папку в правильное имя
      * (GitHub архив распаковывается в папку типа wp-ru-max-1.0.11)
      */
     public function after_install( $response, $hook_extra, $result ) {
