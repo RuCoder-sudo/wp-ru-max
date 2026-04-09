@@ -3,7 +3,7 @@
  * Plugin Name: WP Ru-max
  * Plugin URI: https://рукодер.рф/
  * Description: Интегрируйте свой сайт WordPress с Max - Российский мессенджер с полным контролем.
- * Version: 1.0.11
+ * Version: 1.0.14
  * Author: RuCoder
  * Author URI: https://рукодер.рф/
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'WP_RU_MAX_VERSION', '1.0.11' );
+define( 'WP_RU_MAX_VERSION', '1.0.14' );
 define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
 define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
