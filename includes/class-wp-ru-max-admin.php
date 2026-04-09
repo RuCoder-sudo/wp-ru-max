@@ -239,6 +239,62 @@ class WP_Ru_Max_Admin {
             }
         }
 
+        // Кнопки уведомлений (JSON)
+        if ( isset( $_POST['notify_buttons_json'] ) ) {
+            $raw = json_decode( wp_unslash( $_POST['notify_buttons_json'] ), true );
+            if ( is_array( $raw ) ) {
+                $buttons = array();
+                foreach ( $raw as $btn ) {
+                    $text = isset( $btn['text'] ) ? sanitize_text_field( $btn['text'] ) : '';
+                    $url  = isset( $btn['url'] )  ? sanitize_text_field( $btn['url'] )  : '';
+                    if ( $text && $url ) {
+                        $buttons[] = array( 'text' => $text, 'url' => $url );
+                    }
+                }
+                $settings['notify_buttons'] = $buttons;
+            } else {
+                $settings['notify_buttons'] = array();
+            }
+        }
+
+        // Кнопки публикаций (JSON)
+        if ( ! isset( $_POST['post_buttons_json'] ) && ! isset( $_POST['field'] ) && isset( $_POST['post_sender_enabled'] ) ) {
+            WP_Ru_Max_Logger::log( 'settings', 'warning',
+                'Сохранение «Отправки публикаций» — поле post_buttons_json НЕ получено. Проверьте JS.',
+                array( 'post_keys' => array_keys( $_POST ) )
+            );
+        }
+        if ( isset( $_POST['post_buttons_json'] ) ) {
+            $json_raw = wp_unslash( $_POST['post_buttons_json'] );
+            $raw      = json_decode( $json_raw, true );
+            if ( is_array( $raw ) ) {
+                $buttons = array();
+                foreach ( $raw as $btn ) {
+                    $text = isset( $btn['text'] ) ? sanitize_text_field( $btn['text'] ) : '';
+                    $url  = isset( $btn['url'] )  ? sanitize_text_field( $btn['url'] )  : '';
+                    if ( $text && $url ) {
+                        $buttons[] = array( 'text' => $text, 'url' => $url );
+                    }
+                }
+                $settings['post_buttons'] = $buttons;
+                WP_Ru_Max_Logger::log( 'settings', 'info',
+                    'Кнопки публикаций сохранены: ' . count( $buttons ) . ' шт.',
+                    array( 'buttons' => $buttons )
+                );
+            } else {
+                $settings['post_buttons'] = array();
+                WP_Ru_Max_Logger::log( 'settings', 'warning',
+                    'post_buttons_json получен, но не удалось распарсить JSON.',
+                    array( 'raw' => substr( $json_raw, 0, 300 ), 'json_error' => json_last_error_msg() )
+                );
+            }
+        }
+
+        // Шаблон сообщения публикации
+        if ( isset( $_POST['post_message_template'] ) ) {
+            $settings['post_message_template'] = sanitize_textarea_field( wp_unslash( $_POST['post_message_template'] ) );
+        }
+
         update_option( 'wp_ru_max_settings', $settings );
         WP_Ru_Max_Logger::log( 'settings', 'info', 'Настройки обновлены.' );
         wp_send_json_success( 'Настройки сохранены.' );
@@ -588,6 +644,57 @@ class WP_Ru_Max_Admin {
             </div>
 
             <div class="wp-ru-max-card">
+                <h3>Шаблон сообщения</h3>
+                <p>Настройте шаблон для публикаций, отправляемых в MAX. Если поле оставить пустым — используется стандартный формат.</p>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="post_message_template">Шаблон</label></th>
+                        <td>
+                            <textarea id="post_message_template" name="post_message_template" rows="8" class="large-text code"><?php echo esc_textarea( $settings['post_message_template'] ?? '' ); ?></textarea>
+                            <p class="description">
+                                Доступные переменные: <code>{title}</code> <code>{excerpt}</code> <code>{url}</code> <code>{author}</code> <code>{date}</code> <code>{status}</code> <code>{site_name}</code> <code>{post_type}</code><br>
+                                Поля записи: <code>{meta_FIELDNAME}</code> — стандартные мета-поля, <code>{acf_FIELDNAME}</code> — поля ACF.<br>
+                                Например: <code>&lt;b&gt;{title}&lt;/b&gt;\n{excerpt}\n\n&lt;a href="{url}"&gt;Читать&lt;/a&gt;</code>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="wp-ru-max-card">
+                <h3>Встроенные кнопки клавиатуры</h3>
+                <p>Здесь вы можете добавить свои собственные кнопки, которые будут отображаться под каждой публикацией в MAX.</p>
+                <p class="description"><strong>Примечание:</strong> Название кнопки должно быть уникальным и содержать не более 8 английских букв или символов подчеркивания.</p>
+
+                <div id="post_buttons_list" style="margin:12px 0;">
+                    <?php
+                    $post_buttons = isset( $settings['post_buttons'] ) ? (array) $settings['post_buttons'] : array();
+                    foreach ( $post_buttons as $btn ) :
+                        if ( empty( $btn['text'] ) && empty( $btn['url'] ) ) continue;
+                    ?>
+                    <div class="wp-ru-max-button-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+                        <input type="text" name="post_btn_text[]" value="<?php echo esc_attr( $btn['text'] ?? '' ); ?>" class="regular-text" placeholder="Название кнопки" style="max-width:160px;" />
+                        <input type="text" name="post_btn_url[]" value="<?php echo esc_attr( $btn['url'] ?? '' ); ?>" class="regular-text" placeholder="https://..." style="flex:1;" />
+                        <button type="button" class="button wp-ru-max-remove-btn">Удалить</button>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+                    <input type="text" id="new_post_btn_text" class="regular-text" placeholder="Название кнопки" style="max-width:160px;" />
+                    <input type="text" id="new_post_btn_url" class="regular-text" placeholder="https://..." style="flex:1;" />
+                    <button type="button" class="button" id="add_post_button">+ Добавить кнопку</button>
+                </div>
+
+                <p class="description">
+                    В поле URL вы можете указать абсолютный или динамический URL, используя теги настраиваемых полей, как в шаблоне сообщения.<br>
+                    Например: <code>https://domain.com</code>, <code>{url}</code>, <code>{home_url}</code><br>
+                    <strong>Примечание:</strong> если вы добавляете теги в качестве параметров URL-запроса, обязательно заключите их в <code>{encode:&lt;tag&gt;}</code>.<br>
+                    Например: <code>{home_url}?utm_source={encode:{title}}</code>
+                </p>
+            </div>
+
+            <div class="wp-ru-max-card">
                 <div class="wp-ru-max-actions">
                     <button type="button" class="button button-primary" id="save_post_sender">Сохранить</button>
                     <button type="button" class="button button-secondary" id="test_post_sender">Тестовое сообщение</button>
@@ -603,12 +710,20 @@ class WP_Ru_Max_Admin {
     }
 
     private function render_tab_notifications( $settings ) {
-        $enabled = ! empty( $settings['notifications_enabled'] );
-        $chat_ids = isset( $settings['notify_chat_ids'] ) ? (array) $settings['notify_chat_ids'] : array( '' );
+        $enabled  = ! empty( $settings['notifications_enabled'] );
+        $chat_ids = isset( $settings['notify_chat_ids'] ) ? array_filter( array_map( 'trim', (array) $settings['notify_chat_ids'] ) ) : array();
+        $chat_ids_display = ! empty( $chat_ids ) ? array_values( $chat_ids ) : array( '' );
         ?>
         <div class="wp-ru-max-card">
             <h2>Личные уведомления</h2>
             <p>Модуль будет следить за уведомлениями по электронной почте, отправленными с этого сайта, и доставлять их в чат/группу WP Ru-max.</p>
+
+            <?php if ( $enabled && empty( $chat_ids ) ) : ?>
+            <div style="background:#fff3cd;border-left:4px solid #ffc107;padding:12px 16px;margin:12px 0;border-radius:2px;">
+                <strong>Внимание:</strong> Уведомления включены, но не указан ни один ID чата/группы в поле «Отправлять в».
+                Добавьте ID чата и нажмите <strong>«Сохранить»</strong> — иначе письма будут перехвачены, но никуда не отправлены.
+            </div>
+            <?php endif; ?>
 
             <div class="wp-ru-max-toggle-row">
                 <label class="wp-ru-max-toggle">
@@ -634,7 +749,7 @@ class WP_Ru_Max_Admin {
                         <th scope="row">Отправлять в *</th>
                         <td>
                             <div id="notify_chat_ids_list">
-                                <?php foreach ( $chat_ids as $cid ) : ?>
+                                <?php foreach ( $chat_ids_display as $cid ) : ?>
                                 <div class="wp-ru-max-channel-row">
                                     <input type="text" name="notify_chat_ids[]" value="<?php echo esc_attr( $cid ); ?>" class="regular-text" placeholder="987654321 | My Personal ID" />
                                     <button type="button" class="button wp-ru-max-remove-channel">X</button>
@@ -685,6 +800,38 @@ class WP_Ru_Max_Admin {
                         </td>
                     </tr>
                 </table>
+            </div>
+
+            <div class="wp-ru-max-card">
+                <h3>Встроенные кнопки клавиатуры</h3>
+                <p>Здесь вы можете добавить свои собственные кнопки, которые будут отображаться под каждым уведомлением в MAX.</p>
+                <p class="description"><strong>Примечание:</strong> Название кнопки должно быть уникальным и содержать не более 8 английских букв или символов подчеркивания.</p>
+
+                <div id="notify_buttons_list" style="margin:12px 0;">
+                    <?php
+                    $notify_buttons = isset( $settings['notify_buttons'] ) ? (array) $settings['notify_buttons'] : array();
+                    foreach ( $notify_buttons as $btn ) :
+                        if ( empty( $btn['text'] ) && empty( $btn['url'] ) ) continue;
+                    ?>
+                    <div class="wp-ru-max-button-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+                        <input type="text" name="notify_btn_text[]" value="<?php echo esc_attr( $btn['text'] ?? '' ); ?>" class="regular-text" placeholder="Название кнопки" style="max-width:160px;" />
+                        <input type="text" name="notify_btn_url[]" value="<?php echo esc_attr( $btn['url'] ?? '' ); ?>" class="regular-text" placeholder="https://..." style="flex:1;" />
+                        <button type="button" class="button wp-ru-max-remove-btn">Удалить</button>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+                    <input type="text" id="new_notify_btn_text" class="regular-text" placeholder="Название кнопки" style="max-width:160px;" />
+                    <input type="text" id="new_notify_btn_url" class="regular-text" placeholder="https://..." style="flex:1;" />
+                    <button type="button" class="button" id="add_notify_button">+ Добавить кнопку</button>
+                </div>
+
+                <p class="description">
+                    В поле URL вы можете указать абсолютный URL.<br>
+                    Например: <code>https://domain.com</code><br>
+                    <strong>Примечание:</strong> если кнопка удалена из настроек, она исчезнет из новых уведомлений в MAX.
+                </p>
             </div>
 
             <div class="wp-ru-max-card">
