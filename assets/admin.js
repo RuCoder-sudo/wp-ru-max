@@ -65,6 +65,29 @@
         doAjax('wp_ru_max_save_settings', { field: 'post_sender_enabled', value: this.checked ? '1' : '0' }, function () {});
     });
 
+    /* Collect post buttons as JSON — also flushes any pending button from the input fields */
+    function collectPostButtons() {
+        var pendingText = $('#new_post_btn_text').val().trim();
+        var pendingUrl  = $('#new_post_btn_url').val().trim();
+        if (pendingText && pendingUrl) {
+            var row = '<div class="wp-ru-max-button-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">' +
+                '<input type="text" name="post_btn_text[]" value="' + escAttr(pendingText) + '" class="regular-text" placeholder="Название кнопки" style="max-width:160px;" />' +
+                '<input type="text" name="post_btn_url[]" value="' + escAttr(pendingUrl) + '" class="regular-text" placeholder="https://..." style="flex:1;" />' +
+                '<button type="button" class="button wp-ru-max-remove-btn">Удалить</button>' +
+                '</div>';
+            $('#post_buttons_list').append(row);
+            $('#new_post_btn_text').val('');
+            $('#new_post_btn_url').val('');
+        }
+        var buttons = [];
+        $('#post_buttons_list .wp-ru-max-button-row').each(function () {
+            var t = $(this).find('input[name="post_btn_text[]"]').val().trim();
+            var u = $(this).find('input[name="post_btn_url[]"]').val().trim();
+            if (t && u) { buttons.push({ text: t, url: u }); }
+        });
+        return { post_buttons_json: JSON.stringify(buttons) };
+    }
+
     $('#save_post_sender').on('click', function () {
         var $btn = $(this).prop('disabled', true).text('Сохранение...');
         var channels = [];
@@ -75,17 +98,20 @@
         var postTypes = [];
         $('input[name="post_types[]"]:checked').each(function () { postTypes.push($(this).val()); });
 
-        doAjax('wp_ru_max_save_settings', {
-            post_sender_enabled:  $('#post_sender_enabled').is(':checked') ? '1' : '0',
-            send_new_post:        $('input[name="send_new_post"]').is(':checked') ? '1' : '0',
-            send_updated_post:    $('input[name="send_updated_post"]').is(':checked') ? '1' : '0',
-            show_read_more:       $('input[name="show_read_more"]').is(':checked') ? '1' : '0',
-            show_action_label:    $('input[name="show_action_label"]').is(':checked') ? '1' : '0',
-            show_author_date:     $('input[name="show_author_date"]').is(':checked') ? '1' : '0',
-            excerpt_max_chars:    parseInt($('#excerpt_max_chars').val(), 10) || 0,
-            'channels[]':         channels,
-            'post_types[]':       postTypes,
-        }, function (res) {
+        var data = $.extend({
+            post_sender_enabled:   $('#post_sender_enabled').is(':checked') ? '1' : '0',
+            send_new_post:         $('input[name="send_new_post"]').is(':checked') ? '1' : '0',
+            send_updated_post:     $('input[name="send_updated_post"]').is(':checked') ? '1' : '0',
+            show_read_more:        $('input[name="show_read_more"]').is(':checked') ? '1' : '0',
+            show_action_label:     $('input[name="show_action_label"]').is(':checked') ? '1' : '0',
+            show_author_date:      $('input[name="show_author_date"]').is(':checked') ? '1' : '0',
+            excerpt_max_chars:     parseInt($('#excerpt_max_chars').val(), 10) || 0,
+            post_message_template: $('#post_message_template').val(),
+            'channels[]':          channels,
+            'post_types[]':        postTypes,
+        }, collectPostButtons());
+
+        doAjax('wp_ru_max_save_settings', data, function (res) {
             $btn.prop('disabled', false).text('Сохранить');
             showNotice($('#post_sender_result'), res.success ? 'success' : 'error', res.success ? 'Сохранено!' : res.data);
         });
@@ -105,6 +131,21 @@
         });
     });
 
+    /* -- Post Buttons management -- */
+    $('#add_post_button').on('click', function () {
+        var text = $('#new_post_btn_text').val().trim();
+        var url  = $('#new_post_btn_url').val().trim();
+        if (!text || !url) { alert('Введите название и URL кнопки.'); return; }
+        var row = '<div class="wp-ru-max-button-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">' +
+            '<input type="text" name="post_btn_text[]" value="' + escAttr(text) + '" class="regular-text" placeholder="Название кнопки" style="max-width:160px;" />' +
+            '<input type="text" name="post_btn_url[]" value="' + escAttr(url) + '" class="regular-text" placeholder="https://..." style="flex:1;" />' +
+            '<button type="button" class="button wp-ru-max-remove-btn">Удалить</button>' +
+            '</div>';
+        $('#post_buttons_list').append(row);
+        $('#new_post_btn_text').val('');
+        $('#new_post_btn_url').val('');
+    });
+
     /* -- Channel / Chat ID management -- */
     $(document).on('click', '.wp-ru-max-remove-channel', function () {
         var $row = $(this).closest('.wp-ru-max-channel-row');
@@ -113,6 +154,11 @@
         } else {
             $row.remove();
         }
+    });
+
+    /* -- Button row remove -- */
+    $(document).on('click', '.wp-ru-max-remove-btn', function () {
+        $(this).closest('.wp-ru-max-button-row').remove();
     });
 
     $('#add_channel').on('click', function () {
@@ -142,6 +188,29 @@
         });
     });
 
+    /* Collect notification buttons as JSON — also flushes any pending button from the input fields */
+    function collectNotifyButtons() {
+        var pendingText = $('#new_notify_btn_text').val().trim();
+        var pendingUrl  = $('#new_notify_btn_url').val().trim();
+        if (pendingText && pendingUrl) {
+            var row = '<div class="wp-ru-max-button-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">' +
+                '<input type="text" name="notify_btn_text[]" value="' + escAttr(pendingText) + '" class="regular-text" placeholder="Название кнопки" style="max-width:160px;" />' +
+                '<input type="text" name="notify_btn_url[]" value="' + escAttr(pendingUrl) + '" class="regular-text" placeholder="https://..." style="flex:1;" />' +
+                '<button type="button" class="button wp-ru-max-remove-btn">Удалить</button>' +
+                '</div>';
+            $('#notify_buttons_list').append(row);
+            $('#new_notify_btn_text').val('');
+            $('#new_notify_btn_url').val('');
+        }
+        var buttons = [];
+        $('#notify_buttons_list .wp-ru-max-button-row').each(function () {
+            var t = $(this).find('input[name="notify_btn_text[]"]').val().trim();
+            var u = $(this).find('input[name="notify_btn_url[]"]').val().trim();
+            if (t && u) { buttons.push({ text: t, url: u }); }
+        });
+        return { notify_buttons_json: JSON.stringify(buttons) };
+    }
+
     $('#save_notifications').on('click', function () {
         var $btn = $(this).prop('disabled', true).text('Сохранение...');
         var chatIds = [];
@@ -150,16 +219,33 @@
             if (v) chatIds.push(v);
         });
 
-        doAjax('wp_ru_max_save_settings', {
+        var data = $.extend({
             notifications_enabled: $('#notifications_enabled').is(':checked') ? '1' : '0',
             notify_from_email:     $('#notify_from_email').val(),
             'notify_chat_ids[]':   chatIds,
             notify_template:       $('#notify_template').val(),
             notify_format:         $('input[name="notify_format"]:checked').val(),
-        }, function (res) {
+        }, collectNotifyButtons());
+
+        doAjax('wp_ru_max_save_settings', data, function (res) {
             $btn.prop('disabled', false).text('Сохранить');
             showNotice($('#notifications_result'), res.success ? 'success' : 'error', res.success ? 'Сохранено!' : res.data);
         });
+    });
+
+    /* -- Notify Button management -- */
+    $('#add_notify_button').on('click', function () {
+        var text = $('#new_notify_btn_text').val().trim();
+        var url  = $('#new_notify_btn_url').val().trim();
+        if (!text || !url) { alert('Введите название и URL кнопки.'); return; }
+        var row = '<div class="wp-ru-max-button-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">' +
+            '<input type="text" name="notify_btn_text[]" value="' + escAttr(text) + '" class="regular-text" placeholder="Название кнопки" style="max-width:160px;" />' +
+            '<input type="text" name="notify_btn_url[]" value="' + escAttr(url) + '" class="regular-text" placeholder="https://..." style="flex:1;" />' +
+            '<button type="button" class="button wp-ru-max-remove-btn">Удалить</button>' +
+            '</div>';
+        $('#notify_buttons_list').append(row);
+        $('#new_notify_btn_text').val('');
+        $('#new_notify_btn_url').val('');
     });
 
     /* -- Advanced Tab -- */
@@ -324,6 +410,11 @@
     /* Auto-load logs on history tab */
     if ($('#history_table_wrap').length) {
         loadLogs(1);
+    }
+
+    /* -- Utility: escape attribute value -- */
+    function escAttr(str) {
+        return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
 })(jQuery);
