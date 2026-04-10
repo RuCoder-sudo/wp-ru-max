@@ -1321,6 +1321,13 @@ class WP_Ru_Max_Admin {
                             </td>
                         </tr>
                         <tr>
+                            <th scope="row"><label for="req_contact">Ссылка для связи *</label></th>
+                            <td>
+                                <input type="text" id="req_contact" name="req_contact" class="regular-text" placeholder="Например: https://t.me/username или https://vk.com/id..." />
+                                <p class="description">Ссылка на Telegram, ВКонтакте или другой удобный способ связи.</p>
+                            </td>
+                        </tr>
+                        <tr>
                             <th scope="row">Согласия *</th>
                             <td>
                                 <label class="wp-ru-max-checkbox-label">
@@ -1342,6 +1349,36 @@ class WP_Ru_Max_Admin {
                         </button>
                     </div>
                     <div id="license_request_result" class="wp-ru-max-notice" style="display:none;margin-top:12px;"></div>
+                </div>
+
+                <hr style="margin:32px 0;" />
+
+                <div class="wp-ru-max-activation-block">
+                    <h3>Информация о лицензии и активации плагина</h3>
+                    <p>Плагин распространяется под лицензией GPL v2 or later. Функционал плагина становится доступен только после активации с использованием уникального ключа.</p>
+
+                    <h4 style="margin-top:20px;">Как получить ключ активации</h4>
+                    <p>Чтобы получить ключ активации, вы можете выбрать один из двух способов:</p>
+
+                    <p><strong>Способ 1. Заполнить форму</strong></p>
+                    <p>Заполните короткую форму выше — и мы оперативно свяжемся с вами для завершения покупки. После отправки формы мы свяжемся с вами, предоставим реквизиты для оплаты и ответим на любые вопросы.</p>
+
+                    <p><strong>Способ 2. Написать напрямую</strong></p>
+                    <p>Если вы предпочитаете сразу обсудить покупку, просто напишите нам одним из удобных способов:</p>
+                    <ul style="list-style:disc;padding-left:24px;line-height:2;">
+                        <li>Сайт: <a href="https://рукодер.рф/" target="_blank" rel="noopener">https://рукодер.рф/</a></li>
+                        <li>Telegram: <a href="https://t.me/RussCoder" target="_blank" rel="noopener">https://t.me/RussCoder</a></li>
+                        <li>ВКонтакте: <a href="https://vk.com/ruscoder" target="_blank" rel="noopener">https://vk.com/ruscoder</a></li>
+                        <li>MAX Messenger: <a href="https://max.ru/u/f9LHodD0cOIhMMNX7yu02rl-e7Vzkr1VFxmkAEqOSlziBRtQEIMNiAR_R8M" target="_blank" rel="noopener">Написать в MAX</a></li>
+                    </ul>
+
+                    <h4 style="margin-top:20px;">Стоимость и условия</h4>
+                    <ul style="list-style:disc;padding-left:24px;line-height:2;">
+                        <li>Стоимость плагина: <strong>2 200 рублей.</strong></li>
+                        <li>Тип лицензии: <strong>бессрочная версия.</strong></li>
+                        <li>Обновления: <strong>все будущие обновления включены в стоимость.</strong></li>
+                    </ul>
+                    <p>После подтверждения оплаты мы незамедлительно отправим вам уникальный ключ активации — вы сможете сразу активировать плагин и начать им пользоваться.</p>
                 </div>
 
             <?php endif; ?>
@@ -1383,8 +1420,9 @@ class WP_Ru_Max_Admin {
 
             // Запрос ключа
             $('#request_license_btn').on('click', function(){
-                var name  = $('#req_name').val().trim();
-                var email = $('#req_email').val().trim();
+                var name    = $('#req_name').val().trim();
+                var email   = $('#req_email').val().trim();
+                var contact = $('#req_contact').val().trim();
                 if ( ! name ) {
                     showResult('#license_request_result', false, 'Укажите ваше имя.');
                     return;
@@ -1393,18 +1431,23 @@ class WP_Ru_Max_Admin {
                     showResult('#license_request_result', false, 'Укажите корректный email.');
                     return;
                 }
+                if ( ! contact ) {
+                    showResult('#license_request_result', false, 'Укажите ссылку для связи.');
+                    return;
+                }
                 var $btn = $(this).prop('disabled', true).text('Отправляем...');
                 $.post(wpRuMax.ajaxUrl, {
-                    action:    'wp_ru_max_request_license',
-                    nonce:     wpRuMax.nonce,
-                    req_name:  name,
-                    req_email: email,
-                    consent:   $('#consent_personal').is(':checked') ? 1 : 0,
-                    mailing:   $('#consent_mailing').is(':checked')  ? 1 : 0
+                    action:       'wp_ru_max_request_license',
+                    nonce:        wpRuMax.nonce,
+                    req_name:     name,
+                    req_email:    email,
+                    req_contact:  contact,
+                    consent:      $('#consent_personal').is(':checked') ? 1 : 0,
+                    mailing:      $('#consent_mailing').is(':checked')  ? 1 : 0
                 }, function(resp){
                     if ( resp.success ) {
                         showResult('#license_request_result', true, resp.data);
-                        $('#req_name, #req_email').val('');
+                        $('#req_name, #req_email, #req_contact').val('');
                         $('#consent_personal, #consent_mailing').prop('checked', false);
                         $btn.prop('disabled', true).text('Отправить запрос');
                     } else {
