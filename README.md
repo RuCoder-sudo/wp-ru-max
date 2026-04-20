@@ -17,7 +17,7 @@
 ![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4?style=flat-square&logo=php)
 ![License](https://img.shields.io/badge/license-GPLv2-green?style=flat-square)
 
-**Полная интеграция WooCommerce с 1С:Предприятие, СБИС и МойСклад**
+**Интеграция WordPress с мессенджером MAX**
 
 [Получить лицензию](https://рукодер.рф) · [Документация](#установка) · [Поддержка](#поддержка) · [Changelog](#changelog)
 
