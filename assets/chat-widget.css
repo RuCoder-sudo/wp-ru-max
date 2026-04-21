@@ -2,22 +2,21 @@
 
 #wp-ru-max-widget {
     position: fixed;
-    bottom: 20px;
     z-index: 9999;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-#wp-ru-max-widget a {
+.wp-ru-max-icon {
     display: block;
     border-radius: 50%;
     overflow: hidden;
     text-decoration: none;
     transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
-    animation: wp-ru-max-bounce-in 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) 1.5s both;
+    animation: wp-ru-max-bounce-in 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.2s both;
 }
 
-#wp-ru-max-widget a:hover {
-    transform: scale(1.08);
+.wp-ru-max-icon:hover {
+    transform: scale(1.08) !important;
     box-shadow: 0 8px 30px rgba(99, 102, 241, 0.45) !important;
 }
 
@@ -27,7 +26,6 @@
     overflow-wrap: break-word;
 }
 
-
 /* Typing indicator */
 .wp-ru-max-cursor::after {
     content: '|';
@@ -36,6 +34,7 @@
     color: #6366f1;
 }
 
+/* ---- Base keyframes ---- */
 @keyframes wp-ru-max-bounce-in {
     0%   { opacity: 0; transform: scale(0.3); }
     50%  { transform: scale(1.1); }
@@ -53,10 +52,70 @@
     50%       { opacity: 0; }
 }
 
+/* ---- Attention animations ---- */
+
+/* Пульсация */
+.wp-ru-max-anim-pulse {
+    animation: wp-ru-max-pulse 1.8s ease-in-out infinite !important;
+}
 @keyframes wp-ru-max-pulse {
-    0%   { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
-    70%  { box-shadow: 0 0 0 14px rgba(99, 102, 241, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+    0%   { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.5); transform: scale(1); }
+    50%  { box-shadow: 0 0 0 16px rgba(99, 102, 241, 0); transform: scale(1.06); }
+    100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); transform: scale(1); }
+}
+
+/* Рябь */
+.wp-ru-max-anim-ripple {
+    animation: none !important;
+    position: relative;
+}
+.wp-ru-max-anim-ripple::before,
+.wp-ru-max-anim-ripple::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: rgba(99, 102, 241, 0.3);
+    transform: translate(-50%, -50%) scale(1);
+    animation: wp-ru-max-ripple 2s ease-out infinite;
+    pointer-events: none;
+}
+.wp-ru-max-anim-ripple::after {
+    animation-delay: 0.7s;
+}
+@keyframes wp-ru-max-ripple {
+    0%   { transform: translate(-50%, -50%) scale(1);   opacity: 0.7; }
+    100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0;   }
+}
+
+/* Подпрыгивание */
+.wp-ru-max-anim-bounce {
+    animation: wp-ru-max-jump 1.2s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite !important;
+}
+@keyframes wp-ru-max-jump {
+    0%, 100% { transform: translateY(0); }
+    20%      { transform: translateY(-14px); }
+    40%      { transform: translateY(0px); }
+    55%      { transform: translateY(-7px); }
+    70%      { transform: translateY(0px); }
+}
+
+/* Покачивание */
+.wp-ru-max-anim-shake {
+    animation: wp-ru-max-shake 1.5s ease-in-out infinite !important;
+}
+@keyframes wp-ru-max-shake {
+    0%, 100% { transform: rotate(0deg); }
+    10%      { transform: rotate(-12deg); }
+    20%      { transform: rotate(12deg); }
+    30%      { transform: rotate(-10deg); }
+    40%      { transform: rotate(10deg); }
+    50%      { transform: rotate(-6deg); }
+    60%      { transform: rotate(6deg); }
+    70%      { transform: rotate(0deg); }
 }
 
 /* Responsive adjustments */
@@ -66,7 +125,7 @@
         font-size: 13px !important;
     }
 
-    #wp-ru-max-widget a {
+    .wp-ru-max-icon {
         width: 52px !important;
         height: 52px !important;
     }
