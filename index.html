@@ -31,6 +31,7 @@
         <a href="#preview">Превью</a>
         <a href="#install">Установка</a>
         <a href="#pricing">Лицензия</a>
+        <a href="#activation">Активация</a>
         <a href="#gallery">Галерея</a>
         <a href="#faq">FAQ</a>
         <a href="#links">Ссылки</a>
@@ -71,13 +72,6 @@
                     </a>
                 </div>
 
-                <div class="badges">
-                    <img src="https://img.shields.io/badge/version-1.0.21-7c5cff?style=flat-square" alt="Version">
-                    <img src="https://img.shields.io/badge/WordPress-5.8%2B-21759b?style=flat-square&logo=wordpress" alt="WordPress">
-                    <img src="https://img.shields.io/badge/PHP-7.4%2B-777bb4?style=flat-square&logo=php" alt="PHP">
-                    <img src="https://img.shields.io/badge/WooCommerce-4.0%2B-96588a?style=flat-square&logo=woocommerce" alt="WooCommerce">
-                    <img src="https://img.shields.io/badge/license-GPLv2-2ed573?style=flat-square" alt="License">
-                </div>
             </div>
 
             <!-- Mockup of WP admin panel -->
@@ -352,7 +346,7 @@ git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
                     <li>Бессрочное использование</li>
                     <li>Все обновления включены</li>
                 </ul>
-                <a href="#author" class="btn btn-ghost">Запросить ключ</a>
+                <a href="#activation" class="btn btn-ghost">Активировать</a>
             </div>
 
             <div class="price featured reveal">
@@ -368,7 +362,7 @@ git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
                     <li>Все обновления включены</li>
                     <li>Приоритетная поддержка</li>
                 </ul>
-                <a href="#author" class="btn btn-primary">Запросить ключ</a>
+                <a href="#activation" class="btn btn-primary">Активировать</a>
             </div>
 
             <div class="price reveal">
@@ -383,7 +377,7 @@ git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
                     <li>Все обновления включены</li>
                     <li>Персональные консультации</li>
                 </ul>
-                <a href="#author" class="btn btn-ghost">Запросить ключ</a>
+                <a href="#activation" class="btn btn-ghost">Активировать</a>
             </div>
         </div>
     </div>
@@ -520,7 +514,7 @@ git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
             </div>
             <div style="display:flex; gap:10px; flex-wrap:wrap;">
                 <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" class="btn btn-primary">⬇ Скачать</a>
-                <a href="#author" class="btn btn-ghost">Получить ключ</a>
+                <a href="#activation" class="btn btn-ghost">Как активировать</a>
             </div>
         </div>
     </div>
@@ -606,106 +600,120 @@ git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
             </div>
         </div>
 
-        <!-- ===== License request form ===== -->
-        <div class="panel form-panel reveal" style="margin-top:24px;">
-            <div class="form-head">
-                <div class="form-icon">🔑</div>
-                <div>
-                    <h3>Запросить лицензионный ключ</h3>
-                    <p>Нет ключа? Заполните форму — владелец плагина рассмотрит запрос и пришлёт ключ на ваш email.</p>
-                </div>
+    </div>
+</section>
+
+<!-- ===== ACTIVATION FLOW ===== -->
+<section id="activation">
+    <div class="container">
+        <div class="section-head">
+            <span class="kicker">Активация</span>
+            <h2>Всё просто — активация прямо в плагине</h2>
+            <p>Никаких внешних форм и личных кабинетов. Скачайте плагин, установите его в WordPress и заполните короткую форму запроса ключа прямо в админке.</p>
+        </div>
+
+        <div class="activation-flow">
+            <div class="activation-card reveal">
+                <div class="num">1</div>
+                <span class="icon-emoji">⬇</span>
+                <h4>Скачайте плагин</h4>
+                <p>Возьмите свежий ZIP-архив плагина в GitHub Releases — это бесплатно.</p>
             </div>
-
-            <div id="thanks" class="thanks-banner" style="display:none;">
-                <span class="ok">✓</span>
-                <span>Запрос отправлен! Я свяжусь с вами в ближайшее время и пришлю лицензионный ключ на указанный email.</span>
+            <div class="activation-card reveal">
+                <div class="num">2</div>
+                <span class="icon-emoji">⚙</span>
+                <h4>Установите в WordPress</h4>
+                <p>Плагины → Добавить новый → Загрузить плагин. Стандартная установка за минуту.</p>
             </div>
+            <div class="activation-card reveal">
+                <div class="num">3</div>
+                <span class="icon-emoji">📝</span>
+                <h4>Заполните форму в плагине</h4>
+                <p>Вкладка <strong>Ru-max → Активация</strong>. Запрос ключа отправляется прямо из админки сайта.</p>
+            </div>
+            <div class="activation-card reveal">
+                <div class="num">4</div>
+                <span class="icon-emoji">✓</span>
+                <h4>Оплатите и активируйте</h4>
+                <p>После запроса я пришлю способы оплаты. Оплатили — получили код активации — всё работает!</p>
+            </div>
+        </div>
 
-            <form class="lic-form" action="https://formsubmit.co/rucoder.rf@yandex.ru" method="POST">
-                <!-- FormSubmit settings -->
-                <input type="hidden" name="_subject" value="WP Ru-max — запрос лицензионного ключа">
-                <input type="hidden" name="_template" value="table">
-                <input type="hidden" name="_captcha" value="false">
-                <input type="hidden" name="_next" value="https://rucoder-sudo.github.io/wp-ru-max/?sent=1#author">
-                <input type="text" name="_honey" style="display:none">
-
-                <div class="form-grid">
-                    <div class="field">
-                        <label for="lic-name">Ваше имя <span class="req">*</span></label>
-                        <input id="lic-name" name="name" type="text" placeholder="Иван Иванов" required>
-                    </div>
-
-                    <div class="field">
-                        <label for="lic-email">Ваш email <span class="req">*</span></label>
-                        <input id="lic-email" name="email" type="email" placeholder="your@email.ru" required>
-                        <small>На этот адрес придёт лицензионный ключ.</small>
-                    </div>
-                </div>
-
-                <div class="field">
-                    <label for="lic-contact">Контакт для быстрой связи</label>
-                    <input id="lic-contact" name="contact" type="text" placeholder="Telegram @username, MAX, WhatsApp +7..., VK ссылка">
-                    <small>Удобный мессенджер или соцсеть, чтобы быстрее обсудить покупку и выслать ключ.</small>
-                </div>
-
-                <div class="field">
-                    <label for="lic-domain">Домен сайта (опционально)</label>
-                    <input id="lic-domain" name="domain" type="text" placeholder="example.ru">
-                    <small>Домен, на который планируется активация ключа.</small>
-                </div>
-
-                <div class="field-checkbox">
-                    <label>
-                        <input type="checkbox" name="consent_pd" value="yes" required>
-                        <span>
-                            Даю своё согласие на
-                            <a href="https://рукодер.рф" target="_blank" rel="noopener">обработку персональных данных</a>.
-                            <span class="req">*</span>
-                        </span>
-                    </label>
-                </div>
-
-                <div class="field-checkbox">
-                    <label>
-                        <input type="checkbox" name="consent_news" value="yes">
-                        <span>
-                            Согласен(а) получать информационные рассылки и уведомления об акциях
-                            на указанный email. Подтверждаю, что могу отменить подписку в любое время.
-                        </span>
-                    </label>
-                </div>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">⬆ Отправить запрос</button>
-                    <span class="form-note">Запрос будет отправлен на <code>rucoder.rf@yandex.ru</code></span>
-                </div>
-            </form>
+        <div class="activation-highlight reveal">
+            <div class="big-icon">🚀</div>
+            <div style="flex:1; min-width:260px;">
+                <strong>Главное: форма запроса ключа находится прямо в плагине.</strong>
+                <p>Вам не нужно регистрироваться на сторонних сайтах. Установили плагин → нажали «Запросить ключ» в админке → получили ответ на email → ввели ключ → всё активно. Просто и понятно.</p>
+            </div>
         </div>
     </div>
 </section>
 
 <!-- ===== FOOTER ===== -->
-<footer>
+<footer class="site-footer">
     <div class="container">
-        <div>© 2026 <a href="https://рукодер.рф">РуКодер</a> · WP Ru-max v1.0.21 · GPLv2</div>
-        <div class="made">Сделано с ♥ для российского WordPress-сообщества</div>
+        <div class="footer-grid">
+            <div class="footer-about">
+                <div class="footer-brand">
+                    <img src="assets/icon.png" alt="WP Ru-max">
+                    <div>
+                        <div class="ttl">WP Ru-max</div>
+                        <div class="sub">Интеграция WordPress × MAX</div>
+                    </div>
+                </div>
+                <p>Плагин для WordPress, который связывает ваш сайт с российским мессенджером MAX: автопубликация, уведомления и чат-виджет.</p>
+                <p>Бессрочная лицензия с привязкой к домену. Активация занимает 5 минут — прямо в админке вашего сайта.</p>
+            </div>
+
+            <div class="footer-col">
+                <h5>Навигация</h5>
+                <a href="#features">Возможности</a>
+                <a href="#install">Установка</a>
+                <a href="#pricing">Лицензия</a>
+                <a href="#activation">Активация</a>
+                <a href="#faq">FAQ</a>
+                <a href="docs.html">Документация</a>
+            </div>
+
+            <div class="footer-col">
+                <h5>Контакты</h5>
+                <a href="https://рукодер.рф" target="_blank" rel="noopener">рукодер.рф</a>
+                <a href="https://t.me/RussCoder" target="_blank" rel="noopener">Telegram @RussCoder</a>
+                <a href="mailto:rucoder.rf@yandex.ru">rucoder.rf@yandex.ru</a>
+                <a href="tel:+79859855397">+7 (985) 985-53-97</a>
+                <a href="https://github.com/RuCoder-sudo/wp-ru-max" target="_blank" rel="noopener">GitHub</a>
+            </div>
+        </div>
+
+        <div class="footer-legal">
+            <div class="copy">
+                Copyright © 2025 <span class="brand-name">«🆁🆄🅲🅾🅳🅴🆁»</span> — Солошенко Сергей Геннадьевич
+            </div>
+            <div class="inn">ИНН: 772076225347</div>
+            <div>Разработка сайтов с <span class="heart">❤</span> | Все права защищены</div>
+            <div class="rights">WP Ru-max v1.0.21 · GPLv2 · сделано в России</div>
+        </div>
     </div>
 </footer>
 
 <script>
+// Reveal-on-scroll
 const io = new IntersectionObserver((entries) => {
     entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('on'); });
 }, { threshold: 0.12 });
 document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 
-// Показ баннера «Спасибо» после возврата с FormSubmit
-if (new URLSearchParams(location.search).get('sent') === '1') {
-    const t = document.getElementById('thanks');
-    if (t) {
-        t.style.display = 'flex';
-        t.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-}
+// Эффект «волны» по матовому стеклу — следует за курсором мыши
+const glassSelector = '.card, .panel, .price, .step, .demo-card, .stat, .compat, .mockup, .cta-banner, .form-panel, .activation-card';
+document.querySelectorAll(glassSelector).forEach(el => {
+    el.addEventListener('pointermove', (e) => {
+        const rect = el.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        el.style.setProperty('--mx', x + '%');
+        el.style.setProperty('--my', y + '%');
+    });
+});
 </script>
 
 </body>
