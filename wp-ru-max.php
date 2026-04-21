@@ -27,8 +27,7 @@
  * Принцип работы:     «Сайт — как для себя»
  * -----------------------------------------------------------------------
  * Контакты:
- * Телефон / WhatsApp: +7 (985) 985-53-97
- * Email:              support@рукодер.рф
+ * Email:              rucoder.rf@yandex.ru
  * Telegram:           @RussCoder
  * Портфолио:          https://рукодер.рф
  * GitHub:             https://github.com/RuCoder-sudo
