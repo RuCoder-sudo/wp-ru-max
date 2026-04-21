@@ -590,3 +590,63 @@
     margin-top: 3px;
     flex-shrink: 0;
 }
+
+/* ---- Preview attention animations ---- */
+.preview-icon {
+    position: relative;
+    display: inline-block;
+    border-radius: 50%;
+}
+.preview-icon.wp-ru-max-anim-pulse {
+    animation: wp-ru-max-pulse 1.8s ease-in-out infinite;
+}
+@keyframes wp-ru-max-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.5); transform: scale(1); }
+    50%  { box-shadow: 0 0 0 16px rgba(99, 102, 241, 0); transform: scale(1.06); }
+    100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); transform: scale(1); }
+}
+.preview-icon.wp-ru-max-anim-ripple::before,
+.preview-icon.wp-ru-max-anim-ripple::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: rgba(99, 102, 241, 0.3);
+    transform: translate(-50%, -50%) scale(1);
+    animation: wp-ru-max-ripple 2s ease-out infinite;
+    pointer-events: none;
+}
+.preview-icon.wp-ru-max-anim-ripple::after {
+    animation-delay: 0.7s;
+}
+@keyframes wp-ru-max-ripple {
+    0%   { transform: translate(-50%, -50%) scale(1);   opacity: 0.7; }
+    100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0;   }
+}
+.preview-icon.wp-ru-max-anim-bounce {
+    animation: wp-ru-max-jump 1.2s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite;
+}
+@keyframes wp-ru-max-jump {
+    0%, 100% { transform: translateY(0); }
+    20%      { transform: translateY(-14px); }
+    40%      { transform: translateY(0px); }
+    55%      { transform: translateY(-7px); }
+    70%      { transform: translateY(0px); }
+}
+.preview-icon.wp-ru-max-anim-shake {
+    animation: wp-ru-max-shake 1.5s ease-in-out infinite;
+    transform-origin: center center;
+}
+@keyframes wp-ru-max-shake {
+    0%, 100% { transform: rotate(0deg); }
+    10%      { transform: rotate(-12deg); }
+    20%      { transform: rotate(12deg); }
+    30%      { transform: rotate(-10deg); }
+    40%      { transform: rotate(10deg); }
+    50%      { transform: rotate(-6deg); }
+    60%      { transform: rotate(6deg); }
+    70%      { transform: rotate(0deg); }
+}
