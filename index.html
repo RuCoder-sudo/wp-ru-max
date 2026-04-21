@@ -8,6 +8,8 @@
 <meta property="og:title" content="WP Ru-max — интеграция WordPress с мессенджером MAX">
 <meta property="og:description" content="Автопубликация записей, личные уведомления с форм и чат-виджет MAX для вашего WordPress-сайта.">
 <meta property="og:type" content="website">
+<meta property="og:image" content="assets/horizontal-5.jpg">
+<link rel="icon" type="image/png" href="assets/icon.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -21,18 +23,18 @@
 <!-- ===== NAV ===== -->
 <nav class="nav">
     <a href="#top" class="brand">
-        <span class="logo">M</span>
+        <img src="assets/icon.png" alt="WP Ru-max" class="logo-img">
         <span>WP Ru-max</span>
     </a>
     <div class="links">
         <a href="#features">Возможности</a>
         <a href="#preview">Превью</a>
-        <a href="#compat">Совместимость</a>
         <a href="#install">Установка</a>
         <a href="#pricing">Лицензия</a>
+        <a href="#gallery">Галерея</a>
         <a href="#faq">FAQ</a>
+        <a href="#links">Ссылки</a>
         <a href="#author">Автор</a>
-        <a href="docs.html">Документация</a>
     </div>
     <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" class="btn btn-primary btn-sm cta">Скачать</a>
 </nav>
@@ -432,6 +434,82 @@ git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
     </div>
 </section>
 
+<!-- ===== GALLERY ===== -->
+<section id="gallery">
+    <div class="container">
+        <div class="section-head">
+            <span class="kicker">Галерея</span>
+            <h2>Скриншоты и баннеры</h2>
+            <p>Так выглядит плагин внутри админки WordPress и сообщения в мессенджере MAX.</p>
+        </div>
+
+        <div class="gallery">
+            <a class="g-tile g-wide reveal" href="assets/horizontal-5.jpg" target="_blank" rel="noopener">
+                <img src="assets/horizontal-5.jpg" alt="WP Ru-max — баннер">
+            </a>
+            <a class="g-tile reveal" href="assets/horizontal-1.jpg" target="_blank" rel="noopener">
+                <img src="assets/horizontal-1.jpg" alt="Скриншот плагина 1">
+            </a>
+            <a class="g-tile reveal" href="assets/horizontal-2.jpg" target="_blank" rel="noopener">
+                <img src="assets/horizontal-2.jpg" alt="Скриншот плагина 2">
+            </a>
+            <a class="g-tile reveal" href="assets/horizontal-4.jpg" target="_blank" rel="noopener">
+                <img src="assets/horizontal-4.jpg" alt="Скриншот плагина 3">
+            </a>
+            <a class="g-tile g-tall reveal" href="assets/vertical.jpg" target="_blank" rel="noopener">
+                <img src="assets/vertical.jpg" alt="Вертикальный баннер">
+            </a>
+            <a class="g-tile reveal" href="assets/horizontal-1.jpeg" target="_blank" rel="noopener">
+                <img src="assets/horizontal-1.jpeg" alt="Скриншот плагина 4">
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- ===== USEFUL LINKS ===== -->
+<section id="links">
+    <div class="container">
+        <div class="section-head">
+            <span class="kicker">Документация и ресурсы</span>
+            <h2>Полезные ссылки</h2>
+            <p>Вся документация, исходники и официальные страницы — в одном месте.</p>
+        </div>
+
+        <div class="features">
+            <a class="card link-card reveal" href="https://github.com/RuCoder-sudo/wp-ru-max" target="_blank" rel="noopener">
+                <div class="icon alt5">📦</div>
+                <h3>GitHub репозиторий</h3>
+                <p>Исходный код плагина, релизы, история коммитов и трекер задач.</p>
+            </a>
+            <a class="card link-card reveal" href="https://github.com/RuCoder-sudo/wp-ru-max/blob/main/wp-ru-max/README.md" target="_blank" rel="noopener">
+                <div class="icon alt2">📄</div>
+                <h3>README плагина</h3>
+                <p>Подробное описание возможностей, требований, установки и changelog.</p>
+            </a>
+            <a class="card link-card reveal" href="https://github.com/RuCoder-sudo/wp-ru-max/wiki" target="_blank" rel="noopener">
+                <div class="icon alt">📚</div>
+                <h3>Wiki проекта</h3>
+                <p>Полное руководство: главная, активация, автопубликация, виджет, уведомления, логи, требования.</p>
+            </a>
+            <a class="card link-card reveal" href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">
+                <div class="icon alt3">⬇</div>
+                <h3>GitHub Releases</h3>
+                <p>Скачайте последний ZIP-архив плагина и загрузите его в WordPress.</p>
+            </a>
+            <a class="card link-card reveal" href="https://max.ru" target="_blank" rel="noopener">
+                <div class="icon">М</div>
+                <h3>Мессенджер MAX</h3>
+                <p>Официальный сайт российского мессенджера MAX (max.ru) — установите приложение и создайте бота.</p>
+            </a>
+            <a class="card link-card reveal" href="https://max.ru/partner" target="_blank" rel="noopener">
+                <div class="icon alt4">🤖</div>
+                <h3>MAX для партнёров</h3>
+                <p>Платформа max.ru/partner — регистрация бота, получение токена, настройка интеграции.</p>
+            </a>
+        </div>
+    </div>
+</section>
+
 <!-- ===== CTA banner ===== -->
 <section style="padding-top:0;">
     <div class="container">
@@ -501,6 +579,20 @@ git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
                         <span class="info">
                             <span class="lbl">Email</span>
                             <span class="val">rucoder.rf@yandex.ru</span>
+                        </span>
+                    </a>
+                    <a class="contact-row" href="https://max.ru/u/f9LHodD0cOJYpSQb9uTP6ebD3rtqiv_-gbY1D1csXSQAuyEfUChlnjzWVSA" target="_blank" rel="noopener">
+                        <span class="ic" style="background: linear-gradient(135deg, #ff4757, var(--accent));">М</span>
+                        <span class="info">
+                            <span class="lbl">MAX (max.ru)</span>
+                            <span class="val">Написать в MAX</span>
+                        </span>
+                    </a>
+                    <a class="contact-row" href="https://vk.com/ruscoder" target="_blank" rel="noopener">
+                        <span class="ic" style="background: linear-gradient(135deg, #4f8bff, #0077ff);">VK</span>
+                        <span class="info">
+                            <span class="lbl">ВКонтакте</span>
+                            <span class="val">vk.com/ruscoder</span>
                         </span>
                     </a>
                     <a class="contact-row" href="https://github.com/RuCoder-sudo/wp-ru-max/issues" target="_blank" rel="noopener">
