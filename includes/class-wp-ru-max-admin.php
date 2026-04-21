@@ -166,9 +166,14 @@ class WP_Ru_Max_Admin {
                 case 'chat_widget_url':
                 case 'chat_widget_message':
                 case 'chat_widget_position':
+                case 'chat_widget_sound':
+                case 'chat_widget_animation':
                     $settings[ $field ] = sanitize_text_field( $value );
                     break;
                 case 'excerpt_max_chars':
+                case 'chat_widget_bottom_offset':
+                case 'chat_widget_show_delay':
+                case 'chat_widget_sound_delay':
                     $settings[ $field ] = max( 0, intval( $value ) );
                     break;
                 case 'notify_template':
@@ -202,10 +207,10 @@ class WP_Ru_Max_Admin {
                     break;
             }
         } else {
-            $allowed_text = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position' );
+            $allowed_text = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation' );
             $allowed_textarea = array( 'notify_template' );
             $allowed_bool = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled' );
-            $allowed_int  = array( 'excerpt_max_chars' );
+            $allowed_int  = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay' );
             $allowed_array = array( 'post_types', 'channels', 'notify_chat_ids' );
 
             foreach ( $allowed_text as $key ) {
@@ -1077,11 +1082,16 @@ class WP_Ru_Max_Admin {
     }
 
     private function render_tab_chat( $settings ) {
-        $enabled  = ! empty( $settings['chat_widget_enabled'] );
-        $size     = $settings['chat_widget_size'] ?? 'medium';
-        $url      = $settings['chat_widget_url'] ?? '';
-        $message  = $settings['chat_widget_message'] ?? 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!';
-        $position = $settings['chat_widget_position'] ?? 'right';
+        $enabled       = ! empty( $settings['chat_widget_enabled'] );
+        $size          = $settings['chat_widget_size']        ?? 'medium';
+        $url           = $settings['chat_widget_url']         ?? '';
+        $message       = $settings['chat_widget_message']     ?? 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!';
+        $position      = $settings['chat_widget_position']    ?? 'right';
+        $bottom_offset = isset( $settings['chat_widget_bottom_offset'] ) ? (int) $settings['chat_widget_bottom_offset'] : 20;
+        $show_delay    = isset( $settings['chat_widget_show_delay'] )    ? (int) $settings['chat_widget_show_delay']    : 0;
+        $sound         = $settings['chat_widget_sound']       ?? 'none';
+        $sound_delay   = isset( $settings['chat_widget_sound_delay'] )   ? (int) $settings['chat_widget_sound_delay']   : 3;
+        $animation     = $settings['chat_widget_animation']   ?? 'none';
         ?>
         <div class="wp-ru-max-card">
             <h2>Чат-виджет MAX</h2>
@@ -1147,6 +1157,135 @@ class WP_Ru_Max_Admin {
                                 <input type="radio" name="chat_widget_position" value="left" <?php checked( $position, 'left' ); ?> />
                                 Слева внизу
                             </label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="chat_widget_bottom_offset">Отступ снизу (px)</label></th>
+                        <td>
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <input type="range" id="chat_widget_bottom_offset_range" min="0" max="200" value="<?php echo esc_attr( $bottom_offset ); ?>" style="width:200px;" />
+                                <input type="number" id="chat_widget_bottom_offset" name="chat_widget_bottom_offset" value="<?php echo esc_attr( $bottom_offset ); ?>" min="0" max="200" style="width:70px;" />
+                                <span>px</span>
+                            </div>
+                            <p class="description">Задайте отступ значка от нижнего края экрана. Двигайте ползунок вверх/вниз.</p>
+                            <script>
+                            (function(){
+                                var r = document.getElementById('chat_widget_bottom_offset_range');
+                                var n = document.getElementById('chat_widget_bottom_offset');
+                                if(r && n){
+                                    r.addEventListener('input', function(){ n.value = r.value; });
+                                    n.addEventListener('input', function(){ r.value = n.value; });
+                                }
+                            })();
+                            </script>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="wp-ru-max-card">
+                <h3>Задержка появления виджета</h3>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label>Показать виджет</label></th>
+                        <td>
+                            <?php
+                            $delay_options = array(
+                                0  => 'Сразу',
+                                5  => 'Через 5 секунд',
+                                8  => 'Через 8 секунд',
+                                10 => 'Через 10 секунд',
+                                15 => 'Через 15 секунд',
+                            );
+                            foreach ( $delay_options as $val => $label ) :
+                            ?>
+                            <label style="display:inline-flex;align-items:center;margin-right:20px;margin-bottom:8px;cursor:pointer;">
+                                <input type="radio" name="chat_widget_show_delay" value="<?php echo esc_attr( $val ); ?>" <?php checked( $show_delay, $val ); ?> style="margin-right:6px;" />
+                                <?php echo esc_html( $label ); ?>
+                            </label>
+                            <?php endforeach; ?>
+                            <p class="description">Через сколько секунд после загрузки страницы показать виджет посетителю.</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="wp-ru-max-card">
+                <h3>Звук уведомления</h3>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label>Выбор звука</label></th>
+                        <td>
+                            <div style="display:flex;flex-direction:column;gap:10px;">
+                                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                                    <input type="radio" name="chat_widget_sound" value="none" <?php checked( $sound, 'none' ); ?> />
+                                    <span>Без звука</span>
+                                </label>
+                                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                                    <input type="radio" name="chat_widget_sound" value="sound1" <?php checked( $sound, 'sound1' ); ?> />
+                                    <span>Вариант 1 — Новое сообщение</span>
+                                    <button type="button" class="button wp-ru-max-preview-sound" data-sound="sound1">&#9654; Прослушать</button>
+                                </label>
+                                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                                    <input type="radio" name="chat_widget_sound" value="sound2" <?php checked( $sound, 'sound2' ); ?> />
+                                    <span>Вариант 2 — Всплывающее окно</span>
+                                    <button type="button" class="button wp-ru-max-preview-sound" data-sound="sound2">&#9654; Прослушать</button>
+                                </label>
+                                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                                    <input type="radio" name="chat_widget_sound" value="sound3" <?php checked( $sound, 'sound3' ); ?> />
+                                    <span>Вариант 3 — Тихий сигнал</span>
+                                    <button type="button" class="button wp-ru-max-preview-sound" data-sound="sound3">&#9654; Прослушать</button>
+                                </label>
+                            </div>
+                            <p class="description" style="margin-top:8px;">Выберите звук уведомления, который будет проигрываться при появлении виджета.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label>Время проигрывания звука</label></th>
+                        <td>
+                            <?php
+                            $sound_delay_options = array(
+                                3 => 'Через 3 секунды после появления',
+                                6 => 'Через 6 секунд после появления',
+                                9 => 'Через 9 секунд после появления',
+                            );
+                            foreach ( $sound_delay_options as $val => $label ) :
+                            ?>
+                            <label style="display:block;margin-bottom:8px;cursor:pointer;">
+                                <input type="radio" name="chat_widget_sound_delay" value="<?php echo esc_attr( $val ); ?>" <?php checked( $sound_delay, $val ); ?> style="margin-right:6px;" />
+                                <?php echo esc_html( $label ); ?>
+                            </label>
+                            <?php endforeach; ?>
+                            <p class="description">Через сколько секунд после появления виджета проиграть звук уведомления.</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="wp-ru-max-card">
+                <h3>Анимация привлечения внимания</h3>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label>Анимация</label></th>
+                        <td>
+                            <div style="display:flex;flex-wrap:wrap;gap:12px;">
+                                <?php
+                                $anim_options = array(
+                                    'none'    => 'Без анимации',
+                                    'pulse'   => 'Пульсация',
+                                    'ripple'  => 'Рябь',
+                                    'bounce'  => 'Подпрыгивание',
+                                    'shake'   => 'Покачивание',
+                                );
+                                foreach ( $anim_options as $val => $label ) :
+                                ?>
+                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;background:<?php echo $animation === $val ? '#e8f0fe' : '#f8f9fa'; ?>;border:2px solid <?php echo $animation === $val ? '#4a90d9' : '#ddd'; ?>;border-radius:8px;padding:8px 14px;">
+                                    <input type="radio" name="chat_widget_animation" value="<?php echo esc_attr( $val ); ?>" <?php checked( $animation, $val ); ?> />
+                                    <?php echo esc_html( $label ); ?>
+                                </label>
+                                <?php endforeach; ?>
+                            </div>
+                            <p class="description" style="margin-top:8px;">Анимация для привлечения внимания к кнопке чата.</p>
                         </td>
                     </tr>
                 </table>
@@ -1321,13 +1460,6 @@ class WP_Ru_Max_Admin {
                             </td>
                         </tr>
                         <tr>
-                            <th scope="row"><label for="req_contact">Ссылка для связи *</label></th>
-                            <td>
-                                <input type="text" id="req_contact" name="req_contact" class="regular-text" placeholder="Например: https://t.me/username или https://vk.com/id..." />
-                                <p class="description">Ссылка на Telegram, ВКонтакте или другой удобный способ связи.</p>
-                            </td>
-                        </tr>
-                        <tr>
                             <th scope="row">Согласия *</th>
                             <td>
                                 <label class="wp-ru-max-checkbox-label">
@@ -1349,36 +1481,6 @@ class WP_Ru_Max_Admin {
                         </button>
                     </div>
                     <div id="license_request_result" class="wp-ru-max-notice" style="display:none;margin-top:12px;"></div>
-                </div>
-
-                <hr style="margin:32px 0;" />
-
-                <div class="wp-ru-max-activation-block">
-                    <h3>Информация о лицензии и активации плагина</h3>
-                    <p>Плагин распространяется под лицензией GPL v2 or later. Функционал плагина становится доступен только после активации с использованием уникального ключа.</p>
-
-                    <h4 style="margin-top:20px;">Как получить ключ активации</h4>
-                    <p>Чтобы получить ключ активации, вы можете выбрать один из двух способов:</p>
-
-                    <p><strong>Способ 1. Заполнить форму</strong></p>
-                    <p>Заполните короткую форму выше — и мы оперативно свяжемся с вами для завершения покупки. После отправки формы мы свяжемся с вами, предоставим реквизиты для оплаты и ответим на любые вопросы.</p>
-
-                    <p><strong>Способ 2. Написать напрямую</strong></p>
-                    <p>Если вы предпочитаете сразу обсудить покупку, просто напишите нам одним из удобных способов:</p>
-                    <ul style="list-style:disc;padding-left:24px;line-height:2;">
-                        <li>Сайт: <a href="https://рукодер.рф/" target="_blank" rel="noopener">https://рукодер.рф/</a></li>
-                        <li>Telegram: <a href="https://t.me/RussCoder" target="_blank" rel="noopener">https://t.me/RussCoder</a></li>
-                        <li>ВКонтакте: <a href="https://vk.com/ruscoder" target="_blank" rel="noopener">https://vk.com/ruscoder</a></li>
-                        <li>MAX Messenger: <a href="https://max.ru/u/f9LHodD0cOIhMMNX7yu02rl-e7Vzkr1VFxmkAEqOSlziBRtQEIMNiAR_R8M" target="_blank" rel="noopener">Написать в MAX</a></li>
-                    </ul>
-
-                    <h4 style="margin-top:20px;">Стоимость и условия</h4>
-                    <ul style="list-style:disc;padding-left:24px;line-height:2;">
-                        <li>Стоимость плагина: <strong>2 200 рублей.</strong></li>
-                        <li>Тип лицензии: <strong>бессрочная версия.</strong></li>
-                        <li>Обновления: <strong>все будущие обновления включены в стоимость.</strong></li>
-                    </ul>
-                    <p>После подтверждения оплаты мы незамедлительно отправим вам уникальный ключ активации — вы сможете сразу активировать плагин и начать им пользоваться.</p>
                 </div>
 
             <?php endif; ?>
@@ -1420,9 +1522,8 @@ class WP_Ru_Max_Admin {
 
             // Запрос ключа
             $('#request_license_btn').on('click', function(){
-                var name    = $('#req_name').val().trim();
-                var email   = $('#req_email').val().trim();
-                var contact = $('#req_contact').val().trim();
+                var name  = $('#req_name').val().trim();
+                var email = $('#req_email').val().trim();
                 if ( ! name ) {
                     showResult('#license_request_result', false, 'Укажите ваше имя.');
                     return;
@@ -1431,23 +1532,18 @@ class WP_Ru_Max_Admin {
                     showResult('#license_request_result', false, 'Укажите корректный email.');
                     return;
                 }
-                if ( ! contact ) {
-                    showResult('#license_request_result', false, 'Укажите ссылку для связи.');
-                    return;
-                }
                 var $btn = $(this).prop('disabled', true).text('Отправляем...');
                 $.post(wpRuMax.ajaxUrl, {
-                    action:       'wp_ru_max_request_license',
-                    nonce:        wpRuMax.nonce,
-                    req_name:     name,
-                    req_email:    email,
-                    req_contact:  contact,
-                    consent:      $('#consent_personal').is(':checked') ? 1 : 0,
-                    mailing:      $('#consent_mailing').is(':checked')  ? 1 : 0
+                    action:    'wp_ru_max_request_license',
+                    nonce:     wpRuMax.nonce,
+                    req_name:  name,
+                    req_email: email,
+                    consent:   $('#consent_personal').is(':checked') ? 1 : 0,
+                    mailing:   $('#consent_mailing').is(':checked')  ? 1 : 0
                 }, function(resp){
                     if ( resp.success ) {
                         showResult('#license_request_result', true, resp.data);
-                        $('#req_name, #req_email, #req_contact').val('');
+                        $('#req_name, #req_email').val('');
                         $('#consent_personal, #consent_mailing').prop('checked', false);
                         $btn.prop('disabled', true).text('Отправить запрос');
                     } else {
