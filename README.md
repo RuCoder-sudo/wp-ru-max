@@ -159,7 +159,6 @@ wp-ru-max/
 ├── uninstall.php                        # Очистка данных при удалении плагина
 ├── readme.txt                           # Описание для WordPress.org
 ├── README.md                            # Документация для GitHub
-├── license-keys.json                    # (устаревший) локальный список хэшей ключей
 │
 ├── assets/
 │   ├── admin.css                        # Стили административной панели
@@ -179,7 +178,6 @@ wp-ru-max/
 │   ├── class-wp-ru-max-post-sender.php  # Отправка записей в канал MAX при публикации
 │   ├── class-wp-ru-max-notifications.php# Перехват wp_mail() и пересылка в MAX
 │   ├── class-wp-ru-max-chat-widget.php  # Рендер HTML/JS виджета и передача настроек
-│   ├── class-wp-ru-max-license.php      # Лицензирование: активация, проверка через рукодер.рф
 │   ├── class-wp-ru-max-updater.php      # Автообновление через GitHub Releases
 │   ├── class-wp-ru-max-logger.php       # Система логирования событий в БД
 │   └── index.php                        # Заглушка (безопасность)
