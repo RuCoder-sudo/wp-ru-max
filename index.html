@@ -703,8 +703,10 @@ const io = new IntersectionObserver((entries) => {
 }, { threshold: 0.12 });
 document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 
-// Эффект «волны» по матовому стеклу — следует за курсором мыши
-const glassSelector = '.card, .panel, .price, .step, .demo-card, .stat, .compat, .mockup, .cta-banner, .form-panel, .activation-card';
+// Эффект «волны» по матовому стеклу — следует за курсором мыши.
+// Селектор синхронизирован с CSS: применяется только к карточкам, шагам,
+// статам и шагам активации, где не ломаются «выпирающие» элементы.
+const glassSelector = '.card:not(.link-card), .step, .stat, .activation-card';
 document.querySelectorAll(glassSelector).forEach(el => {
     el.addEventListener('pointermove', (e) => {
         const rect = el.getBoundingClientRect();
