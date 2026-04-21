@@ -24,202 +24,235 @@
 </div>
 ---
 
-### 🚀 Основные возможности
+## О плагине
 
-#### 📢 Автопубликация
-- Новая или обновлённая запись / страница → автоматически отправляется в **канал MAX**.
-- Поддержка миниатюры (изображение прикрепляется к сообщению).
-- Возможность отключить ссылку «Читать полностью».
+**WP Ru-max** подключает WordPress-сайт к мессенджеру [MAX (max.ru)](https://max.ru) и решает три задачи:
 
-#### 🔔 Личные уведомления
-- Перехват всех email-уведомлений WordPress.
-- Поддержка **WooCommerce** (новые заказы), **Contact Form 7**, **Elementor Forms**, **Gravity Forms**, **Ninja Forms** и любых других форм, использующих `wp_mail()`.
-- Каждое письмо дублируется в личный чат с ботом MAX.
+- **Автопубликация** — новые записи и страницы автоматически отправляются в канал MAX.
+- **Уведомления** — все email WordPress (заказы WooCommerce, заявки с форм) дублируются в личный чат с ботом.
+- **Чат-виджет** — настраиваемая плавающая кнопка MAX на сайте для связи с посетителями.
 
-#### 💬 Чат-виджет
-- Плавающая кнопка MAX на сайте.
-- Анимация «печатания» для приветственного сообщения.
-- Полная кастомизация внешнего вида (через настройки плагина).
-
-#### 📋 История и логи
-- Полная таблица всех событий (отправки, ошибки, тесты).
-- Фильтрация по типу, дате, статусу.
-- Просмотр подробного JSON-лога каждого запроса.
-
-#### 🧪 Тестирование
-- Встроенная проверка подключения к боту MAX.
-- Отправка тестового сообщения в выбранный канал / чат.
+Лицензирование и управление ключами реализовано через REST API сайта [рукодер.рф](https://рукодер.рф).
+📲 Telegram: @RussCoder
+🌐 https://рукодер.рф
 
 ---
 
-### ⚙️ Совместимость
+## Возможности
 
-| Компонент            | Поддержка |
-|----------------------|-----------|
-| WordPress            | 5.8 – 6.7 |
-| PHP                  | 7.4+      |
-| WooCommerce          | ✔️ (заказы) |
-| Contact Form 7       | ✔️         |
-| Elementor Forms      | ✔️         |
-| Gravity Forms        | ✔️         |
-| Ninja Forms          | ✔️         |
-| Любые формы через `wp_mail` | ✔️ |
+### Автопубликация записей
+
+| Функция | Описание |
+|---|---|
+| Отправка при публикации | Новая или обновлённая запись / страница → сообщение в канал MAX |
+| Миниатюра | Изображение прикрепляется к сообщению |
+| Ссылка «Читать полностью» | Опционально — можно отключить |
+| Ручная отправка | Кнопка «Отправить в MAX» прямо в редакторе записи |
+| Типы записей | Любые публичные типы (posts, pages, CPT) |
+
+### Уведомления в личный чат
+
+| Функция | Описание |
+|---|---|
+| Перехват `wp_mail()` | Все email-уведомления WordPress → в MAX |
+| WooCommerce | Новый заказ, смена статуса, оплата и т.д. |
+| Contact Form 7 | Уведомления со всех форм |
+| Elementor Forms | Включая Elementor Pro |
+| Gravity Forms | Полная поддержка |
+| Ninja Forms | Полная поддержка |
+
+### Чат-виджет
+
+| Функция | Описание |
+|---|---|
+| Плавающая кнопка | Иконка MAX в углу сайта |
+| Приветственное сообщение | Текст с анимацией «печатания» |
+| Анимации внимания | Пульс, рябь, подпрыгивание, встряска |
+| Звуковое уведомление | 3 варианта (синтез через Web Audio API, без аудиофайлов) |
+| Задержка появления | 0 / 5 / 8 / 10 / 15 секунд |
+| Задержка звука | 3 / 6 / 9 секунд после появления |
+| Отступ от края | Слайдер 0–200 px |
+| Кнопка закрытия | Крестик на приветственном баллоне |
+
+### Логи и тестирование
+
+| Функция | Описание |
+|---|---|
+| Таблица событий | Все отправки, ошибки, тесты |
+| Фильтрация | По типу, дате, статусу |
+| JSON-лог | Полный запрос и ответ API для каждого события |
+| Проверка подключения | Тест соединения с ботом MAX |
+| Тестовое сообщение | Отправка в любой канал / чат |
 
 ---
 
-### 📥 Установка
+## Требования
 
-1. Скачайте архив плагина или клонируйте репозиторий:
+- WordPress 5.8 или выше
+- PHP 7.4 или выше (протестировано на PHP 8.0–8.3)
+- Действующий токен бота MAX
+
+---
+
+## Установка
+
+### Способ 1: через панель WordPress
+
+1. Скачайте ZIP-архив плагина
+2. Перейдите в **Плагины → Добавить новый → Загрузить плагин**
+3. Выберите файл `wp-ru-max.zip` и нажмите **Установить**
+4. Нажмите **Активировать плагин**
+
+### Способ 2: через FTP / SSH
+
+1. Клонируйте репозиторий или распакуйте архив:
    ```bash
    git clone https://github.com/RuCoder-sudo/wp-ru-max.git
-Загрузите папку wp-ru-max в /wp-content/plugins/.
+   ```
+2. Загрузите папку `wp-ru-max` в `/wp-content/plugins/`
+3. Активируйте плагин в **Плагины → Установленные плагины**
 
-Активируйте плагин через меню Плагины в WordPress.
+---
 
-Перейдите в раздел Ru-max → Главная.
+## Настройка
 
-Введите токен бота MAX (получается в партнёрском разделе MAX → Чат-боты → Интеграция → Получить токен).
+### 1. Активация лицензии
 
-Настройте автопубликацию, уведомления и виджет.
+1. Перейдите в **Ru-max → Активация**
+2. Введите лицензионный ключ (формат `WPRM-XXXX-XXXX-XXXX-XXXX`)
+3. Нажмите **Активировать**
 
-💡 Совет: После активации плагина проверьте соединение кнопкой «Проверить подключение» на вкладке «Главная».
+Нет ключа — заполните форму «Запросить лицензионный ключ» на той же вкладке.
 
-❓ Часто задаваемые вопросы
-Где взять токен бота MAX?
-На платформе MAX для партнёров: https://max.ru/partner → раздел «Чат-боты» → «Интеграция» → «Получить токен».
+### 2. Подключение бота MAX
 
-Как узнать ID канала?
-Для публичного канала используйте его никнейм с @ (например, @news_channel).
+1. Получите токен бота на платформе [MAX для партнёров](https://max.ru/partner):  
+   «Чат-боты» → «Интеграция» → «Получить токен»
+2. Вставьте токен на вкладке **Ru-max → Главная**
+3. Нажмите **Проверить подключение**
 
-Для группы — числовой ID (можно получить через бота @get_id_bot в самом MAX).
+### 3. Автопубликация
 
-Работает ли плагин с WooCommerce?
-Да. Плагин автоматически перехватывает все email-уведомления WooCommerce (новый заказ, смена статуса и т.д.) и отправляет их в MAX.
+На вкладке **Публикация**:
+- Включите автоотправку и укажите ID или никнейм канала MAX
+- Настройте формат сообщения и включение/отключение ссылки
 
-Можно ли отключить ссылку «Читать полностью»?
-Да. В настройках автопубликации есть чекбокс «Добавлять ссылку "Читать полностью"».
+### 4. Уведомления
 
-Поддерживает ли плагин Elementor Pro?
-Да, включая виджеты форм Elementor Pro.
+На вкладке **Уведомления**:
+- Включите перехват `wp_mail()`
+- Опционально — укажите фильтр тем для выбора нужных уведомлений
 
-🧪 Статус проекта
-✅ Стабильная работа на WordPress 6.7
+### 5. Чат-виджет
 
-✅ Проверено с PHP 8.0 – 8.3
+На вкладке **Виджет**:
+- Включите виджет и укажите ссылку на бота или канал
+- Настройте текст приветствия, анимацию, звук, задержку и отступ
 
-✅ Все функции протестированы
+---
 
-✅ Готов к использованию в продакшене
+## Структура проекта
 
-📌 Лицензия
-GPL v2 or later
-Полный текст лицензии: https://www.gnu.org/licenses/gpl-2.0.html
+```
+wp-ru-max/
+├── wp-ru-max.php                        # Главный файл плагина — заголовок, константы, подключение классов
+├── uninstall.php                        # Очистка данных при удалении плагина
+├── readme.txt                           # Описание для WordPress.org
+├── README.md                            # Документация для GitHub
+├── license-keys.json                    # (устаревший) локальный список хэшей ключей
+│
+├── assets/
+│   ├── admin.css                        # Стили административной панели
+│   ├── admin.js                         # JavaScript панели: превью звуков, AJAX-сохранение
+│   ├── chat-widget.css                  # Стили фронтенд-виджета и анимаций
+│   ├── chat-widget.js                   # Логика виджета: показ, звук, анимации, закрытие
+│   ├── gutenberg-panel.js               # Панель «Отправить в MAX» в редакторе Gutenberg
+│   ├── max-32x32.png                    # Иконка плагина 32×32
+│   ├── max-64x64.png                    # Иконка плагина 64×64
+│   ├── max-256x256.png                  # Иконка плагина 256×256
+│   └── index.php                        # Заглушка (безопасность)
+│
+├── includes/
+│   ├── class-wp-ru-max.php              # Ядро плагина — инициализация, хуки
+│   ├── class-wp-ru-max-api.php          # Обёртка над REST API мессенджера MAX
+│   ├── class-wp-ru-max-admin.php        # Административная панель: вкладки, настройки, AJAX
+│   ├── class-wp-ru-max-post-sender.php  # Отправка записей в канал MAX при публикации
+│   ├── class-wp-ru-max-notifications.php# Перехват wp_mail() и пересылка в MAX
+│   ├── class-wp-ru-max-chat-widget.php  # Рендер HTML/JS виджета и передача настроек
+│   ├── class-wp-ru-max-license.php      # Лицензирование: активация, проверка через рукодер.рф
+│   ├── class-wp-ru-max-updater.php      # Автообновление через GitHub Releases
+│   ├── class-wp-ru-max-logger.php       # Система логирования событий в БД
+│   └── index.php                        # Заглушка (безопасность)
+│
+└── languages/
+    └── index.php                        # Заглушка (безопасность)
+```
 
-👨‍💻 Автор
-Sergey Soloshenko (RuCoder)
-🛠 WordPress / Full Stack разработчик
-📬 support@рукодер.рф
-📲 Telegram: @RussCoder
-🌐 https://рукодер.рф
+---
 
-WordPress Integration with MAX Messenger
-WP Ru-max is a complete WordPress plugin that connects your site to the Russian messenger MAX (max.ru). Auto-publish posts, receive personal notifications from any forms, and add a chat widget.
+## Как работает автообновление
 
-🚀 Features
-📢 Auto-publishing
-New/updated posts or pages → automatically sent to a MAX channel.
+Плагин проверяет [GitHub Releases](https://github.com/RuCoder-sudo/wp-ru-max/releases) раз в 12 часов. Если тег нового релиза новее установленной версии — в WordPress появляется стандартное уведомление «Доступно обновление». Обновление устанавливается в один клик, как обычный плагин из WordPress.org.
 
-Featured image support (attached to the message).
+---
 
-Option to disable the “Read more” link.
+## Changelog
 
-🔔 Personal notifications
-Intercepts all WordPress email notifications.
+### 1.0.17
+- Лицензирование полностью переведено на REST API сайта рукодер.рф (Key Manager)
+- Устаревшие файлы локальной генерации ключей удалены
 
-Supports WooCommerce (new orders), Contact Form 7, Elementor Forms, Gravity Forms, Ninja Forms, and any form using wp_mail().
+### 1.0.16
+- Исправлена критическая ошибка: звук не воспроизводился, если пользователь взаимодействовал со страницей до истечения задержки появления виджета
+- AudioContext теперь создаётся и разблокируется немедленно при первом взаимодействии
 
-Each email is duplicated as a private message to your MAX bot.
+### 1.0.15
+- Добавлен слайдер отступа виджета от края (0–200 px)
+- Добавлены 3 варианта звука и 4 варианты анимации привлечения внимания
+- Задержка появления виджета: 0 / 5 / 8 / 10 / 15 с
+- Кнопка закрытия (×) на приветственном баллоне
 
-💬 Chat widget
-Floating MAX button on your website.
+---
 
-“Typing” animation for the welcome message.
+## FAQ
 
-Fully customizable appearance.
+**Где взять токен бота MAX?**  
+[max.ru/partner](https://max.ru/partner) → «Чат-боты» → «Интеграция» → «Получить токен».
 
-📋 Event history & logs
-Full table of all events (sent, errors, tests).
+**Как узнать ID канала или группы?**  
+Публичный канал — никнейм с `@` (например, `@my_channel`).  
+Группа — числовой ID (получить через бота `@get_id_bot` в MAX).
 
-Filter by type, date, status.
+**Работает ли плагин без лицензии?**  
+Базовые функции доступны. Полный доступ требует лицензионного ключа.
 
-View detailed JSON log for each request.
+**Почему звук не играет при загрузке страницы?**  
+Браузеры блокируют автовоспроизведение звука до первого взаимодействия пользователя. Звук сыграет сразу после первого клика, касания или прокрутки.
 
-🧪 Testing tools
-Built-in connection test to your MAX bot.
+**Работает ли обновление без WordPress.org?**  
+Да. Плагин проверяет GitHub Releases и обновляется стандартными средствами WordPress.
 
-Send a test message to any channel / chat.
+---
 
-⚙️ Compatibility
-Component	Support
-WordPress	5.8 – 6.7
-PHP	7.4+
-WooCommerce	✔️ (orders)
-Contact Form 7	✔️
-Elementor Forms	✔️
-Gravity Forms	✔️
-Ninja Forms	✔️
-Any form using wp_mail	✔️
-📥 Installation
-Download the plugin archive or clone the repository:
+## Поддержка
 
-bash
-git clone https://github.com/RuCoder-sudo/wp-ru-max.git
-Upload the wp-ru-max folder to /wp-content/plugins/.
+| Канал | Контакт |
+|---|---|
+| Telegram | [@RussCoder](https://t.me/RussCoder) |
+| WhatsApp | +7 (985) 985-53-97 |
+| Email | support@рукодер.рф |
+| Сайт | [рукодер.рф](https://рукодер.рф) |
+| GitHub Issues | [github.com/RuCoder-sudo/wp-ru-max/issues](https://github.com/RuCoder-sudo/wp-ru-max/issues) |
 
-Activate the plugin via Plugins menu in WordPress.
+---
 
-Go to Ru-max → General tab.
+## Лицензия
 
-Enter your MAX bot token (get it from MAX partner area → Chat bots → Integration → Get token).
+Плагин распространяется под лицензией [GPL-2.0+](https://www.gnu.org/licenses/gpl-2.0.html).
 
-Configure auto‑publishing, notifications, and the widget.
+---
 
-💡 Tip: After activation, use the “Test connection” button on the General tab.
+<div align="center">
+Разработано — <a href="https://рукодер.рф">РуКодер</a> · Сергей Солошенко
+</div>
 
-❓ FAQ
-Where can I get the MAX bot token?
-In the MAX partner area: https://max.ru/partner → “Chat bots” → “Integration” → “Get token”.
-
-How to find my channel ID?
-For a public channel – use its nickname with @ (e.g., @news_channel).
-
-For a group – numeric ID (you can get it via @get_id_bot inside MAX).
-
-Does it work with WooCommerce?
-Yes. The plugin automatically intercepts all WooCommerce email notifications (new order, status change, etc.) and forwards them to MAX.
-
-Can I remove the “Read more” link?
-Yes – there is a checkbox in the auto‑publishing settings.
-
-Does it support Elementor Pro?
-Yes, including Elementor Pro Form widgets.
-
-🧪 Project Status
-✅ Stable with WordPress 6.7
-
-✅ Tested with PHP 8.0 – 8.3
-
-✅ All features tested
-
-✅ Production-ready
-
-📌 License
-GPL v2 or later
-Full license: https://www.gnu.org/licenses/gpl-2.0.html
-
-👨‍💻 Author
-Sergey Soloshenko (RuCoder)
-🛠 WordPress / Full Stack Developer
-📬 support@рукодер.рф
-📲 Telegram: @RussCoder
-🌐 https://рукодер.рф
