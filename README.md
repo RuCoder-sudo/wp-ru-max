@@ -4,9 +4,9 @@
   <img src="assets/banneruss.png" alt="WP Ru-max — отправка постов и уведомлений в MAX">
 </p>
 
-## Интеграция WordPress с мессенджером MAX
-
 <div align="center">
+## Интеграция WordPress с мессенджером MAX
+  
 **WP Ru-max** Плагин для WordPress, который подключает ваш сайт к российскому мессенджеру **MAX (max.ru)**. Автоматическая публикация записей, личные уведомления с любых форм и красивый чат-виджет.
 
 ![Version](https://img.shields.io/badge/version-1.0.20-blue?style=flat-square)
