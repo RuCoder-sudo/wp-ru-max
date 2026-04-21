@@ -1,61 +1,24 @@
 <?php
 /**
- * Plugin Name: WP RU-MAX
+ * Plugin Name: WP Ru-max
  * Plugin URI: https://рукодер.рф/
  * Description: Интегрируйте свой сайт WordPress с Max - Российский мессенджер с полным контролем.
- * Version: 1.0.14
- * Author: Сергей Солошенко (RuCoder)
+ * Version: 1.0.17
+ * Author: RuCoder
  * Author URI: https://рукодер.рф/
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: wp-ru-max
+ * Text Domain: рукодер.рф
  * Domain Path: /languages
  * Requires at least: 5.8
- * Tested up to: 6.6
  * Requires PHP: 7.4
- * Stable tag: 1.0.14
- * Tags: max, messenger, chat, online-chat, russian-messenger, widget, woocommerce
- *
- * Compatible with: Wordpress, WooCommerce, Mail, Elementor, Gutenberg, Contact Form 7, Ninja Forms, Formidable Forms, Gravity Forms
- * Max Account Required: Yes
- * Translation Ready: Yes
- * Locale: ru_RU
- *
- * Features:
- * - Виджет онлайн‑чата Max в правом нижнем углу сайта
- * - Настройка цвета и позиции виджета в админ‑панели
- * - Уведомления о новых сообщениях на email
- * - Логирование диалогов в админке WordPress
- * - Поддержка эмодзи и вложений
- *
- * Installation:
- * 1. Загрузите папку `wp-ru-max` в директорию `/wp-content/plugins/`
- * 2. Активируйте плагин через меню «Плагины» в WordPress
- * 3. Перейдите в «Настройки → WP RU-MAX»
- * 4. Введите API‑ключ от аккаунта Max
- * 5. Настройте внешний вид виджета
- *
- * FAQ:
- * Q: Нужен ли платный аккаунт Max?
- * A: Достаточно бесплатного бизнес‑аккаунта Max только для Ип или ООО, не подходит обычнм физ.лицам.
- *
- * Support URI: https://рукодер.рф/
- * Разработчик: Сергей Солошенко | РуКодер
- * Специализация: Веб-разработка с 2018 года | WordPress / Full Stack
- * Принцип работы: "Сайт как для себя"
- * Контакты:
- * - Телефон/WhatsApp: +7 (985) 985-53-97
- * - Email: support@рукодер.рф
- * - Telegram: @RussCoder
- * - Портфолио: https://рукодер.рф
- * - GitHub: https://github.com/RuCoder-sudo
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'WP_RU_MAX_VERSION', '1.0.14' );
+define( 'WP_RU_MAX_VERSION', '1.0.17' );
 define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
 define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
