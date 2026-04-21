@@ -1,44 +1,190 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Документация — WP Ru-max</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Документация — WP Ru-max</title>
+<meta name="description" content="Документация плагина WP Ru-max: установка, активация лицензии, настройка бота MAX, автопубликация, уведомления, чат-виджет, логи.">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>📖 Документация WP Ru-max</h1>
-        <p><a href="index.html">← На главную</a></p>
 
-        <h2>Установка</h2>
-        <ol>
-            <li>Скачайте ZIP-архив из <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases">Releases</a>.</li>
-            <li>В админке WordPress: Плагины → Добавить новый → Загрузить плагин.</li>
-            <li>Активируйте плагин.</li>
-        </ol>
+<div class="bg-canvas">
+    <span class="blob b1"></span>
+    <span class="blob b2"></span>
+    <span class="blob b3"></span>
+</div>
 
-        <h2>Активация лицензии</h2>
-        <p>Перейдите в меню <strong>Ru-max → Активация</strong>. Введите ключ формата <code>WPRM-XXXX-XXXX-XXXX-XXXX</code>.</p>
-        <p>Нет ключа? Запросите через форму на той же вкладке или купите на <a href="https://kwork.ru/user/RuCoder">Kwork</a>.</p>
-
-        <h2>Настройка бота MAX</h2>
-        <p>Получите токен на <a href="https://max.ru/partner">max.ru/partner</a> (Чат-боты → Интеграция → Получить токен). Вставьте токен в <strong>Ru-max → Главная</strong> и нажмите «Проверить подключение».</p>
-
-        <h2>Автопубликация</h2>
-        <p>В разделе <strong>Ru-max → Публикация</strong> укажите ID канала (например <code>@my_channel</code>) и включите отправку.</p>
-
-        <h2>Уведомления</h2>
-        <p>Включите перехват <code>wp_mail()</code> в разделе <strong>Ru-max → Уведомления</strong>. Все письма будут дублироваться в личный чат с ботом.</p>
-
-        <h2>Чат-виджет</h2>
-        <p>Настройте внешний вид, анимации, звук и задержку появления в разделе <strong>Ru-max → Виджет</strong>.</p>
-
-        <h2>Логи и тестирование</h2>
-        <p>Все отправки и ошибки сохраняются в таблицу логов (<strong>Ru-max → Логи</strong>). Там же можно посмотреть JSON запросов.</p>
-
-        <h2>Поддержка</h2>
-        <p>Telegram: <a href="https://t.me/RussCoder">@RussCoder</a><br>Email: support@рукодер.рф</p>
+<nav class="nav">
+    <a href="index.html" class="brand">
+        <span class="logo">M</span>
+        <span>WP Ru-max</span>
+    </a>
+    <div class="links">
+        <a href="index.html#features">Возможности</a>
+        <a href="index.html#install">Установка</a>
+        <a href="index.html#pricing">Лицензия</a>
+        <a href="index.html#faq">FAQ</a>
+        <a href="docs.html">Документация</a>
     </div>
+    <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" class="btn btn-primary btn-sm cta">Скачать</a>
+</nav>
+
+<header class="hero" style="padding:60px 0 20px;">
+    <div class="container">
+        <div class="eyebrow"><span class="dot"></span> Документация · версия 1.0.21</div>
+        <h1>📖 Документация <span class="grad">WP Ru-max</span></h1>
+        <p class="lead">Установка, активация, настройка модулей и работа с логами — всё в одном месте.</p>
+    </div>
+</header>
+
+<section style="padding-top:20px;">
+    <div class="container">
+        <div class="doc-layout">
+            <aside class="doc-toc">
+                <h4>Содержание</h4>
+                <a href="#install">1. Установка</a>
+                <a href="#license">2. Активация лицензии</a>
+                <a href="#bot">3. Подключение бота MAX</a>
+                <a href="#publish">4. Автопубликация</a>
+                <a href="#notify">5. Уведомления с форм</a>
+                <a href="#widget">6. Чат-виджет</a>
+                <a href="#logs">7. Логи и тестирование</a>
+                <a href="#updates">8. Обновления</a>
+                <a href="#changelog">9. История версий</a>
+                <a href="#support">10. Поддержка</a>
+            </aside>
+
+            <article class="doc-body">
+
+                <h2 id="install">1. Установка</h2>
+                <p>Поддерживается WordPress 5.8+ и PHP 7.4+. Тестировано на PHP 8.0–8.3.</p>
+                <h3>Через панель WordPress</h3>
+                <ol>
+                    <li>Скачайте ZIP-архив из <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases">GitHub Releases</a>.</li>
+                    <li>Перейдите в <strong>Плагины → Добавить новый → Загрузить плагин</strong>.</li>
+                    <li>Выберите <code>wp-ru-max.zip</code> и нажмите <strong>Установить</strong>.</li>
+                    <li>Активируйте плагин кнопкой <strong>Активировать плагин</strong>.</li>
+                </ol>
+                <h3>Через FTP / SSH</h3>
+                <pre><code>git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
+    /var/www/site/wp-content/plugins/wp-ru-max</code></pre>
+                <p>Затем активируйте плагин в <strong>Плагины → Установленные плагины</strong>.</p>
+
+                <h2 id="license">2. Активация лицензии</h2>
+                <p>Перейдите в меню <strong>Ru-max → Активация</strong>. Введите ключ формата <code>WPRM-XXXX-XXXX-XXXX-XXXX</code> и нажмите «Активировать».</p>
+                <p>Нет ключа? Заполните форму «Запросить лицензионный ключ» на той же вкладке. Укажите имя, email и удобный мессенджер (Telegram / MAX / WhatsApp / VK) — владелец свяжется и вышлет ключ.</p>
+                <p>При открытии вкладки плагин сверяет ключ с сервером рукодер.рф. Если ключ был отозван — статус сразу переключается на «приостановлен», на странице появляется красная плашка, в логе пишется «Лицензия отозвана сервером».</p>
+                <h3>Кнопка «Проверить лицензию сейчас»</h3>
+                <p>На активной лицензии есть кнопка ручной перепроверки и строка «Последняя проверка». В фоне ключ сверяется раз в час (<code>RECHECK_SECONDS = 3600</code>).</p>
+                <h3>Стоимость</h3>
+                <table>
+                    <thead><tr><th>Доменов</th><th>Цена</th><th>За домен</th><th>Экономия</th></tr></thead>
+                    <tbody>
+                        <tr><td>1</td><td><strong>2 200 ₽</strong></td><td>2 200 ₽</td><td>—</td></tr>
+                        <tr><td>2</td><td><strong>4 000 ₽</strong></td><td>2 000 ₽</td><td>~9%</td></tr>
+                        <tr><td>5</td><td><strong>7 000 ₽</strong></td><td>1 400 ₽</td><td><strong>36%</strong></td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="bot">3. Подключение бота MAX</h2>
+                <ol>
+                    <li>Получите токен на платформе <a href="https://max.ru/partner">max.ru/partner</a>: «Чат-боты» → «Интеграция» → «Получить токен».</li>
+                    <li>Вставьте токен на вкладке <strong>Ru-max → Главная</strong>.</li>
+                    <li>Нажмите <strong>Проверить подключение</strong> — плагин дёрнет метод <code>GET /me</code> и покажет данные бота.</li>
+                </ol>
+
+                <h2 id="publish">4. Автопубликация</h2>
+                <p>В разделе <strong>Ru-max → Публикация</strong>:</p>
+                <ul>
+                    <li>Включите «Автоматическая отправка постов».</li>
+                    <li>Укажите канал MAX: никнейм публичного канала вида <code>@my_channel</code> или числовой ID группы.</li>
+                    <li>Выберите типы записей (posts, pages, любые CPT).</li>
+                    <li>Настройте формат сообщения: переменные <code>{title}</code>, <code>{excerpt}</code>, <code>{url}</code>, <code>{meta_FIELD}</code>, <code>{acf_FIELD}</code>.</li>
+                    <li>Опционально включите/отключите ссылку «Читать полностью» и прикрепление миниатюры.</li>
+                </ul>
+                <p>В редакторе записи появится отдельная кнопка <strong>«Отправить в MAX»</strong> для ручной отправки.</p>
+
+                <h2 id="notify">5. Уведомления с форм</h2>
+                <p>В разделе <strong>Ru-max → Уведомления</strong> включите перехват <code>wp_mail()</code> и укажите ID чатов, в которые дублировать письма.</p>
+                <p>Поддерживаются:</p>
+                <ul>
+                    <li>WooCommerce — новые заказы, смена статуса, оплата.</li>
+                    <li>Contact Form 7, Elementor Forms (включая Pro), Gravity Forms, Ninja Forms.</li>
+                    <li>Любые формы и плагины, использующие стандартный <code>wp_mail()</code>.</li>
+                </ul>
+                <p>Шаблон сообщения настраивается; по умолчанию: <code>&lt;b&gt;{email_subject}&lt;/b&gt;\n{email_message}</code>.</p>
+
+                <h2 id="widget">6. Чат-виджет</h2>
+                <p>В разделе <strong>Ru-max → Виджет</strong>:</p>
+                <ul>
+                    <li>Включите виджет, укажите ссылку на бота / канал MAX.</li>
+                    <li>Текст приветствия с анимацией «печатания», размер виджета (S / M / L), позиция (слева / справа).</li>
+                    <li>Слайдер отступа от края (0–200 px).</li>
+                    <li>Задержка появления: 0 / 5 / 8 / 10 / 15 секунд.</li>
+                    <li>3 варианта звука уведомления (Web Audio, без аудиофайлов), задержка звука 3 / 6 / 9 секунд.</li>
+                    <li>4 анимации привлечения внимания: пульс, рябь, подпрыгивание, встряска.</li>
+                    <li>Попап удержания: заголовок и сообщение, кнопки «Остаться» и «Уйти», цвета и закругление.</li>
+                </ul>
+
+                <h2 id="logs">7. Логи и тестирование</h2>
+                <p>В разделе <strong>Ru-max → Логи</strong>:</p>
+                <ul>
+                    <li>Таблица всех событий: отправки, ошибки, тесты.</li>
+                    <li>Фильтры по типу, дате, статусу.</li>
+                    <li>Просмотр полного JSON запроса/ответа API MAX для каждого события.</li>
+                </ul>
+                <p>Тестовые сообщения отправляются с вкладки «Главная» в любой канал или личный чат.</p>
+
+                <h2 id="updates">8. Обновления</h2>
+                <p>Раз в 12 часов плагин проверяет <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases">GitHub Releases</a>. Если тег нового релиза новее установленной версии — в WordPress появится стандартное уведомление «Доступно обновление». Установка в один клик, как с обычным плагином из WordPress.org.</p>
+
+                <h2 id="changelog">9. История версий</h2>
+                <h3>1.0.21</h3>
+                <ul>
+                    <li>Лицензирование: фоновая перепроверка ключа сокращена с 1 раза в сутки до 1 раза в час.</li>
+                    <li>При открытии вкладки «Активация» — принудительная сверка ключа, отозванные ключи определяются мгновенно.</li>
+                    <li>Кнопка «Проверить лицензию сейчас» + строка «Последняя проверка».</li>
+                    <li>Если ключ отозван — статус <code>suspended</code>, красная плашка, запись в логе.</li>
+                    <li>На вкладку «Активация» добавлен блок «Важная информация о лицензии» (2 200 ₽, бессрочная).</li>
+                    <li>Блок «Система скидок» перенесён со вкладки «Инструкция» на вкладку «Активация».</li>
+                    <li>В форму запроса ключа добавлено поле «Контакт для быстрой связи» (Telegram / MAX / WhatsApp / VK).</li>
+                </ul>
+                <h3>1.0.20</h3>
+                <ul>
+                    <li>Расширенные настройки попапа удержания: многострочные тексты, выравнивание, цвета и закругление кнопок.</li>
+                </ul>
+                <h3>1.0.19</h3>
+                <ul>
+                    <li>Добавлены «Сообщения на удержание» — попап при попытке закрыть приветствие чат-виджета.</li>
+                    <li>Исправлен предварительный просмотр анимации привлечения внимания в админке.</li>
+                </ul>
+                <p>Полный список изменений — в <a href="https://github.com/RuCoder-sudo/wp-ru-max/blob/main/wp-ru-max/readme.txt">readme.txt</a>.</p>
+
+                <h2 id="support">10. Поддержка</h2>
+                <table>
+                    <thead><tr><th>Канал</th><th>Контакт</th></tr></thead>
+                    <tbody>
+                        <tr><td>Telegram</td><td><a href="https://t.me/RussCoder">@RussCoder</a></td></tr>
+                        <tr><td>WhatsApp / телефон</td><td>+7 (985) 985-53-97</td></tr>
+                        <tr><td>Email</td><td><a href="mailto:rucoder.rf@yandex.ru">rucoder.rf@yandex.ru</a></td></tr>
+                        <tr><td>Сайт</td><td><a href="https://рукодер.рф">рукодер.рф</a></td></tr>
+                        <tr><td>GitHub Issues</td><td><a href="https://github.com/RuCoder-sudo/wp-ru-max/issues">github.com/RuCoder-sudo/wp-ru-max/issues</a></td></tr>
+                    </tbody>
+                </table>
+
+                <p style="margin-top:40px;"><a href="index.html" class="btn btn-ghost btn-sm">← На главную</a></p>
+            </article>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div>© 2026 <a href="https://рукодер.рф">РуКодер</a> · WP Ru-max v1.0.21 · GPLv2</div>
+        <div class="made">Сделано с ♥ для российского WordPress-сообщества</div>
+    </div>
+</footer>
+
 </body>
 </html>
