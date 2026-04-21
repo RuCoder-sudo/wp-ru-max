@@ -130,3 +130,82 @@
         height: 52px !important;
     }
 }
+
+/* ================================================================== */
+/* RETENTION MODAL                                                      */
+/* ================================================================== */
+.wp-ru-max-retention-modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 100000;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    animation: wpRuMaxFadeIn 0.25s ease;
+}
+.wp-ru-max-retention-modal.show {
+    display: flex;
+}
+@keyframes wpRuMaxFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+.wp-ru-max-retention-content {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+    width: 90%;
+    max-width: 420px;
+    padding: 24px;
+    animation: wpRuMaxSlideUp 0.3s ease;
+}
+@keyframes wpRuMaxSlideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+.wp-ru-max-retention-header h3 {
+    margin: 0 0 12px;
+    font-size: 20px;
+    font-weight: 600;
+    color: #222;
+}
+.wp-ru-max-retention-body p {
+    margin: 0 0 20px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: #444;
+}
+.wp-ru-max-retention-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+.wp-ru-max-retention-actions button {
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+}
+.wp-ru-max-retention-actions button:active {
+    transform: scale(0.97);
+}
+.wp-ru-max-retention-stay {
+    background: #4a90d9;
+    color: #fff;
+}
+.wp-ru-max-retention-stay:hover {
+    background: #3a7bc0;
+}
+.wp-ru-max-retention-leave {
+    background: #f0f0f0;
+    color: #555;
+}
+.wp-ru-max-retention-leave:hover {
+    background: #e0e0e0;
+}
