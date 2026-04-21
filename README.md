@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/🌐_Открыть_сайт-rucoder--sudo.github.io%2Fwp--ru--max-d63347?style=for-the-badge&labelColor=1a0d12" alt="Открыть сайт" height="42">
 </a>
 
-### 👉 [**Перейти на сайт плагина**](https://rucoder-sudo.github.io/wp-ru-max/) 👈
+### [**Перейти на сайт плагина**](https://rucoder-sudo.github.io/wp-ru-max/)
 
 <br>
 
@@ -24,17 +24,17 @@
 
 ---
 
-## 🚀 Что такое WP Ru-max
+## Что такое WP Ru-max
 
 **WP Ru-max** — это WordPress-плагин, который связывает ваш сайт с мессенджером [MAX (max.ru)](https://max.ru). Один плагин = три модуля:
 
-- 📝 **Автопубликация** — новые записи и страницы автоматически уходят в канал MAX
-- 📩 **Личные уведомления** — все письма WordPress (заказы WooCommerce, заявки с форм) дублируются в личный чат с ботом
-- 💬 **Чат-виджет** — плавающая кнопка MAX с приветствием, звуком и попапом удержания
+-  **Автопубликация** — новые записи и страницы автоматически уходят в канал MAX
+-  **Личные уведомления** — все письма WordPress (заказы WooCommerce, заявки с форм) дублируются в личный чат с ботом
+-  **Чат-виджет** — плавающая кнопка MAX с приветствием, звуком и попапом удержания
 
 ---
 
-## ⚡ Активация — прямо в плагине
+## Активация — прямо в плагине
 
 > Никаких внешних форм и личных кабинетов. Всё происходит в админке вашего сайта.
 
@@ -47,7 +47,7 @@
 
 ---
 
-## 💎 Лицензия
+## Лицензия
 
 | Доменов | Цена | За домен | Экономия |
 |---------|------|----------|----------|
@@ -59,19 +59,19 @@
 
 ---
 
-## 🔧 Совместимость
+## Совместимость
 
 `WordPress 5.8 – 6.7` · `PHP 7.4 – 8.3` · `WooCommerce` · `Contact Form 7` · `Elementor Forms` · `Gravity Forms` · `Ninja Forms` · любые формы через `wp_mail()`
 
 ---
 
-## 📬 Контакты
+## Контакты
 
-- 🌐 **Сайт:** [рукодер.рф](https://рукодер.рф)
-- ✈ **Telegram:** [@RussCoder](https://t.me/RussCoder)
-- ✉ **Email:** [rucoder.rf@yandex.ru](mailto:rucoder.rf@yandex.ru)
-- 📞 **Телефон / WhatsApp:** +7 (985) 985-53-97
-- 🐛 **Баг-репорты:** [GitHub Issues](https://github.com/RuCoder-sudo/wp-ru-max/issues)
+-  **Сайт:** [рукодер.рф](https://рукодер.рф)
+-  **Telegram:** [@RussCoder](https://t.me/RussCoder)
+-  **Email:** [rucoder.rf@yandex.ru](mailto:rucoder.rf@yandex.ru)
+-  **Телефон / WhatsApp:** +7 (985) 985-53-97
+-  **Баг-репорты:** [GitHub Issues](https://github.com/RuCoder-sudo/wp-ru-max/issues)
 
 ---
 
@@ -79,9 +79,9 @@
 
 <br>
 
-## 🎯 Готовы подключить MAX к своему сайту?
+##  Готовы подключить MAX к своему сайту?
 
-### [🌟 Открыть сайт плагина → rucoder-sudo.github.io/wp-ru-max](https://rucoder-sudo.github.io/wp-ru-max/)
+### [ Открыть сайт плагина → rucoder-sudo.github.io/wp-ru-max](https://rucoder-sudo.github.io/wp-ru-max/)
 
 <br>
 
