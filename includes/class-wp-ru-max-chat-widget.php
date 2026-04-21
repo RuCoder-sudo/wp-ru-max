@@ -59,10 +59,15 @@ class WP_Ru_Max_Chat_Widget {
             return;
         }
 
-        $size     = isset( $settings['chat_widget_size'] )     ? $settings['chat_widget_size']     : 'medium';
-        $url      = isset( $settings['chat_widget_url'] )      ? trim( $settings['chat_widget_url'] ) : '';
-        $message  = isset( $settings['chat_widget_message'] )  ? $settings['chat_widget_message']  : 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!';
-        $position = isset( $settings['chat_widget_position'] ) ? $settings['chat_widget_position'] : 'right';
+        $size          = isset( $settings['chat_widget_size'] )          ? $settings['chat_widget_size']                  : 'medium';
+        $url           = isset( $settings['chat_widget_url'] )           ? trim( $settings['chat_widget_url'] )           : '';
+        $message       = isset( $settings['chat_widget_message'] )       ? $settings['chat_widget_message']               : 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!';
+        $position      = isset( $settings['chat_widget_position'] )      ? $settings['chat_widget_position']              : 'right';
+        $bottom_offset = isset( $settings['chat_widget_bottom_offset'] ) ? (int) $settings['chat_widget_bottom_offset']   : 20;
+        $show_delay    = isset( $settings['chat_widget_show_delay'] )    ? (int) $settings['chat_widget_show_delay']      : 0;
+        $sound         = isset( $settings['chat_widget_sound'] )         ? $settings['chat_widget_sound']                 : 'none';
+        $sound_delay   = isset( $settings['chat_widget_sound_delay'] )   ? (int) $settings['chat_widget_sound_delay']     : 3;
+        $animation     = isset( $settings['chat_widget_animation'] )     ? $settings['chat_widget_animation']             : 'none';
 
         $cfg = self::get_size_config( $size );
         $px  = (int) $cfg['px'];
@@ -74,13 +79,17 @@ class WP_Ru_Max_Chat_Widget {
         $balloon_css = ( 'left' === $position ) ? 'left:0;' : 'right:0;';
         $arrow_css   = ( 'left' === $position ) ? 'left:14px;' : 'right:14px;';
         $icon_url    = esc_url( WP_RU_MAX_PLUGIN_URL . 'assets/' . $img );
+        $anim_class  = ! empty( $animation ) && $animation !== 'none' ? ' wp-ru-max-anim-' . esc_attr( $animation ) : '';
         ?>
-<div id="wp-ru-max-widget" style="position:fixed;bottom:20px;<?php echo esc_attr( $side_css ); ?>z-index:99999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-    <div id="wp-ru-max-balloon" style="position:absolute;bottom:<?php echo ( $px + 14 ); ?>px;<?php echo esc_attr( $balloon_css ); ?>background:#fff;border:1px solid #e0e0e0;border-radius:14px;padding:12px 16px;max-width:265px;min-width:265px;box-shadow:0 4px 24px rgba(0,0,0,0.15);display:none;word-break:break-word;">
-        <div id="wp-ru-max-typing" style="color:#222;font-size:14px;line-height:1.5;"></div>
+<div id="wp-ru-max-widget" style="position:fixed;bottom:<?php echo (int) $bottom_offset; ?>px;<?php echo esc_attr( $side_css ); ?>z-index:99999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:none;">
+    <div id="wp-ru-max-balloon" style="position:absolute;bottom:<?php echo ( $px + 14 ); ?>px;<?php echo esc_attr( $balloon_css ); ?>background:#fff;border:1px solid #e0e0e0;border-radius:14px;padding:12px 16px 12px 16px;max-width:265px;min-width:265px;box-shadow:0 4px 24px rgba(0,0,0,0.15);display:none;word-break:break-word;">
+        <button id="wp-ru-max-close" onclick="(function(){var b=document.getElementById('wp-ru-max-balloon');if(b){b.style.opacity='0';b.style.transition='opacity 0.3s';setTimeout(function(){b.style.display='none';b.dataset.closed='1';},300);}})();return false;" style="position:absolute;top:6px;right:8px;background:none;border:none;cursor:pointer;color:#aaa;font-size:18px;line-height:1;padding:0 2px;" title="Закрыть" aria-label="Закрыть">&times;</button>
+        <div id="wp-ru-max-typing" style="color:#222;font-size:14px;line-height:1.5;padding-right:18px;"></div>
         <div style="position:absolute;bottom:-8px;<?php echo esc_attr( $arrow_css ); ?>width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:8px solid #fff;"></div>
     </div>
     <a href="<?php echo $href; ?>"<?php echo $target; ?>
+       id="wp-ru-max-icon"
+       class="wp-ru-max-icon<?php echo $anim_class; ?>"
        style="display:block;width:<?php echo $px; ?>px;height:<?php echo $px; ?>px;border-radius:50%;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.28);cursor:pointer;text-decoration:none;transition:transform 0.2s ease,box-shadow 0.2s ease;"
        aria-label="Написать нам в MAX"
        onmouseover="this.style.transform='scale(1.1)';this.style.boxShadow='0 6px 24px rgba(0,0,0,0.38)'"
@@ -91,7 +100,15 @@ class WP_Ru_Max_Chat_Widget {
              alt="MAX"
              style="display:block;width:100%;height:100%;object-fit:cover;" />
     </a>
-    <script>window.wpRuMaxMessage=<?php echo wp_json_encode( $message ); ?>;</script>
+    <script>
+    window.wpRuMaxSettings = <?php echo wp_json_encode( array(
+        'message'     => $message,
+        'showDelay'   => $show_delay * 1000,
+        'sound'       => $sound,
+        'soundDelay'  => $sound_delay * 1000,
+        'animation'   => $animation,
+    ) ); ?>;
+    </script>
 </div>
         <?php
     }
