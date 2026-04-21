@@ -1107,41 +1107,6 @@ class WP_Ru_Max_Admin {
             </ul>
         </div>
 
-        <div class="wp-ru-max-card">
-            <h3>Система скидок на лицензии</h3>
-            <p>При покупке нескольких доменов действует прогрессивная скидка:</p>
-            <table class="widefat striped" style="max-width:520px;">
-                <thead>
-                    <tr>
-                        <th>Количество доменов</th>
-                        <th>Цена</th>
-                        <th>Цена за домен</th>
-                        <th>Экономия</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>1 домен</td>
-                        <td><strong>2&nbsp;200&nbsp;₽</strong></td>
-                        <td>2&nbsp;200&nbsp;₽/шт</td>
-                        <td>—</td>
-                    </tr>
-                    <tr>
-                        <td>2 домена</td>
-                        <td><strong>4&nbsp;000&nbsp;₽</strong></td>
-                        <td>2&nbsp;000&nbsp;₽/шт</td>
-                        <td>~9%</td>
-                    </tr>
-                    <tr>
-                        <td>5 доменов</td>
-                        <td><strong>7&nbsp;000&nbsp;₽</strong></td>
-                        <td>1&nbsp;400&nbsp;₽/шт</td>
-                        <td><strong>36%</strong></td>
-                    </tr>
-                </tbody>
-            </table>
-            <p class="description" style="margin-top:8px;">Чем больше доменов — тем выгоднее. Для покупки нескольких лицензий свяжитесь с нами.</p>
-        </div>
         <?php
     }
 
@@ -1544,10 +1509,18 @@ class WP_Ru_Max_Admin {
     }
 
     private function render_tab_activation() {
+        // Каждый раз при открытии вкладки активации делаем свежую проверку
+        // ключа на сервере, чтобы отозванные ключи определялись сразу.
+        $existing = WP_Ru_Max_License::get_data();
+        if ( ! empty( $existing['key'] ) ) {
+            WP_Ru_Max_License::force_recheck();
+        }
+
         $is_licensed = WP_Ru_Max_License::is_active();
         $license     = WP_Ru_Max_License::get_data();
         $license_obj = WP_Ru_Max_License::instance();
         $attempts    = $license_obj->get_remaining_attempts();
+        $is_suspended = ! $is_licensed && ! empty( $license['status'] ) && $license['status'] === 'suspended';
         ?>
         <div class="wp-ru-max-card">
             <?php if ( $is_licensed ) : ?>
@@ -1568,12 +1541,27 @@ class WP_Ru_Max_Admin {
                             <th>Тип лицензии:</th>
                             <td>Пожизненная</td>
                         </tr>
+                        <tr>
+                            <th>Последняя проверка:</th>
+                            <td><?php echo esc_html( $license['last_verified'] ?? '—' ); ?></td>
+                        </tr>
                     </table>
+                    <p style="margin-top:16px;">
+                        <button type="button" class="button" id="recheck_license_btn">Проверить лицензию сейчас</button>
+                    </p>
+                    <div id="license_recheck_result" class="wp-ru-max-notice" style="display:none;margin-top:12px;"></div>
                 </div>
 
             <?php else : ?>
 
                 <h2>Активация плагина</h2>
+                <?php if ( $is_suspended ) : ?>
+                    <div class="wp-ru-max-notice notice-error" style="display:block;padding:12px 16px;border-left:4px solid #d63638;background:#fff;margin:12px 0;">
+                        <strong>Лицензия отозвана или больше недействительна.</strong><br />
+                        Ключ <code><?php echo esc_html( $license['key'] ?? '' ); ?></code> был аннулирован на сервере рукодер.рф.
+                        Все функции плагина деактивированы. Введите новый лицензионный ключ или запросите его ниже.
+                    </div>
+                <?php endif; ?>
                 <p>Для использования всех функций WP Ru-max введите лицензионный ключ. Если у вас нет ключа — запросите его ниже.</p>
 
                 <div class="wp-ru-max-activation-block">
@@ -1615,6 +1603,61 @@ class WP_Ru_Max_Admin {
                 <hr style="margin:32px 0;" />
 
                 <div class="wp-ru-max-activation-block">
+                    <h3>Важная информация о лицензии</h3>
+                    <p>
+                        Стоимость лицензии WP Ru-max — <strong>2&nbsp;200&nbsp;₽</strong> за один домен.
+                        Лицензия <strong>бессрочная</strong>: оплачивается один раз и действует постоянно,
+                        без абонентской платы и продлений. Включает все функции плагина и обновления.
+                    </p>
+                    <ul style="margin-left:18px;list-style:disc;">
+                        <li>Привязка к одному домену сайта</li>
+                        <li>Бессрочное использование без продления</li>
+                        <li>Все обновления плагина включены</li>
+                        <li>Поддержка от разработчика</li>
+                    </ul>
+                </div>
+
+                <hr style="margin:32px 0;" />
+
+                <div class="wp-ru-max-activation-block">
+                    <h3>Система скидок на лицензии</h3>
+                    <p>При покупке нескольких доменов действует прогрессивная скидка:</p>
+                    <table class="widefat striped" style="max-width:520px;">
+                        <thead>
+                            <tr>
+                                <th>Количество доменов</th>
+                                <th>Цена</th>
+                                <th>Цена за домен</th>
+                                <th>Экономия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1 домен</td>
+                                <td><strong>2&nbsp;200&nbsp;₽</strong></td>
+                                <td>2&nbsp;200&nbsp;₽/шт</td>
+                                <td>—</td>
+                            </tr>
+                            <tr>
+                                <td>2 домена</td>
+                                <td><strong>4&nbsp;000&nbsp;₽</strong></td>
+                                <td>2&nbsp;000&nbsp;₽/шт</td>
+                                <td>~9%</td>
+                            </tr>
+                            <tr>
+                                <td>5 доменов</td>
+                                <td><strong>7&nbsp;000&nbsp;₽</strong></td>
+                                <td>1&nbsp;400&nbsp;₽/шт</td>
+                                <td><strong>36%</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="description" style="margin-top:8px;">Чем больше доменов — тем выгоднее. Для покупки нескольких лицензий свяжитесь с нами.</p>
+                </div>
+
+                <hr style="margin:32px 0;" />
+
+                <div class="wp-ru-max-activation-block">
                     <h3>Запросить лицензионный ключ</h3>
                     <p>Нет ключа? Заполните форму — владелец плагина рассмотрит запрос и пришлёт ключ на ваш email.</p>
 
@@ -1630,6 +1673,13 @@ class WP_Ru_Max_Admin {
                             <td>
                                 <input type="email" id="req_email" name="req_email" class="regular-text" placeholder="your@email.ru" />
                                 <p class="description">На этот адрес придёт лицензионный ключ.</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="req_social">Контакт для быстрой связи</label></th>
+                            <td>
+                                <input type="text" id="req_social" name="req_social" class="regular-text" placeholder="Telegram @username, MAX, WhatsApp +7..., VK ссылка" />
+                                <p class="description">Удобный мессенджер или соцсеть, чтобы быстрее обсудить покупку и выслать ключ.</p>
                             </td>
                         </tr>
                         <tr>
@@ -1661,6 +1711,27 @@ class WP_Ru_Max_Admin {
 
         <script>
         (function($){
+            // Ручная перепроверка действующей лицензии
+            $('#recheck_license_btn').on('click', function(){
+                var $btn = $(this).prop('disabled', true).text('Проверяем...');
+                $.post(wpRuMax.ajaxUrl, {
+                    action: 'wp_ru_max_recheck_license',
+                    nonce:  wpRuMax.nonce
+                }, function(resp){
+                    if ( resp.success ) {
+                        showResult('#license_recheck_result', true, resp.data.message || 'Лицензия действительна.');
+                        $btn.prop('disabled', false).text('Проверить лицензию сейчас');
+                        setTimeout(function(){ location.reload(); }, 1200);
+                    } else {
+                        showResult('#license_recheck_result', false, resp.data || 'Лицензия больше не действительна.');
+                        setTimeout(function(){ location.reload(); }, 1500);
+                    }
+                }).fail(function(){
+                    showResult('#license_recheck_result', false, 'Ошибка сети. Попробуйте ещё раз.');
+                    $btn.prop('disabled', false).text('Проверить лицензию сейчас');
+                });
+            });
+
             // Активация по ключу
             $('#activate_license_btn').on('click', function(){
                 var key = $('#license_key').val().trim().toUpperCase();
@@ -1711,12 +1782,13 @@ class WP_Ru_Max_Admin {
                     nonce:     wpRuMax.nonce,
                     req_name:  name,
                     req_email: email,
+                    req_social: $('#req_social').val().trim(),
                     consent:   $('#consent_personal').is(':checked') ? 1 : 0,
                     mailing:   $('#consent_mailing').is(':checked')  ? 1 : 0
                 }, function(resp){
                     if ( resp.success ) {
                         showResult('#license_request_result', true, resp.data);
-                        $('#req_name, #req_email').val('');
+                        $('#req_name, #req_email, #req_social').val('');
                         $('#consent_personal, #consent_mailing').prop('checked', false);
                         $btn.prop('disabled', true).text('Отправить запрос');
                     } else {
