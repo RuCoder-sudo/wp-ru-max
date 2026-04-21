@@ -19,10 +19,10 @@
 
 [Получить лицензию](https://рукодер.рф) · [Документация](#установка) · [Поддержка](#поддержка) · [Changelog](#changelog)
 
-</div>
 <a href="https://rucoder-sudo.github.io/wp-ru-max/">
   <img src="https://img.shields.io/badge/🌐_Открыть_сайт-rucoder--sudo.github.io%2Fwp--ru--max-d63347?style=for-the-badge&labelColor=1a0d12" alt="Открыть сайт" height="42">
 </a>
+</div>
 
 ## О плагине
 
