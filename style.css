@@ -1031,17 +1031,17 @@ footer .made { font-size: 13px; margin-top: 8px; opacity: 0.7; }
 .reveal.on { opacity: 1; transform: none; }
 
 /* ===== Mouse-tracked frosted-glass wave =====
-   Каждый glass-блок (.card, .panel, .price, .step, .demo-card, .stat,
-   .compat, .mockup, .cta-banner) получает мягкую «волну» подсветки,
-   которая следует за курсором. Координаты задаются через --mx/--my из JS. */
-.card, .panel, .price, .step, .demo-card, .stat,
-.compat, .mockup, .cta-banner, .form-panel, .activation-card {
+   Безопасная реализация: позиционирование задано без overflow:hidden,
+   псевдоэлемент сам себя обрезает через border-radius: inherit, поэтому
+   «выпирающие» элементы (.tag «Популярно», градиентные бордеры с inset:-1px,
+   стрелка .link-card::after) остаются на месте. */
+.card:not(.link-card), .step, .stat, .activation-card {
     position: relative;
-    overflow: hidden;
 }
-.card::after, .panel::after, .price::after, .step::after, .demo-card::after,
-.stat::after, .compat::after, .mockup::after, .cta-banner::after,
-.form-panel::after, .activation-card::after {
+.card:not(.link-card)::after,
+.step::after,
+.stat::after,
+.activation-card::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -1058,13 +1058,17 @@ footer .made { font-size: 13px; margin-top: 8px; opacity: 0.7; }
     mix-blend-mode: screen;
     z-index: 1;
 }
-.card:hover::after, .panel:hover::after, .price:hover::after, .step:hover::after,
-.demo-card:hover::after, .stat:hover::after, .compat:hover::after,
-.mockup:hover::after, .cta-banner:hover::after, .form-panel:hover::after,
+.card:not(.link-card):hover::after,
+.step:hover::after,
+.stat:hover::after,
 .activation-card:hover::after { opacity: 1; }
-.card > *, .panel > *, .price > *, .step > *, .demo-card > *,
-.stat > *, .compat > *, .mockup > *, .cta-banner > *,
-.form-panel > *, .activation-card > * { position: relative; z-index: 2; }
+
+/* Поднимаем содержимое над псевдоволной, но НЕ трогаем .link-card,
+   чтобы стрелка (.link-card::after) и иконка работали как раньше. */
+.card:not(.link-card) > *,
+.step > *,
+.stat > *,
+.activation-card > * { position: relative; z-index: 2; }
 
 /* ===== Activation flow (как это работает у клиента) ===== */
 .activation-flow {
