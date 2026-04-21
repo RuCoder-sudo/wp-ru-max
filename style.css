@@ -6,9 +6,9 @@
     --bg-0:         #07080f;
     --bg-1:         #0f1226;
     --text:         #ecf0ff;
-    --text-soft:    #a5acd1;
+    --text-soft:    #c36969;
     --text-muted:   #6f7596;
-    --accent:       #7c5cff;
+    --accent:       #6327d3;
     --accent-2:     #00d4ff;
     --accent-3:     #ff4757;
     --success:      #2ed573;
@@ -63,7 +63,7 @@ img { max-width: 100%; display: block; }
     background:
         radial-gradient(1200px 700px at 8% -10%, rgba(124,92,255,0.34), transparent 60%),
         radial-gradient(1000px 700px at 110% 5%, rgba(0,212,255,0.24),  transparent 60%),
-        radial-gradient(900px  600px at 50% 110%, rgba(255,93,205,0.22), transparent 60%),
+        radial-gradient(900px  600px at 50% 110%, rgb(242, 84, 84,0.22), transparent 60%),
         linear-gradient(180deg, var(--bg-1), var(--bg-0));
     overflow: hidden;
 }
@@ -478,7 +478,7 @@ section { padding: 90px 0; position: relative; }
 .card .icon.alt   { background: linear-gradient(135deg, var(--accent-2), #4f8bff); box-shadow: 0 10px 26px rgba(0,212,255,0.45); }
 .card .icon.alt2  { background: linear-gradient(135deg, var(--success), #16a085); box-shadow: 0 10px 26px rgba(46,213,115,0.45); }
 .card .icon.alt3  { background: linear-gradient(135deg, var(--warning), #ff7a00); box-shadow: 0 10px 26px rgba(255,186,8,0.4); }
-.card .icon.alt4  { background: linear-gradient(135deg, #ff4757, #dc2626); box-shadow: 0 10px 26px rgba(192,38,211,0.45); }
+.card .icon.alt4  { background: linear-gradient(135deg, #ff4757, #dc2626); box-shadow: 0 10px 26px rgb(216, 32, 19,0.45); }
 .card .icon.alt5  { background: linear-gradient(135deg, #4f8bff, #7c5cff); box-shadow: 0 10px 26px rgba(79,139,255,0.45); }
 .card h3 { margin: 0 0 8px; font-size: 19px; font-weight: 700; }
 .card p  { margin: 0; color: var(--text-soft); font-size: 15px; }
@@ -788,6 +788,122 @@ section { padding: 90px 0; position: relative; }
 .contact-row .info .val { font-weight: 600; font-size: 14.5px; color: var(--text); margin-top: 2px; }
 
 @media (max-width: 860px) { .author { grid-template-columns: 1fr; } }
+
+/* ===== License request form ===== */
+.form-panel {
+    background: linear-gradient(180deg, rgba(255,71,87,0.08), rgba(124,92,255,0.06));
+    border-color: rgba(255,71,87,0.25);
+    position: relative;
+    overflow: hidden;
+}
+.form-panel::before {
+    content: ""; position: absolute; inset: -1px; border-radius: var(--radius); padding: 1px;
+    background: linear-gradient(135deg, var(--accent-3), var(--accent), var(--accent-2));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    pointer-events: none; opacity: .55;
+}
+.form-head { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 22px; }
+.form-icon {
+    width: 52px; height: 52px; border-radius: 14px; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 24px;
+    background: linear-gradient(135deg, var(--accent-3), var(--accent));
+    box-shadow: 0 12px 28px rgba(255,71,87,0.45);
+}
+.form-head h3 { margin: 0 0 4px; font-size: 22px; color: var(--text); }
+.form-head p  { margin: 0; color: var(--text-soft); font-size: 14.5px; }
+
+.lic-form .form-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+}
+.lic-form .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.lic-form .field label {
+    font-size: 13px; font-weight: 600; color: var(--text-soft);
+    letter-spacing: .02em;
+}
+.lic-form .field .req { color: var(--accent-3); }
+.lic-form .field input {
+    padding: 12px 14px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14.5px;
+    transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+.lic-form .field input::placeholder { color: var(--text-muted); }
+.lic-form .field input:hover { border-color: rgba(255,255,255,0.22); }
+.lic-form .field input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: rgba(0,0,0,0.55);
+    box-shadow: 0 0 0 3px rgba(124,92,255,0.25);
+}
+.lic-form .field small { color: var(--text-muted); font-size: 12.5px; line-height: 1.45; }
+
+.lic-form .field-checkbox { margin: 8px 0 6px; }
+.lic-form .field-checkbox label {
+    display: flex; gap: 12px; align-items: flex-start;
+    cursor: pointer;
+    color: var(--text-soft);
+    font-size: 14px;
+    line-height: 1.5;
+}
+.lic-form .field-checkbox input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none;
+    width: 20px; height: 20px; flex-shrink: 0;
+    margin-top: 1px;
+    border: 1.5px solid rgba(255,255,255,0.25);
+    border-radius: 6px;
+    background: rgba(0,0,0,0.4);
+    cursor: pointer;
+    position: relative;
+    transition: all .15s ease;
+}
+.lic-form .field-checkbox input[type="checkbox"]:hover { border-color: var(--accent); }
+.lic-form .field-checkbox input[type="checkbox"]:checked {
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    border-color: transparent;
+}
+.lic-form .field-checkbox input[type="checkbox"]:checked::after {
+    content: "✓";
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    color: #fff; font-size: 13px; font-weight: 800;
+    line-height: 1;
+}
+
+.lic-form .form-actions {
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+.lic-form .form-note { color: var(--text-muted); font-size: 13px; }
+
+@media (max-width: 660px) {
+    .lic-form .form-grid { grid-template-columns: 1fr; }
+    .form-head { flex-direction: column; gap: 12px; }
+}
+
+/* «Спасибо» баннер после отправки формы */
+.thanks-banner {
+    margin-bottom: 20px;
+    padding: 16px 22px;
+    background: linear-gradient(135deg, rgba(46,213,115,0.18), rgba(0,212,255,0.12));
+    border: 1px solid rgba(46,213,115,0.4);
+    border-radius: 14px;
+    color: var(--text);
+    font-size: 15px;
+    display: flex; align-items: center; gap: 12px;
+}
+.thanks-banner .ok {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: grid; place-items: center; flex-shrink: 0;
+    background: var(--success); color: #fff; font-weight: 800;
+    box-shadow: 0 6px 18px rgba(46,213,115,0.5);
+}
 
 /* ===== Code block ===== */
 code {
