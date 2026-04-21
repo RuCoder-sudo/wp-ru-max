@@ -20,6 +20,14 @@ class WP_Ru_Max_Updater {
         $this->current_version = $current_version;
         $this->cache_key       = 'wp_ru_max_github_update';
 
+        // Одноразовый сброс старого кэша проверки обновлений — после исправления нормализации версий.
+        // Это убирает «фантомное» уведомление о версии вида 1.017, которое WP кэшировал ранее.
+        if ( get_option( 'wp_ru_max_updater_cache_reset_v2' ) !== '1' ) {
+            delete_transient( $this->cache_key );
+            delete_site_transient( 'update_plugins' );
+            update_option( 'wp_ru_max_updater_cache_reset_v2', '1' );
+        }
+
         add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'check_update' ) );
         add_filter( 'plugins_api',                           array( $this, 'plugin_info' ), 10, 3 );
         add_filter( 'upgrader_post_install',                 array( $this, 'after_install' ), 10, 3 );
@@ -55,10 +63,36 @@ class WP_Ru_Max_Updater {
     }
 
     /**
-     * Нормализовать версию (убрать 'v' в начале если есть)
+     * Нормализовать версию к каноничному виду MAJOR.MINOR.PATCH.
+     *
+     * Чинит распространённую опечатку в тегах GitHub: `v1.017` → `1.0.17`.
+     * Без этого PHP version_compare('1.017','1.0.17','>') возвращает true,
+     * и WordPress бесконечно пишет «доступна свежая версия».
      */
     private function normalize_version( $version ) {
-        return ltrim( $version, 'v' );
+        $version = ltrim( (string) $version, 'vV' );
+
+        $parts    = preg_split( '/[._\-+]/', $version );
+        $expanded = array();
+
+        foreach ( $parts as $p ) {
+            if ( ! ctype_digit( $p ) ) {
+                continue;
+            }
+            // Сегмент с лидирующим нулём вида "017" → распаковываем в "0" и "17".
+            if ( strlen( $p ) >= 2 && $p[0] === '0' ) {
+                $expanded[] = 0;
+                $expanded[] = (int) substr( $p, 1 );
+            } else {
+                $expanded[] = (int) $p;
+            }
+        }
+
+        while ( count( $expanded ) < 3 ) {
+            $expanded[] = 0;
+        }
+
+        return implode( '.', array_slice( $expanded, 0, 3 ) );
     }
 
     /**
