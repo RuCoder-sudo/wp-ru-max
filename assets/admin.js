@@ -281,6 +281,23 @@
         $('#preview_message').text($(this).val());
     });
 
+    $('input[name="chat_widget_animation"]').on('change', function () {
+        var $icon = $('.wp-ru-max-preview-widget .preview-icon');
+        $icon.removeClass('wp-ru-max-anim-pulse wp-ru-max-anim-ripple wp-ru-max-anim-bounce wp-ru-max-anim-shake');
+        var val = $(this).val();
+        if (val && val !== 'none') {
+            $icon.addClass('wp-ru-max-anim-' + val);
+        }
+        $(this).closest('div').find('label').each(function () {
+            var $lbl = $(this);
+            var checked = $lbl.find('input[type="radio"]').is(':checked');
+            $lbl.css({
+                background: checked ? '#e8f0fe' : '#f8f9fa',
+                'border-color': checked ? '#4a90d9' : '#ddd'
+            });
+        });
+    });
+
     $('input[name="chat_widget_position"]').on('change', function () {
         var $widget = $('.wp-ru-max-preview-widget');
         if ($(this).val() === 'left') {
@@ -304,6 +321,18 @@
             chat_widget_sound:         $('input[name="chat_widget_sound"]:checked').val() || 'none',
             chat_widget_sound_delay:   parseInt($('input[name="chat_widget_sound_delay"]:checked').val(), 10) || 3,
             chat_widget_animation:     $('input[name="chat_widget_animation"]:checked').val() || 'none',
+            chat_widget_retention_enabled:        $('#chat_widget_retention_enabled').is(':checked') ? '1' : '0',
+            chat_widget_retention_title:          $('#chat_widget_retention_title').val() || '',
+            chat_widget_retention_message:        $('#chat_widget_retention_message').val() || '',
+            chat_widget_retention_text_align:     $('input[name="chat_widget_retention_text_align"]:checked').val() || 'left',
+            chat_widget_retention_buttons_align:  $('input[name="chat_widget_retention_buttons_align"]:checked').val() || 'right',
+            chat_widget_retention_btn_radius:     parseInt($('#chat_widget_retention_btn_radius').val(), 10) || 0,
+            chat_widget_retention_stay_text:      $('#chat_widget_retention_stay_text').val() || 'Остаться',
+            chat_widget_retention_leave_text:     $('#chat_widget_retention_leave_text').val() || 'Все равно уйти',
+            chat_widget_retention_stay_bg:        $('input[name="chat_widget_retention_stay_bg"]').val() || '#4a90d9',
+            chat_widget_retention_stay_color:     $('input[name="chat_widget_retention_stay_color"]').val() || '#ffffff',
+            chat_widget_retention_leave_bg:       $('input[name="chat_widget_retention_leave_bg"]').val() || '#f0f0f0',
+            chat_widget_retention_leave_color:    $('input[name="chat_widget_retention_leave_color"]').val() || '#555555',
         }, function (res) {
             $btn.prop('disabled', false).text('Сохранить');
             if (res.success) {
