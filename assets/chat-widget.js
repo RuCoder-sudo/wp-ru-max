@@ -8,13 +8,83 @@
     var sound      = cfg.sound      || 'none';
     var soundDelay = typeof cfg.soundDelay === 'number' ? cfg.soundDelay : 3000;
     var animation  = cfg.animation  || 'none';
+    var retentionEnabled = !!cfg.retentionEnabled;
 
     var widget   = document.getElementById('wp-ru-max-widget');
     var balloon  = document.getElementById('wp-ru-max-balloon');
     var typingEl = document.getElementById('wp-ru-max-typing');
     var iconEl   = document.getElementById('wp-ru-max-icon');
+    var closeBtn = document.getElementById('wp-ru-max-close');
+    var retentionModal = document.getElementById('wp-ru-max-retention-modal');
 
     if (!widget || !balloon || !typingEl) return;
+
+    /* ================================================================== */
+    /* CLOSE / RETENTION                                                    */
+    /* ================================================================== */
+    var retentionShown = false;
+
+    function hideBalloonNow() {
+        balloon.style.opacity    = '0';
+        balloon.style.transition = 'opacity 0.3s';
+        setTimeout(function () {
+            balloon.style.display = 'none';
+            balloon.dataset.closed = '1';
+        }, 300);
+    }
+
+    function showRetentionModal() {
+        if (!retentionModal) return;
+        retentionModal.classList.add('show');
+    }
+
+    function hideRetentionModal() {
+        if (!retentionModal) return;
+        retentionModal.classList.remove('show');
+    }
+
+    if (closeBtn) {
+        var triggerClose = function (e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            if (retentionEnabled && retentionModal && !retentionShown) {
+                retentionShown = true;
+                showRetentionModal();
+            } else {
+                hideBalloonNow();
+            }
+            return false;
+        };
+        closeBtn.addEventListener('mouseenter', function () {
+            if (retentionEnabled && retentionModal && !retentionShown) {
+                retentionShown = true;
+                showRetentionModal();
+            }
+        });
+        closeBtn.addEventListener('click', triggerClose);
+    }
+
+    if (retentionModal) {
+        var stayBtn  = retentionModal.querySelector('.wp-ru-max-retention-stay');
+        var leaveBtn = retentionModal.querySelector('.wp-ru-max-retention-leave');
+        if (stayBtn) {
+            stayBtn.addEventListener('click', function () {
+                hideRetentionModal();
+                retentionShown = false;
+            });
+        }
+        if (leaveBtn) {
+            leaveBtn.addEventListener('click', function () {
+                hideRetentionModal();
+                hideBalloonNow();
+            });
+        }
+        retentionModal.addEventListener('click', function (e) {
+            if (e.target === retentionModal) {
+                hideRetentionModal();
+                retentionShown = false;
+            }
+        });
+    }
 
     /* ================================================================== */
     /* SOUND ENGINE                                                         */
