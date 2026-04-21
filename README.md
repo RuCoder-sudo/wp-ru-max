@@ -189,42 +189,6 @@
 
 ---
 
-## Структура проекта
-
-```
-wp-ru-max/
-├── wp-ru-max.php                        # Главный файл плагина — заголовок, константы, подключение классов
-├── uninstall.php                        # Очистка данных при удалении плагина
-├── readme.txt                           # Описание для WordPress.org
-├── README.md                            # Документация для GitHub
-│
-├── assets/
-│   ├── admin.css                        # Стили административной панели
-│   ├── admin.js                         # JavaScript панели: превью звуков, AJAX-сохранение
-│   ├── chat-widget.css                  # Стили фронтенд-виджета и анимаций
-│   ├── chat-widget.js                   # Логика виджета: показ, звук, анимации, закрытие
-│   ├── gutenberg-panel.js               # Панель «Отправить в MAX» в редакторе Gutenberg
-│   ├── max-32x32.png                    # Иконка плагина 32×32
-│   ├── max-64x64.png                    # Иконка плагина 64×64
-│   ├── max-256x256.png                  # Иконка плагина 256×256
-│   └── index.php                        # Заглушка (безопасность)
-│
-├── includes/
-│   ├── class-wp-ru-max.php              # Ядро плагина — инициализация, хуки
-│   ├── class-wp-ru-max-api.php          # Обёртка над REST API мессенджера MAX
-│   ├── class-wp-ru-max-admin.php        # Административная панель: вкладки, настройки, AJAX
-│   ├── class-wp-ru-max-post-sender.php  # Отправка записей в канал MAX при публикации
-│   ├── class-wp-ru-max-notifications.php# Перехват wp_mail() и пересылка в MAX
-│   ├── class-wp-ru-max-chat-widget.php  # Рендер HTML/JS виджета и передача настроек
-│   ├── class-wp-ru-max-updater.php      # Автообновление через GitHub Releases
-│   ├── class-wp-ru-max-logger.php       # Система логирования событий в БД
-│   └── index.php                        # Заглушка (безопасность)
-│
-└── languages/
-    └── index.php                        # Заглушка (безопасность)
-```
-
----
 
 ## Как работает автообновление
 
