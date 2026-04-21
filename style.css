@@ -3,14 +3,14 @@
    Чистый CSS, без зависимостей. */
 
 :root {
-    --bg-0:         #07080f;
-    --bg-1:         #0f1226;
-    --text:         #ecf0ff;
-    --text-soft:    #c36969;
-    --text-muted:   #6f7596;
-    --accent:       #6327d3;
-    --accent-2:     #00d4ff;
-    --accent-3:     #ff4757;
+    --bg-0:         #0a0608;
+    --bg-1:         #1a0d12;
+    --text:         #fff5f2;
+    --text-soft:    #f1e6e3;
+    --text-muted:   #a89894;
+    --accent:       #d63347;
+    --accent-2:     #ffb27a;
+    --accent-3:     #ff5b3d;
     --success:      #2ed573;
     --warning:      #ffba08;
     --danger:       #ff5b5b;
@@ -61,9 +61,9 @@ img { max-width: 100%; display: block; }
     inset: 0;
     z-index: -2;
     background:
-        radial-gradient(1200px 700px at 8% -10%, rgba(124,92,255,0.34), transparent 60%),
-        radial-gradient(1000px 700px at 110% 5%, rgba(0,212,255,0.24),  transparent 60%),
-        radial-gradient(900px  600px at 50% 110%, rgb(242, 84, 84,0.22), transparent 60%),
+        radial-gradient(1200px 700px at 8% -10%, rgba(214,51,71,0.38), transparent 60%),
+        radial-gradient(1000px 700px at 110% 5%, rgba(255,91,61,0.28),  transparent 60%),
+        radial-gradient(900px  600px at 50% 110%, rgba(255,178,122,0.18), transparent 60%),
         linear-gradient(180deg, var(--bg-1), var(--bg-0));
     overflow: hidden;
 }
@@ -75,12 +75,12 @@ img { max-width: 100%; display: block; }
     animation: floaty 22s ease-in-out infinite;
 }
 .blob.b1 { width: 560px; height: 560px; left: -140px; top: -140px;
-           background: radial-gradient(circle at 30% 30%, #7c5cff, transparent 70%); }
+           background: radial-gradient(circle at 30% 30%, #d63347, transparent 70%); }
 .blob.b2 { width: 460px; height: 460px; right: -120px; top: 16%;
-           background: radial-gradient(circle at 60% 40%, #00d4ff, transparent 70%);
+           background: radial-gradient(circle at 60% 40%, #ff8a5b, transparent 70%);
            animation-delay: -7s; }
 .blob.b3 { width: 520px; height: 520px; left: 30%; bottom: -180px;
-           background: radial-gradient(circle at 50% 50%, #ff4757, transparent 70%);
+           background: radial-gradient(circle at 50% 50%, #b8253a, transparent 70%);
            animation-delay: -14s; }
 
 @keyframes floaty {
@@ -432,7 +432,7 @@ section { padding: 90px 0; position: relative; }
     margin: 0 0 12px;
     font-weight: 800; letter-spacing: -0.01em;
 }
-.section-head p { color: var(--text-soft); font-size: 17px; margin: 0; }
+.section-head p { color: #ffffff; font-size: 17px; margin: 0; opacity: .92; }
 
 /* ===== Карточки возможностей ===== */
 .features {
@@ -1029,3 +1029,167 @@ footer .made { font-size: 13px; margin-top: 8px; opacity: 0.7; }
     transition: opacity .6s ease, transform .6s ease;
 }
 .reveal.on { opacity: 1; transform: none; }
+
+/* ===== Mouse-tracked frosted-glass wave =====
+   Каждый glass-блок (.card, .panel, .price, .step, .demo-card, .stat,
+   .compat, .mockup, .cta-banner) получает мягкую «волну» подсветки,
+   которая следует за курсором. Координаты задаются через --mx/--my из JS. */
+.card, .panel, .price, .step, .demo-card, .stat,
+.compat, .mockup, .cta-banner, .form-panel, .activation-card {
+    position: relative;
+    overflow: hidden;
+}
+.card::after, .panel::after, .price::after, .step::after, .demo-card::after,
+.stat::after, .compat::after, .mockup::after, .cta-banner::after,
+.form-panel::after, .activation-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+        260px circle at var(--mx, 50%) var(--my, 50%),
+        rgba(255, 178, 122, 0.22),
+        rgba(214, 51, 71, 0.10) 40%,
+        transparent 70%
+    );
+    opacity: 0;
+    transition: opacity .35s ease;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    z-index: 1;
+}
+.card:hover::after, .panel:hover::after, .price:hover::after, .step:hover::after,
+.demo-card:hover::after, .stat:hover::after, .compat:hover::after,
+.mockup:hover::after, .cta-banner:hover::after, .form-panel:hover::after,
+.activation-card:hover::after { opacity: 1; }
+.card > *, .panel > *, .price > *, .step > *, .demo-card > *,
+.stat > *, .compat > *, .mockup > *, .cta-banner > *,
+.form-panel > *, .activation-card > * { position: relative; z-index: 2; }
+
+/* ===== Activation flow (как это работает у клиента) ===== */
+.activation-flow {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    counter-reset: actstep;
+}
+.activation-card {
+    padding: 28px 24px;
+    background: linear-gradient(180deg, rgba(214,51,71,0.12), rgba(255,255,255,0.04));
+    border: 1px solid rgba(255,91,61,0.30);
+    border-radius: var(--radius);
+    backdrop-filter: blur(22px) saturate(150%);
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+    box-shadow: 0 18px 48px rgba(0,0,0,0.45);
+    counter-increment: actstep;
+    transition: transform .25s ease, border-color .25s ease;
+}
+.activation-card:hover { transform: translateY(-5px); border-color: rgba(255,91,61,0.55); }
+.activation-card .num {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    color: #fff; font-weight: 800; font-size: 18px;
+    box-shadow: 0 10px 24px rgba(214,51,71,0.5);
+    margin-bottom: 14px;
+}
+.activation-card h4 { margin: 0 0 8px; font-size: 17px; color: #fff; }
+.activation-card p  { margin: 0; color: #ffffff; opacity: .9; font-size: 14.5px; line-height: 1.55; }
+.activation-card .icon-emoji { font-size: 24px; margin-bottom: 8px; display: block; }
+@media (max-width: 960px) { .activation-flow { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .activation-flow { grid-template-columns: 1fr; } }
+
+.activation-highlight {
+    margin-top: 28px;
+    padding: 24px 28px;
+    background: linear-gradient(135deg, rgba(214,51,71,0.18), rgba(255,91,61,0.12));
+    border: 1px solid rgba(255,91,61,0.35);
+    border-radius: var(--radius);
+    color: #fff;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    backdrop-filter: blur(20px);
+}
+.activation-highlight .big-icon {
+    width: 56px; height: 56px; border-radius: 14px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    display: grid; place-items: center; flex-shrink: 0;
+    font-size: 28px;
+    box-shadow: 0 12px 30px rgba(214,51,71,0.5);
+}
+.activation-highlight strong { color: #fff; font-size: 17px; }
+.activation-highlight p { margin: 4px 0 0; color: #ffffff; opacity: .92; font-size: 14.5px; }
+
+/* ===== Pretty footer ===== */
+.site-footer {
+    margin-top: 80px;
+    padding: 56px 0 32px;
+    background: linear-gradient(180deg, transparent, rgba(214,51,71,0.10) 40%, rgba(10,6,8,0.85));
+    border-top: 1px solid rgba(255,91,61,0.25);
+    position: relative;
+    overflow: hidden;
+}
+.site-footer::before {
+    content: "";
+    position: absolute; left: 50%; top: 0;
+    width: 60%; height: 2px; transform: translateX(-50%);
+    background: linear-gradient(90deg, transparent, var(--accent-3), var(--accent), transparent);
+    filter: blur(.5px);
+}
+.footer-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr;
+    gap: 36px;
+    margin-bottom: 36px;
+}
+.footer-brand {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 14px;
+}
+.footer-brand img {
+    width: 48px; height: 48px; border-radius: 12px;
+    box-shadow: 0 8px 22px rgba(214,51,71,0.5);
+}
+.footer-brand .ttl { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: .3px; }
+.footer-brand .sub { font-size: 13px; color: var(--text-muted); }
+.footer-about p {
+    margin: 0 0 8px; color: #f1e6e3; font-size: 14px; line-height: 1.6;
+}
+.footer-col h5 {
+    margin: 0 0 14px; font-size: 12px; color: var(--accent-2);
+    text-transform: uppercase; letter-spacing: .15em; font-weight: 700;
+}
+.footer-col a {
+    display: block; padding: 6px 0; color: #f1e6e3; font-size: 14px;
+    transition: color .2s ease, transform .2s ease;
+}
+.footer-col a:hover { color: var(--accent-3); transform: translateX(3px); }
+.footer-legal {
+    border-top: 1px solid rgba(255,91,61,0.2);
+    padding-top: 24px;
+    text-align: center;
+    color: #f1e6e3;
+    font-size: 13.5px;
+    line-height: 1.85;
+}
+.footer-legal .copy {
+    font-size: 15px; color: #fff; font-weight: 600; margin-bottom: 6px;
+    letter-spacing: .3px;
+}
+.footer-legal .copy .brand-name {
+    background: linear-gradient(135deg, var(--accent-3), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    font-weight: 800; letter-spacing: 1px;
+}
+.footer-legal .heart {
+    display: inline-block; color: var(--accent-3);
+    animation: heartbeat 1.6s ease-in-out infinite;
+}
+@keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    25%      { transform: scale(1.18); }
+    50%      { transform: scale(1); }
+}
+.footer-legal .inn { color: var(--text-muted); font-size: 13px; }
+.footer-legal .rights { color: var(--text-muted); font-size: 12.5px; margin-top: 4px; }
+@media (max-width: 800px) {
+    .footer-grid { grid-template-columns: 1fr; gap: 28px; }
+}
