@@ -605,6 +605,82 @@ git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
                 </div>
             </div>
         </div>
+
+        <!-- ===== License request form ===== -->
+        <div class="panel form-panel reveal" style="margin-top:24px;">
+            <div class="form-head">
+                <div class="form-icon">🔑</div>
+                <div>
+                    <h3>Запросить лицензионный ключ</h3>
+                    <p>Нет ключа? Заполните форму — владелец плагина рассмотрит запрос и пришлёт ключ на ваш email.</p>
+                </div>
+            </div>
+
+            <div id="thanks" class="thanks-banner" style="display:none;">
+                <span class="ok">✓</span>
+                <span>Запрос отправлен! Я свяжусь с вами в ближайшее время и пришлю лицензионный ключ на указанный email.</span>
+            </div>
+
+            <form class="lic-form" action="https://formsubmit.co/rucoder.rf@yandex.ru" method="POST">
+                <!-- FormSubmit settings -->
+                <input type="hidden" name="_subject" value="WP Ru-max — запрос лицензионного ключа">
+                <input type="hidden" name="_template" value="table">
+                <input type="hidden" name="_captcha" value="false">
+                <input type="hidden" name="_next" value="https://rucoder-sudo.github.io/wp-ru-max/?sent=1#author">
+                <input type="text" name="_honey" style="display:none">
+
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="lic-name">Ваше имя <span class="req">*</span></label>
+                        <input id="lic-name" name="name" type="text" placeholder="Иван Иванов" required>
+                    </div>
+
+                    <div class="field">
+                        <label for="lic-email">Ваш email <span class="req">*</span></label>
+                        <input id="lic-email" name="email" type="email" placeholder="your@email.ru" required>
+                        <small>На этот адрес придёт лицензионный ключ.</small>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="lic-contact">Контакт для быстрой связи</label>
+                    <input id="lic-contact" name="contact" type="text" placeholder="Telegram @username, MAX, WhatsApp +7..., VK ссылка">
+                    <small>Удобный мессенджер или соцсеть, чтобы быстрее обсудить покупку и выслать ключ.</small>
+                </div>
+
+                <div class="field">
+                    <label for="lic-domain">Домен сайта (опционально)</label>
+                    <input id="lic-domain" name="domain" type="text" placeholder="example.ru">
+                    <small>Домен, на который планируется активация ключа.</small>
+                </div>
+
+                <div class="field-checkbox">
+                    <label>
+                        <input type="checkbox" name="consent_pd" value="yes" required>
+                        <span>
+                            Даю своё согласие на
+                            <a href="https://рукодер.рф" target="_blank" rel="noopener">обработку персональных данных</a>.
+                            <span class="req">*</span>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="field-checkbox">
+                    <label>
+                        <input type="checkbox" name="consent_news" value="yes">
+                        <span>
+                            Согласен(а) получать информационные рассылки и уведомления об акциях
+                            на указанный email. Подтверждаю, что могу отменить подписку в любое время.
+                        </span>
+                    </label>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">⬆ Отправить запрос</button>
+                    <span class="form-note">Запрос будет отправлен на <code>rucoder.rf@yandex.ru</code></span>
+                </div>
+            </form>
+        </div>
     </div>
 </section>
 
@@ -621,6 +697,15 @@ const io = new IntersectionObserver((entries) => {
     entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('on'); });
 }, { threshold: 0.12 });
 document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+// Показ баннера «Спасибо» после возврата с FormSubmit
+if (new URLSearchParams(location.search).get('sent') === '1') {
+    const t = document.getElementById('thanks');
+    if (t) {
+        t.style.display = 'flex';
+        t.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
 </script>
 
 </body>
