@@ -1,54 +1,364 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WP Ru-max — интеграция WordPress с MAX</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WP Ru-max — интеграция WordPress с мессенджером MAX</title>
+<meta name="description" content="Плагин WP Ru-max подключает WordPress к мессенджеру MAX (max.ru): автопубликация записей, личные уведомления с любых форм и красивый чат-виджет.">
+<meta property="og:title" content="WP Ru-max — интеграция WordPress с мессенджером MAX">
+<meta property="og:description" content="Автопубликация записей, личные уведомления с форм и чат-виджет MAX для вашего WordPress-сайта.">
+<meta property="og:type" content="website">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <div class="badges">
-            <img src="https://img.shields.io/badge/version-1.0.21-blue" alt="Version">
-            <img src="https://img.shields.io/badge/license-GPL--2.0-green" alt="License">
-            <img src="https://img.shields.io/badge/PHP-7.4+-blue" alt="PHP Version">
-            <img src="https://img.shields.io/badge/WordPress-5.8+-blue" alt="WordPress">
-        </div>
-        
-        <h1>🚀 WP Ru-max</h1>
-        <p><strong>Интеграция WordPress с мессенджером MAX (max.ru)</strong> — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Elementor и настраиваемый чат-виджет с анимацией и звуком.</p>
-        
-        <a href="https://github.com/RuCoder-sudo/wp-ru-max" class="btn">GitHub</a>
-        <a href="https://kwork.ru/user/RuCoder" class="btn btn-secondary">Купить лицензию (Kwork)</a>
-        
-        <h2>✨ Основные возможности</h2>
-        <ul>
-            <li><strong>Автопубликация</strong> — новые записи и страницы автоматически отправляются в канал MAX</li>
-            <li><strong>Уведомления</strong> — все email WordPress (заказы WooCommerce, заявки с форм) дублируются в личный чат с ботом</li>
-            <li><strong>Чат-виджет</strong> — настраиваемая плавающая кнопка MAX на сайте с анимацией и звуком</li>
-            <li><strong>История и логи</strong> — полная таблица всех событий с JSON-логами</li>
-            <li><strong>Бессрочная лицензия</strong> — платите один раз, пользуетесь навсегда</li>
-        </ul>
-        
-        <h2>📦 Быстрая установка</h2>
-        <ol>
-            <li>Скачайте ZIP-архив плагина с <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases">GitHub Releases</a></li>
-            <li>В админке WordPress перейдите в <strong>Плагины → Добавить новый → Загрузить плагин</strong></li>
-            <li>Выберите файл <code>wp-ru-max.zip</code> и нажмите <strong>Установить</strong></li>
-            <li>После установки нажмите <strong>Активировать</strong></li>
-            <li>Перейдите в меню <strong>Ru-max → Активация</strong> и введите лицензионный ключ</li>
-        </ol>
-        
-        <h2>📄 Документация</h2>
-        <p>Полная документация доступна в <a href="docs.html">нашей документации</a> или на <a href="https://github.com/RuCoder-sudo/wp-ru-max/wiki">GitHub Wiki</a>.</p>
-        
-        <h2>👨‍💻 Поддержка</h2>
-        <p>Telegram: <a href="https://t.me/RussCoder">@RussCoder</a><br>
-        WhatsApp: +7 (985) 985-53-97<br>
-        Email: support@рукодер.рф</p>
+
+<div class="bg-canvas">
+    <span class="blob b1"></span>
+    <span class="blob b2"></span>
+    <span class="blob b3"></span>
+</div>
+
+<!-- ===== NAV ===== -->
+<nav class="nav">
+    <a href="#top" class="brand">
+        <span class="logo">M</span>
+        <span>WP Ru-max</span>
+    </a>
+    <div class="links">
+        <a href="#features">Возможности</a>
+        <a href="#compat">Совместимость</a>
+        <a href="#install">Установка</a>
+        <a href="#pricing">Лицензия</a>
+        <a href="#faq">FAQ</a>
+        <a href="#author">Автор</a>
+        <a href="docs.html">Документация</a>
     </div>
-    <footer>
-        Разработано с ❤️ — РуКодер · Сергей Солошенко
-    </footer>
+    <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" class="btn btn-primary btn-sm cta">Скачать</a>
+</nav>
+
+<!-- ===== HERO ===== -->
+<header class="hero" id="top">
+    <div class="container">
+        <div class="eyebrow">
+            <span class="dot"></span>
+            <span>Версия 1.0.21 — стабильная</span>
+        </div>
+        <h1>
+            WordPress &times; MAX —<br>
+            <span class="grad">всё в одном плагине</span>
+        </h1>
+        <p class="lead">
+            <strong>WP Ru-max</strong> подключает ваш WordPress-сайт к российскому мессенджеру
+            <a href="https://max.ru" target="_blank" rel="noopener">MAX (max.ru)</a>:
+            автопубликация записей, личные уведомления с любых форм и
+            настраиваемый чат-виджет с анимацией и звуком.
+        </p>
+
+        <div class="actions">
+            <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" class="btn btn-primary">
+                <span>⬇</span> Скачать плагин
+            </a>
+            <a href="docs.html" class="btn btn-ghost">
+                <span>📖</span> Документация
+            </a>
+            <a href="https://github.com/RuCoder-sudo/wp-ru-max" class="btn btn-ghost">
+                <span>★</span> GitHub
+            </a>
+        </div>
+
+        <div class="badges">
+            <img src="https://img.shields.io/badge/version-1.0.21-7c5cff?style=flat-square" alt="Version">
+            <img src="https://img.shields.io/badge/WordPress-5.8%2B-21759b?style=flat-square&logo=wordpress" alt="WordPress">
+            <img src="https://img.shields.io/badge/PHP-7.4%2B-777bb4?style=flat-square&logo=php" alt="PHP">
+            <img src="https://img.shields.io/badge/WooCommerce-4.0%2B-96588a?style=flat-square&logo=woocommerce" alt="WooCommerce">
+            <img src="https://img.shields.io/badge/license-GPLv2-2ed573?style=flat-square" alt="License">
+        </div>
+
+        <div class="stats">
+            <div class="stat reveal"><div class="num">3</div><div class="lbl">модуля в одном плагине</div></div>
+            <div class="stat reveal"><div class="num">5+</div><div class="lbl">плагинов форм поддерживается</div></div>
+            <div class="stat reveal"><div class="num">∞</div><div class="lbl">бессрочная лицензия</div></div>
+            <div class="stat reveal"><div class="num">2200₽</div><div class="lbl">за один домен</div></div>
+        </div>
+    </div>
+</header>
+
+<!-- ===== FEATURES ===== -->
+<section id="features">
+    <div class="container">
+        <div class="section-head">
+            <span class="kicker">Возможности</span>
+            <h2>Всё, что нужно для интеграции с MAX</h2>
+            <p>Шесть модулей, которые работают «из коробки» — без лишних настроек и сторонних сервисов.</p>
+        </div>
+
+        <div class="features">
+            <div class="card reveal">
+                <div class="icon">📝</div>
+                <h3>Автопубликация</h3>
+                <p>Новая или обновлённая запись/страница автоматически отправляется в канал MAX, с миниатюрой и опциональной ссылкой «Читать полностью».</p>
+            </div>
+            <div class="card reveal">
+                <div class="icon alt">📩</div>
+                <h3>Личные уведомления</h3>
+                <p>Перехват <code>wp_mail()</code> — все письма WordPress (заказы WooCommerce, заявки с форм) дублируются в личный чат с ботом MAX.</p>
+            </div>
+            <div class="card reveal">
+                <div class="icon alt2">💬</div>
+                <h3>Чат-виджет</h3>
+                <p>Плавающая кнопка MAX с приветствием, анимацией «печатания», звуком, задержкой появления и попапом удержания.</p>
+            </div>
+            <div class="card reveal">
+                <div class="icon alt3">📊</div>
+                <h3>История и логи</h3>
+                <p>Полная таблица событий: все отправки, ошибки, тесты. Фильтрация по типу/дате/статусу и просмотр JSON-лога каждого запроса.</p>
+            </div>
+            <div class="card reveal">
+                <div class="icon alt4">🧪</div>
+                <h3>Тестирование</h3>
+                <p>Встроенная проверка соединения с ботом MAX и отправка тестовых сообщений в любой канал или чат — прямо из админки.</p>
+            </div>
+            <div class="card reveal">
+                <div class="icon alt5">🔐</div>
+                <h3>Лицензирование</h3>
+                <p>Привязка к домену через REST API сайта рукодер.рф. Часовая фоновая перепроверка ключа и кнопка «Проверить лицензию сейчас».</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== COMPATIBILITY ===== -->
+<section id="compat">
+    <div class="container">
+        <div class="section-head">
+            <span class="kicker">Совместимость</span>
+            <h2>Работает с тем, что у вас уже есть</h2>
+            <p>Никаких сторонних SaaS-сервисов и API-шлюзов. Только ваш WordPress и официальный API MAX.</p>
+        </div>
+
+        <div class="compat reveal">
+            <div class="row"><span class="name">WordPress</span> <span class="val">5.8 – 6.7</span></div>
+            <div class="row"><span class="name">PHP</span>       <span class="val">7.4 — 8.3</span></div>
+            <div class="row"><span class="name">WooCommerce (новые заказы, смена статуса)</span> <span class="val">✓ Да</span></div>
+            <div class="row"><span class="name">Contact Form 7</span>  <span class="val">✓ Да</span></div>
+            <div class="row"><span class="name">Elementor Forms (включая Pro)</span> <span class="val">✓ Да</span></div>
+            <div class="row"><span class="name">Gravity Forms</span>   <span class="val">✓ Да</span></div>
+            <div class="row"><span class="name">Ninja Forms</span>     <span class="val">✓ Да</span></div>
+            <div class="row"><span class="name">Любые формы через <code>wp_mail()</code></span> <span class="val">✓ Да</span></div>
+            <div class="row"><span class="name">Кастомные типы записей (CPT)</span> <span class="val">✓ Да</span></div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== INSTALLATION STEPS ===== -->
+<section id="install">
+    <div class="container">
+        <div class="section-head">
+            <span class="kicker">Установка</span>
+            <h2>Запуск за 5 минут</h2>
+            <p>Стандартная установка плагина WordPress + ввод лицензионного ключа и токена бота.</p>
+        </div>
+
+        <div class="steps">
+            <div class="step reveal">
+                <h4>Скачайте архив</h4>
+                <p>Возьмите ZIP последней версии в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases">GitHub Releases</a>.</p>
+            </div>
+            <div class="step reveal">
+                <h4>Загрузите в WordPress</h4>
+                <p>Плагины → Добавить новый → Загрузить плагин → выберите <code>wp-ru-max.zip</code> → Установить.</p>
+            </div>
+            <div class="step reveal">
+                <h4>Активируйте лицензию</h4>
+                <p>Меню <strong>Ru-max → Активация</strong>. Ключ имеет формат <code>WPRM-XXXX-XXXX-XXXX-XXXX</code>.</p>
+            </div>
+            <div class="step reveal">
+                <h4>Подключите бота MAX</h4>
+                <p>Получите токен на <a href="https://max.ru/partner">max.ru/partner</a> и вставьте на вкладке «Главная».</p>
+            </div>
+        </div>
+
+        <div style="margin-top:32px;">
+            <pre><code># Через FTP/SSH
+git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
+    /var/www/site/wp-content/plugins/wp-ru-max</code></pre>
+        </div>
+    </div>
+</section>
+
+<!-- ===== PRICING ===== -->
+<section id="pricing">
+    <div class="container">
+        <div class="section-head">
+            <span class="kicker">Лицензия</span>
+            <h2>Заплатите один раз — пользуйтесь всегда</h2>
+            <p>Бессрочная лицензия с привязкой к домену. Все обновления плагина и поддержка — в стоимости.</p>
+        </div>
+
+        <div class="pricing">
+            <div class="price reveal">
+                <h3>1 домен</h3>
+                <div class="amount">2 200 ₽</div>
+                <div class="per">2 200 ₽ за домен · разовый платёж</div>
+                <ul>
+                    <li>Активация на одном домене</li>
+                    <li>Все функции плагина</li>
+                    <li>Бессрочное использование</li>
+                    <li>Все обновления включены</li>
+                </ul>
+                <a href="#author" class="btn btn-ghost">Запросить ключ</a>
+            </div>
+
+            <div class="price featured reveal">
+                <span class="tag">Популярно</span>
+                <h3>2 домена</h3>
+                <div class="amount">4 000 ₽</div>
+                <span class="save">Экономия ~9% · 2 000 ₽ за домен</span>
+                <div class="per">разовый платёж</div>
+                <ul>
+                    <li>Активация на двух доменах</li>
+                    <li>Все функции плагина</li>
+                    <li>Бессрочное использование</li>
+                    <li>Все обновления включены</li>
+                    <li>Приоритетная поддержка</li>
+                </ul>
+                <a href="#author" class="btn btn-primary">Запросить ключ</a>
+            </div>
+
+            <div class="price reveal">
+                <h3>5 доменов</h3>
+                <div class="amount">7 000 ₽</div>
+                <span class="save">Экономия 36% · 1 400 ₽ за домен</span>
+                <div class="per">разовый платёж</div>
+                <ul>
+                    <li>Активация на пяти доменах</li>
+                    <li>Все функции плагина</li>
+                    <li>Бессрочное использование</li>
+                    <li>Все обновления включены</li>
+                    <li>Персональные консультации</li>
+                </ul>
+                <a href="#author" class="btn btn-ghost">Запросить ключ</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== FAQ ===== -->
+<section id="faq">
+    <div class="container">
+        <div class="section-head">
+            <span class="kicker">Вопросы и ответы</span>
+            <h2>Коротко о главном</h2>
+        </div>
+
+        <div class="faq">
+            <details class="reveal" open>
+                <summary>Где взять токен бота MAX?</summary>
+                <p>На платформе <a href="https://max.ru/partner">max.ru/partner</a> → раздел «Чат-боты» → «Интеграция» → «Получить токен». Вставьте его на вкладке <strong>Ru-max → Главная</strong> и нажмите «Проверить подключение».</p>
+            </details>
+            <details class="reveal">
+                <summary>Как узнать ID канала или группы?</summary>
+                <p>Для публичного канала — никнейм с <code>@</code>, например <code>@my_channel</code>. Для группы — числовой ID, который можно получить через бота <code>@get_id_bot</code> в самом мессенджере MAX.</p>
+            </details>
+            <details class="reveal">
+                <summary>Работает ли плагин с WooCommerce?</summary>
+                <p>Да. Все email-уведомления WooCommerce (новый заказ, смена статуса, оплата и т.д.) перехватываются и пересылаются в личный чат с ботом MAX.</p>
+            </details>
+            <details class="reveal">
+                <summary>Поддерживаются ли Contact Form 7, Elementor, Gravity Forms?</summary>
+                <p>Да. Плагин работает с любыми формами, отправляющими уведомления через стандартный <code>wp_mail()</code> WordPress: CF7, Elementor Forms, Gravity Forms, Ninja Forms и другими.</p>
+            </details>
+            <details class="reveal">
+                <summary>Лицензия действительно бессрочная?</summary>
+                <p>Да. Один платёж — пожизненная активация для указанного домена. Никаких подписок, продлений и абонентской платы. Все обновления плагина включены в стоимость.</p>
+            </details>
+            <details class="reveal">
+                <summary>Что будет, если ключ отозвать?</summary>
+                <p>Плагин ходит на сервер рукодер.рф и сверяет статус ключа: при открытии вкладки «Активация» — мгновенно, в фоне — раз в час. Если ключ отозван, статус сразу переключается на <code>suspended</code> и платные функции отключаются.</p>
+            </details>
+            <details class="reveal">
+                <summary>Как работают обновления?</summary>
+                <p>Плагин раз в 12 часов проверяет <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases">GitHub Releases</a>. Если есть новая версия — в WordPress появится стандартное уведомление «Доступно обновление», устанавливается в один клик.</p>
+            </details>
+            <details class="reveal">
+                <summary>Почему звук виджета не играет сразу?</summary>
+                <p>Браузеры блокируют автовоспроизведение звука до первого взаимодействия пользователя со страницей. Звук сыграет сразу после первого клика, касания или прокрутки.</p>
+            </details>
+        </div>
+    </div>
+</section>
+
+<!-- ===== AUTHOR / CONTACTS ===== -->
+<section id="author">
+    <div class="container">
+        <div class="section-head">
+            <span class="kicker">Автор и поддержка</span>
+            <h2>Сделано вручную, поддерживается лично</h2>
+            <p>За плагином стоит один разработчик. Никакой бюрократии — пишите напрямую.</p>
+        </div>
+
+        <div class="author">
+            <div class="panel reveal">
+                <div class="who">
+                    <div class="ava">СС</div>
+                    <div class="meta">
+                        <strong>Сергей Солошенко</strong>
+                        <span>RuCoder · WordPress / Full Stack с 2018 года</span>
+                    </div>
+                </div>
+                <p>
+                    Разрабатываю продающие сайты на WordPress / WooCommerce, сложные backend-решения,
+                    кастомные плагины и модули, Telegram-боты, парсеры, CRM и автоматизацию.
+                </p>
+                <p style="color:var(--text-muted); font-style:italic; border-left:3px solid var(--accent); padding-left:14px;">
+                    «Сайт как для себя» — именно так можно обозначить мой главный принцип работы.
+                </p>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:18px;">
+                    <a href="https://рукодер.рф" class="btn btn-primary btn-sm" target="_blank" rel="noopener">Сайт рукодер.рф</a>
+                    <a href="https://github.com/RuCoder-sudo" class="btn btn-ghost btn-sm" target="_blank" rel="noopener">GitHub</a>
+                </div>
+            </div>
+
+            <div class="panel reveal">
+                <h3 style="margin-top:0;">Связь со мной</h3>
+                <div class="contacts">
+                    <a class="contact-row" href="https://t.me/RussCoder" target="_blank" rel="noopener">
+                        <span class="ic">✈</span>
+                        <span><span class="lbl">Telegram</span><span class="val">@RussCoder</span></span>
+                    </a>
+                    <a class="contact-row" href="tel:+79859855397">
+                        <span class="ic">📞</span>
+                        <span><span class="lbl">Телефон / WhatsApp</span><span class="val">+7 (985) 985-53-97</span></span>
+                    </a>
+                    <a class="contact-row" href="mailto:rucoder.rf@yandex.ru">
+                        <span class="ic">✉</span>
+                        <span><span class="lbl">Email</span><span class="val">rucoder.rf@yandex.ru</span></span>
+                    </a>
+                    <a class="contact-row" href="https://github.com/RuCoder-sudo/wp-ru-max/issues" target="_blank" rel="noopener">
+                        <span class="ic">🐛</span>
+                        <span><span class="lbl">Баг-репорты и предложения</span><span class="val">GitHub Issues</span></span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== FOOTER ===== -->
+<footer>
+    <div class="container">
+        <div>© 2026 <a href="https://рукодер.рф">РуКодер</a> · WP Ru-max v1.0.21 · GPLv2</div>
+        <div class="made">Сделано с ♥ для российского WordPress-сообщества</div>
+    </div>
+</footer>
+
+<script>
+// Reveal-on-scroll
+const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('on'); });
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+
 </body>
 </html>
