@@ -1,17 +1,30 @@
 <?php
 /**
- * Plugin Name: WP Ru-max
- * Plugin URI: https://рукодер.рф/
- * Description: Интегрируйте свой сайт WordPress с Max - Российский мессенджер с полным контролем.
- * Version: 1.0.17
- * Author: RuCoder
- * Author URI: https://рукодер.рф/
- * License: GPL v2 or later
- * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: рукодер.рф
- * Domain Path: /languages
+ * Plugin Name:       WP Ru-max
+ * Plugin URI:        https://рукодер.рф/wp-ru-max/
+ * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Elementor и настраиваемый чат-виджет с анимацией и звуком.
+ * Version:           1.0.17
+ * Author:            Сергей Солошенко (RuCoder)
+ * Author URI:        https://рукодер.рф/
+ * License:           GPL v2 or later
+ * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:       wp-ru-max
+ * Domain Path:       /languages
  * Requires at least: 5.8
- * Requires PHP: 7.4
+ * Tested up to:      6.7
+ * Requires PHP:      7.4
+ *
+ * -----------------------------------------------------------------------
+ * Разработчик:        Сергей Солошенко | РуКодер
+ * Специализация:      Веб-разработка с 2018 года | WordPress / Full Stack
+ * Принцип работы:     «Сайт — как для себя»
+ * -----------------------------------------------------------------------
+ * Телефон / WhatsApp: +7 (985) 985-53-97
+ * Email:              support@рукодер.рф
+ * Telegram:           @RussCoder
+ * Портфолио:          https://рукодер.рф
+ * GitHub:             https://github.com/RuCoder-sudo
+ * -----------------------------------------------------------------------
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
