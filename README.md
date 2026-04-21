@@ -6,11 +6,7 @@
 
 <div align="center">
 ## Интеграция WordPress с мессенджером MAX
-    <img src="https://img.shields.io/github/last-commit/RuCoder-sudo/wp-ru-max" alt="Last Commit">
-    <img src="https://img.shields.io/github/repo-size/RuCoder-sudo/wp-ru-max" alt="Repo Size">
-    <img src="https://img.shields.io/github/issues/RuCoder-sudo/wp-ru-max" alt="Issues">
-    <img src="https://img.shields.io/github/stars/RuCoder-sudo/wp-ru-max?style=social" alt="Stars">
-    <img src="https://img.shields.io/badge/MAX-Messenger-blueviolet" alt="MAX"> 
+
 **WP Ru-max** Плагин для WordPress, который подключает ваш сайт к российскому мессенджеру **MAX (max.ru)**. Автоматическая публикация записей, личные уведомления с любых форм и красивый чат-виджет.
 
 ![Version](https://img.shields.io/badge/version-1.0.21-blue?style=flat-square)
@@ -279,6 +275,13 @@
 
 Плагин распространяется под лицензией [GPL-2.0+](https://www.gnu.org/licenses/gpl-2.0.html).
 
+<p align="center">
+    <img src="https://img.shields.io/github/last-commit/RuCoder-sudo/wp-ru-max" alt="Последняя фиксация">
+    <img src="https://img.shields.io/github/repo-size/RuCoder-sudo/wp-ru-max" alt="Размер">
+    <img src="https://img.shields.io/github/issues/RuCoder-sudo/wp-ru-max" alt="Issues">
+    <img src="https://img.shields.io/github/stars/RuCoder-sudo/wp-ru-max?style=social" alt="Stars">
+    <img src="https://img.shields.io/badge/MAX-Messenger-blueviolet" alt="MAX">
+</p>
 ---
 
 <div align="center">
