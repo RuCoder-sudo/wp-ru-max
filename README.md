@@ -1,5 +1,11 @@
 # Интеграция WordPress с мессенджером MAX
-
+<p align="center">
+    <img src="https://img.shields.io/badge/version-1.0.21-blue" alt="Version">
+    <img src="https://img.shields.io/badge/license-GPL--2.0-green" alt="License">
+    <img src="https://img.shields.io/badge/PHP-7.4+-blue" alt="PHP Version">
+    <img src="https://img.shields.io/badge/WordPress-5.8+-blue" alt="WordPress Version">
+    <img src="https://img.shields.io/badge/WooCommerce-5.0+-blue" alt="WooCommerce Version">
+</p>
 <p align="center">
   <img src="assets/banneruss.png" alt="WP Ru-max — отправка постов и уведомлений в MAX">
 </p>
