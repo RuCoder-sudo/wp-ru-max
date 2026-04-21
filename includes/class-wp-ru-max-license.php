@@ -144,20 +144,16 @@ class WP_Ru_Max_License {
             wp_send_json_error( 'Нет прав доступа.' );
         }
 
-        $name    = isset( $_POST['req_name'] )    ? sanitize_text_field( wp_unslash( $_POST['req_name'] ) )    : '';
-        $email   = isset( $_POST['req_email'] )   ? sanitize_email( wp_unslash( $_POST['req_email'] ) )         : '';
-        $contact = isset( $_POST['req_contact'] ) ? sanitize_text_field( wp_unslash( $_POST['req_contact'] ) )  : '';
-        $consent = isset( $_POST['consent'] )     ? filter_var( $_POST['consent'], FILTER_VALIDATE_BOOLEAN )    : false;
-        $mailing = isset( $_POST['mailing'] )     ? filter_var( $_POST['mailing'], FILTER_VALIDATE_BOOLEAN )    : false;
+        $name    = isset( $_POST['req_name'] )  ? sanitize_text_field( wp_unslash( $_POST['req_name'] ) )  : '';
+        $email   = isset( $_POST['req_email'] ) ? sanitize_email( wp_unslash( $_POST['req_email'] ) )       : '';
+        $consent = isset( $_POST['consent'] )   ? filter_var( $_POST['consent'], FILTER_VALIDATE_BOOLEAN )  : false;
+        $mailing = isset( $_POST['mailing'] )   ? filter_var( $_POST['mailing'], FILTER_VALIDATE_BOOLEAN )  : false;
 
         if ( empty( $name ) ) {
             wp_send_json_error( 'Укажите ваше имя.' );
         }
         if ( ! is_email( $email ) ) {
             wp_send_json_error( 'Укажите корректный email.' );
-        }
-        if ( empty( $contact ) ) {
-            wp_send_json_error( 'Укажите ссылку для связи.' );
         }
         if ( ! $consent ) {
             wp_send_json_error( 'Необходимо дать согласие на обработку персональных данных.' );
@@ -171,11 +167,10 @@ class WP_Ru_Max_License {
 
         $subject = 'Запрос лицензии WP Ru-max — ' . $name;
         $body  = "=== НОВЫЙ ЗАПРОС ЛИЦЕНЗИИ WP Ru-max ===\n\n";
-        $body .= "Имя:         " . $name . "\n";
-        $body .= "Email:       " . $email . "\n";
-        $body .= "Связь:       " . $contact . "\n";
-        $body .= "Сайт:        " . $site_url . "\n";
-        $body .= "Домен:       " . $domain . "\n\n";
+        $body .= "Имя:   " . $name . "\n";
+        $body .= "Email: " . $email . "\n";
+        $body .= "Сайт:  " . $site_url . "\n";
+        $body .= "Домен: " . $domain . "\n\n";
         $body .= "Согласие на обработку данных: Да\n";
         $body .= "Согласие на рассылку: " . ( $mailing ? 'Да' : 'Нет' ) . "\n";
         $body .= "Дата запроса: " . current_time( 'd.m.Y H:i:s' ) . "\n\n";
