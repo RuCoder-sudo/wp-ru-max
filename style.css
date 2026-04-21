@@ -1,720 +1,1195 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WP Ru-max — интеграция WordPress с мессенджером MAX</title>
-<meta name="description" content="Плагин WP Ru-max подключает WordPress к мессенджеру MAX (max.ru): автопубликация записей, личные уведомления с любых форм и красивый чат-виджет.">
-<meta property="og:title" content="WP Ru-max — интеграция WordPress с мессенджером MAX">
-<meta property="og:description" content="Автопубликация записей, личные уведомления с форм и чат-виджет MAX для вашего WordPress-сайта.">
-<meta property="og:type" content="website">
-<meta property="og:image" content="assets/horizontal-5.jpg">
-<link rel="icon" type="image/png" href="assets/icon.png">
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
+/* ===== WP Ru-max — GitHub Pages =====
+   Тёмная тема, glassmorphism, градиентные блобы, плавные переходы.
+   Чистый CSS, без зависимостей. */
 
-<div class="bg-canvas">
-    <span class="blob b1"></span>
-    <span class="blob b2"></span>
-    <span class="blob b3"></span>
-</div>
+:root {
+    --bg-0:         #0a0608;
+    --bg-1:         #1a0d12;
+    --text:         #fff5f2;
+    --text-soft:    #f1e6e3;
+    --text-muted:   #a89894;
+    --accent:       #d63347;
+    --accent-2:     #ffb27a;
+    --accent-3:     #ff5b3d;
+    --success:      #2ed573;
+    --warning:      #ffba08;
+    --danger:       #ff5b5b;
 
-<!-- ===== NAV ===== -->
-<nav class="nav">
-    <a href="#top" class="brand">
-        <img src="assets/icon.png" alt="WP Ru-max" class="logo-img">
-        <span>WP Ru-max</span>
-    </a>
-    <div class="links">
-        <a href="#features">Возможности</a>
-        <a href="#preview">Превью</a>
-        <a href="#install">Установка</a>
-        <a href="#pricing">Лицензия</a>
-        <a href="#activation">Активация</a>
-        <a href="#gallery">Галерея</a>
-        <a href="#faq">FAQ</a>
-        <a href="#links">Ссылки</a>
-        <a href="#author">Автор</a>
-    </div>
-    <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" class="btn btn-primary btn-sm cta">Скачать</a>
-</nav>
+    --glass-bg:     rgba(255, 255, 255, 0.05);
+    --glass-bg-h:   rgba(255, 255, 255, 0.09);
+    --glass-brd:    rgba(255, 255, 255, 0.12);
+    --glass-shadow: 0 14px 44px rgba(0, 0, 0, 0.45);
 
-<!-- ===== HERO ===== -->
-<header class="hero" id="top">
-    <div class="container">
-        <div class="hero-grid">
-            <div>
-                <div class="eyebrow">
-                    <span class="dot"></span>
-                    <span>Версия 1.0.21 — стабильная</span>
-                </div>
-                <h1>
-                    WordPress &times; MAX —<br>
-                    <span class="grad">всё в одном плагине</span>
-                </h1>
-                <p class="lead">
-                    <strong>WP Ru-max</strong> подключает ваш WordPress-сайт к российскому мессенджеру
-                    <a href="https://max.ru" target="_blank" rel="noopener">MAX (max.ru)</a>:
-                    автопубликация записей, личные уведомления с любых форм и
-                    настраиваемый чат-виджет с анимацией и звуком.
-                </p>
+    --radius:       20px;
+    --radius-sm:    12px;
+    --max-w:        1200px;
 
-                <div class="actions">
-                    <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" class="btn btn-primary">
-                        <span>⬇</span> Скачать плагин
-                    </a>
-                    <a href="docs.html" class="btn btn-ghost">
-                        <span>📖</span> Документация
-                    </a>
-                    <a href="https://github.com/RuCoder-sudo/wp-ru-max" class="btn btn-ghost">
-                        <span>★</span> GitHub
-                    </a>
-                </div>
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "SF Pro Display",
+            "Inter", Roboto, Oxygen, Ubuntu, "Helvetica Neue", sans-serif;
+    --font-mono: "JetBrains Mono", "Fira Code", "SF Mono", Menlo, Consolas, monospace;
+}
 
-            </div>
+* { box-sizing: border-box; }
 
-            <!-- Mockup of WP admin panel -->
-            <div class="mockup reveal">
-                <div class="mockup-bar">
-                    <span class="dot d1"></span>
-                    <span class="dot d2"></span>
-                    <span class="dot d3"></span>
-                    <span class="url">site.ru/wp-admin/admin.php?page=wp-ru-max</span>
-                </div>
-                <div class="mockup-body">
-                    <div class="mockup-tabs">
-                        <span class="mockup-tab active">Главная</span>
-                        <span class="mockup-tab">Публикация</span>
-                        <span class="mockup-tab">Уведомления</span>
-                        <span class="mockup-tab">Виджет</span>
-                        <span class="mockup-tab">Логи</span>
-                        <span class="mockup-tab">Активация</span>
-                    </div>
+html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg-0);
+    color: var(--text);
+    font-family: var(--font);
+    line-height: 1.65;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+    overflow-x: hidden;
+}
+body::selection, ::selection { background: var(--accent); color: #fff; }
 
-                    <div class="mockup-card">
-                        <div class="check">✓</div>
-                        <h5>Бот MAX подключён</h5>
-                        <div class="meta">
-                            <span><b>@my_shop_bot</b></span>
-                            <span>Токен ••••••••f3a</span>
-                            <span class="mockup-pill ok">online</span>
-                        </div>
-                    </div>
+a {
+    color: var(--accent-2);
+    text-decoration: none;
+    transition: color .2s ease;
+}
+a:hover { color: var(--accent-3); }
 
-                    <div class="mockup-card">
-                        <h5 style="margin-bottom:10px;">Лицензия активна</h5>
-                        <div class="meta" style="margin-bottom:10px;">
-                            <span>WPRM-XXXX-XXXX-XXXX-A91F</span>
-                            <span class="mockup-pill ok">active</span>
-                        </div>
-                        <div class="mockup-row">
-                            <span class="mockup-pill">site.ru</span>
-                            <span class="mockup-pill">проверено: 2 мин назад</span>
-                        </div>
-                    </div>
+img { max-width: 100%; display: block; }
 
-                    <div class="mockup-card" style="margin-bottom:0;">
-                        <h5 style="margin-bottom:10px;">Сегодня отправлено</h5>
-                        <div class="mockup-row">
-                            <span class="mockup-pill">📝 12 постов</span>
-                            <span class="mockup-pill">📩 47 уведомлений</span>
-                            <span class="mockup-pill">💬 8 сессий чата</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+/* ===== Анимированный фон ===== */
+.bg-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    background:
+        radial-gradient(1200px 700px at 8% -10%, rgba(214,51,71,0.38), transparent 60%),
+        radial-gradient(1000px 700px at 110% 5%, rgba(255,91,61,0.28),  transparent 60%),
+        radial-gradient(900px  600px at 50% 110%, rgba(255,178,122,0.18), transparent 60%),
+        linear-gradient(180deg, var(--bg-1), var(--bg-0));
+    overflow: hidden;
+}
+.blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(110px);
+    opacity: 0.6;
+    animation: floaty 22s ease-in-out infinite;
+}
+.blob.b1 { width: 560px; height: 560px; left: -140px; top: -140px;
+           background: radial-gradient(circle at 30% 30%, #d63347, transparent 70%); }
+.blob.b2 { width: 460px; height: 460px; right: -120px; top: 16%;
+           background: radial-gradient(circle at 60% 40%, #ff8a5b, transparent 70%);
+           animation-delay: -7s; }
+.blob.b3 { width: 520px; height: 520px; left: 30%; bottom: -180px;
+           background: radial-gradient(circle at 50% 50%, #b8253a, transparent 70%);
+           animation-delay: -14s; }
 
-        <div class="stats">
-            <div class="stat reveal"><div class="num">3</div><div class="lbl">модуля в одном плагине</div></div>
-            <div class="stat reveal"><div class="num">5+</div><div class="lbl">плагинов форм поддерживается</div></div>
-            <div class="stat reveal"><div class="num">∞</div><div class="lbl">бессрочная лицензия</div></div>
-            <div class="stat reveal"><div class="num">2200₽</div><div class="lbl">за один домен</div></div>
-        </div>
-    </div>
-</header>
+@keyframes floaty {
+    0%,100% { transform: translate3d(0,0,0)   scale(1); }
+    50%     { transform: translate3d(50px,-40px,0) scale(1.1); }
+}
 
-<!-- ===== FEATURES ===== -->
-<section id="features">
-    <div class="container">
-        <div class="section-head">
-            <span class="kicker">Возможности</span>
-            <h2>Всё, что нужно для интеграции с MAX</h2>
-            <p>Шесть модулей, которые работают «из коробки» — без лишних настроек и сторонних сервисов.</p>
-        </div>
+/* Лёгкая «зернистость» поверх фона — приглушает банды */
+.bg-canvas::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.06 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    opacity: 0.4;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+}
 
-        <div class="features">
-            <div class="card reveal">
-                <div class="icon">📝</div>
-                <h3>Автопубликация</h3>
-                <p>Новая или обновлённая запись/страница автоматически отправляется в канал MAX, с миниатюрой и опциональной ссылкой «Читать полностью».</p>
-            </div>
-            <div class="card reveal">
-                <div class="icon alt">📩</div>
-                <h3>Личные уведомления</h3>
-                <p>Перехват <code>wp_mail()</code> — все письма WordPress (заказы WooCommerce, заявки с форм) дублируются в личный чат с ботом MAX.</p>
-            </div>
-            <div class="card reveal">
-                <div class="icon alt2">💬</div>
-                <h3>Чат-виджет</h3>
-                <p>Плавающая кнопка MAX с приветствием, анимацией «печатания», звуком, задержкой появления и попапом удержания.</p>
-            </div>
-            <div class="card reveal">
-                <div class="icon alt3">📊</div>
-                <h3>История и логи</h3>
-                <p>Полная таблица событий: все отправки, ошибки, тесты. Фильтрация по типу/дате/статусу и просмотр JSON-лога каждого запроса.</p>
-            </div>
-            <div class="card reveal">
-                <div class="icon alt4">🧪</div>
-                <h3>Тестирование</h3>
-                <p>Встроенная проверка соединения с ботом MAX и отправка тестовых сообщений в любой канал или чат — прямо из админки.</p>
-            </div>
-            <div class="card reveal">
-                <div class="icon alt5">🔐</div>
-                <h3>Лицензирование</h3>
-                <p>Привязка к домену через REST API сайта рукодер.рф. Часовая фоновая перепроверка ключа и кнопка «Проверить лицензию сейчас».</p>
-            </div>
-        </div>
-    </div>
-</section>
+/* ===== Контейнер ===== */
+.container {
+    max-width: var(--max-w);
+    margin: 0 auto;
+    padding: 0 24px;
+}
 
-<!-- ===== PREVIEW DEMO ===== -->
-<section id="preview">
-    <div class="container">
-        <div class="section-head">
-            <span class="kicker">Как это выглядит</span>
-            <h2>Три модуля — три формата</h2>
-            <p>Так выглядят сообщения и интерфейсы, которые видит ваш клиент и вы.</p>
-        </div>
+/* ===== Навигация ===== */
+.nav {
+    position: sticky;
+    top: 14px;
+    z-index: 50;
+    margin: 14px auto 0;
+    padding: 10px 16px;
+    max-width: var(--max-w);
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    border-radius: 999px;
+    background: rgba(15,17,32,0.55);
+    border: 1px solid var(--glass-brd);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    box-shadow: var(--glass-shadow);
+}
+.nav .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 700; letter-spacing: .2px;
+    color: var(--text);
+}
+.nav .brand .logo {
+    width: 32px; height: 32px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    display: grid; place-items: center;
+    color: #fff; font-weight: 800; font-size: 15px;
+    box-shadow: 0 6px 18px rgba(124,92,255,0.55);
+    position: relative;
+}
+.nav .brand .logo::after {
+    content: ""; position: absolute; inset: -2px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    filter: blur(10px); opacity: 0.5; z-index: -1;
+}
+.nav .brand .logo-img {
+    width: 36px; height: 36px; border-radius: 10px;
+    object-fit: cover;
+    box-shadow: 0 6px 18px rgba(124,92,255,0.45);
+}
 
-        <div class="demo">
-            <!-- Автопубликация -->
-            <div class="demo-card reveal">
-                <div class="head">
-                    <div class="icon">📝</div>
-                    <h4>Автопубликация в канал</h4>
-                </div>
-                <div class="body">
-                    <div class="msg">
-                        <div class="from">
-                            <span class="dot"></span>
-                            <span>@my_channel</span>
-                            <span class="time">12:48</span>
-                        </div>
-                        <b>Новая статья на сайте</b><br>
-                        Топ-10 плагинов WordPress в 2026 году<br>
-                        <a href="#" style="color: var(--accent-2);">Читать полностью →</a>
-                    </div>
-                    <div class="msg">
-                        <div class="from">
-                            <span class="dot"></span>
-                            <span>@my_channel</span>
-                            <span class="time">10:12</span>
-                        </div>
-                        <b>WooCommerce: новинка</b><br>
-                        Платье вечернее «Аврора» — 8 990 ₽<br>
-                        <a href="#" style="color: var(--accent-2);">Купить →</a>
-                    </div>
-                </div>
-            </div>
+/* ===== Gallery ===== */
+.gallery {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-auto-rows: 220px;
+    gap: 16px;
+}
+.g-tile {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius);
+    border: 1px solid var(--glass-brd);
+    background: var(--glass-bg);
+    box-shadow: var(--glass-shadow);
+    display: block;
+    transition: transform .35s ease, border-color .25s ease;
+}
+.g-tile img {
+    width: 100%; height: 100%; object-fit: cover;
+    transition: transform .5s ease, filter .35s ease;
+    filter: saturate(1.05);
+}
+.g-tile:hover { transform: translateY(-4px); border-color: rgba(255,71,87,0.45); }
+.g-tile:hover img { transform: scale(1.05); filter: saturate(1.15) brightness(1.05); }
+.g-tile::after {
+    content: "🔍 Открыть";
+    position: absolute; left: 12px; bottom: 12px;
+    padding: 5px 12px; border-radius: 999px;
+    background: rgba(0,0,0,0.55);
+    color: #fff; font-size: 12px; font-weight: 600;
+    backdrop-filter: blur(8px);
+    opacity: 0; transform: translateY(8px);
+    transition: opacity .25s ease, transform .25s ease;
+}
+.g-tile:hover::after { opacity: 1; transform: none; }
+.g-wide { grid-column: span 2; }
+.g-tall { grid-row: span 2; }
+@media (max-width: 760px) {
+    .gallery { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 180px; }
+    .g-wide, .g-tall { grid-column: auto; grid-row: auto; }
+}
 
-            <!-- Уведомления -->
-            <div class="demo-card reveal">
-                <div class="head">
-                    <div class="icon" style="background: linear-gradient(135deg, var(--accent-2), #4f8bff);">📩</div>
-                    <h4>Личные уведомления</h4>
-                </div>
-                <div class="body">
-                    <div class="msg">
-                        <div class="from">
-                            <span class="dot"></span>
-                            <span>WP Ru-max bot</span>
-                            <span class="time">сейчас</span>
-                        </div>
-                        <b>Новый заказ #4521</b><br>
-                        Иванов И. — 12 480 ₽<br>
-                        Способ: СБП · Доставка СДЭК
-                    </div>
-                    <div class="msg">
-                        <div class="from">
-                            <span class="dot"></span>
-                            <span>WP Ru-max bot</span>
-                            <span class="time">2 мин</span>
-                        </div>
-                        <b>Заявка с формы «Контакты»</b><br>
-                        Имя: Анна<br>
-                        Телефон: +7 (999) 123-45-67
-                    </div>
-                </div>
-            </div>
+/* Link cards (clickable) */
+.link-card { text-decoration: none; color: var(--text); display: block; }
+.link-card:hover { color: var(--text); }
+.link-card h3 { color: var(--text); }
+.link-card::after {
+    content: "→";
+    position: absolute; top: 26px; right: 26px;
+    color: var(--accent-2); font-size: 22px;
+    opacity: 0; transform: translateX(-6px);
+    transition: opacity .25s ease, transform .25s ease;
+}
+.link-card:hover::after { opacity: 1; transform: none; }
+.nav .links { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+.nav .links a {
+    color: var(--text-soft);
+    padding: 8px 14px; border-radius: 999px;
+    font-weight: 500; font-size: 14px;
+    transition: all .2s ease;
+}
+.nav .links a:hover { color: var(--text); background: rgba(255,255,255,0.07); }
+.nav .cta { margin-left: 4px; }
+@media (max-width: 820px) {
+    .nav { border-radius: 18px; padding: 10px 14px; }
+    .nav .links { display: none; }
+}
 
-            <!-- Виджет -->
-            <div class="demo-card reveal">
-                <div class="head">
-                    <div class="icon" style="background: linear-gradient(135deg, var(--success), #16a085);">💬</div>
-                    <h4>Чат-виджет на сайте</h4>
-                </div>
-                <div class="body">
-                    <div class="bubble">Здравствуйте! Чем могу помочь? 👋</div>
-                    <div class="bubble" style="background: rgba(255,255,255,0.06); color: var(--text); border-radius: 18px 18px 6px 18px; margin-left: auto;">
-                        Хочу узнать про доставку
-                    </div>
-                    <div class="fab">M</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
+/* ===== Кнопки ===== */
+.btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 13px 24px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 14.5px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform .15s ease, box-shadow .25s ease, background .25s ease;
+    text-decoration: none;
+    white-space: nowrap;
+    position: relative;
+}
+.btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    color: #fff;
+    box-shadow: 0 12px 32px rgba(124,92,255,0.5);
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 18px 44px rgba(124,92,255,0.6); color: #fff; }
+.btn-primary::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    filter: blur(16px); opacity: .5; z-index: -1; transition: opacity .25s ease;
+}
+.btn-primary:hover::after { opacity: .85; }
+.btn-ghost {
+    background: var(--glass-bg);
+    color: var(--text);
+    border-color: var(--glass-brd);
+    backdrop-filter: blur(14px);
+}
+.btn-ghost:hover { background: var(--glass-bg-h); color: var(--text); border-color: rgba(255,255,255,0.25); }
+.btn-sm { padding: 9px 16px; font-size: 13.5px; }
 
-<!-- ===== COMPATIBILITY ===== -->
-<section id="compat">
-    <div class="container">
-        <div class="section-head">
-            <span class="kicker">Совместимость</span>
-            <h2>Работает с тем, что у вас уже есть</h2>
-            <p>Никаких сторонних SaaS-сервисов и API-шлюзов. Только ваш WordPress и официальный API MAX.</p>
-        </div>
+/* ===== Hero ===== */
+.hero { padding: 90px 0 60px; position: relative; }
+.hero-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 48px;
+    align-items: center;
+}
+.hero .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-brd);
+    backdrop-filter: blur(14px);
+    border-radius: 999px;
+    color: var(--text-soft);
+    font-size: 13px;
+    margin-bottom: 22px;
+}
+.hero .eyebrow .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 12px var(--success);
+    animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+    0%,100% { transform: scale(1);   opacity: 1; }
+    50%     { transform: scale(1.4); opacity: .6; }
+}
+.hero h1 {
+    font-size: clamp(36px, 5.6vw, 64px);
+    line-height: 1.05;
+    margin: 0 0 18px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+.hero h1 .grad {
+    background: linear-gradient(120deg, #ffffff 0%, #b8c4ff 30%, var(--accent-2) 60%, var(--accent-3) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+.hero p.lead {
+    margin: 0 0 28px;
+    color: var(--text-soft);
+    font-size: clamp(16px, 1.6vw, 18.5px);
+    max-width: 580px;
+}
+.hero .actions {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 28px;
+}
+.hero .badges {
+    display: flex; gap: 8px; flex-wrap: wrap;
+}
+.hero .badges img { height: 22px; }
 
-        <div class="compat reveal">
-            <div class="row"><span class="name">WordPress</span> <span class="val">5.8 – 6.7</span></div>
-            <div class="row"><span class="name">PHP</span>       <span class="val">7.4 — 8.3</span></div>
-            <div class="row"><span class="name">WooCommerce (новые заказы, смена статуса)</span> <span class="val">✓ Да</span></div>
-            <div class="row"><span class="name">Contact Form 7</span>  <span class="val">✓ Да</span></div>
-            <div class="row"><span class="name">Elementor Forms (включая Pro)</span> <span class="val">✓ Да</span></div>
-            <div class="row"><span class="name">Gravity Forms</span>   <span class="val">✓ Да</span></div>
-            <div class="row"><span class="name">Ninja Forms</span>     <span class="val">✓ Да</span></div>
-            <div class="row"><span class="name">Любые формы через <code>wp_mail()</code></span> <span class="val">✓ Да</span></div>
-            <div class="row"><span class="name">Кастомные типы записей (CPT)</span> <span class="val">✓ Да</span></div>
-        </div>
-    </div>
-</section>
+@media (max-width: 960px) {
+    .hero { padding-top: 60px; }
+    .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+    .hero p.lead { max-width: none; }
+    .hero .badges, .hero .actions { justify-content: flex-start; }
+}
 
-<!-- ===== INSTALLATION STEPS ===== -->
-<section id="install">
-    <div class="container">
-        <div class="section-head">
-            <span class="kicker">Установка</span>
-            <h2>Запуск за 5 минут</h2>
-            <p>Стандартная установка плагина WordPress + ввод лицензионного ключа и токена бота.</p>
-        </div>
+/* ===== Hero mockup admin panel ===== */
+.mockup {
+    position: relative;
+    border-radius: var(--radius);
+    background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+    border: 1px solid var(--glass-brd);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    box-shadow: 0 30px 80px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08);
+    overflow: hidden;
+    transform: perspective(1400px) rotateY(-6deg) rotateX(3deg);
+    transition: transform .5s ease;
+}
+.mockup:hover { transform: perspective(1400px) rotateY(-2deg) rotateX(1deg); }
+.mockup-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px;
+    background: rgba(0,0,0,0.35);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.mockup-bar .dot {
+    width: 11px; height: 11px; border-radius: 50%;
+}
+.mockup-bar .d1 { background: #ff5f57; }
+.mockup-bar .d2 { background: #ffbd2e; }
+.mockup-bar .d3 { background: #28c840; }
+.mockup-bar .url {
+    margin-left: 12px; font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.05);
+    padding: 4px 12px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.06);
+}
+.mockup-body { padding: 22px; }
+.mockup-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+.mockup-tab {
+    padding: 6px 12px; font-size: 12.5px;
+    border-radius: 8px;
+    color: var(--text-soft);
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.06);
+}
+.mockup-tab.active {
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    border-color: transparent;
+    box-shadow: 0 6px 18px rgba(124,92,255,0.45);
+}
+.mockup-card {
+    padding: 18px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    margin-bottom: 12px;
+}
+.mockup-card .check {
+    display: inline-grid; place-items: center;
+    width: 32px; height: 32px; border-radius: 10px;
+    background: rgba(46,213,115,0.18);
+    color: var(--success); font-weight: 800;
+    margin-bottom: 10px;
+}
+.mockup-card h5 { margin: 0 0 4px; font-size: 14.5px; color: var(--text); }
+.mockup-card .meta { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12.5px; color: var(--text-muted); }
+.mockup-card .meta b { color: var(--text); font-weight: 600; }
+.mockup-row {
+    display: flex; gap: 8px; flex-wrap: wrap;
+}
+.mockup-pill {
+    font-size: 11.5px; padding: 4px 10px; border-radius: 999px;
+    background: rgba(0,212,255,0.12); color: var(--accent-2);
+    border: 1px solid rgba(0,212,255,0.25);
+}
+.mockup-pill.ok { background: rgba(46,213,115,0.12); color: var(--success); border-color: rgba(46,213,115,0.25); }
 
-        <div class="steps">
-            <div class="step reveal">
-                <h4>Скачайте архив</h4>
-                <p>Возьмите ZIP последней версии в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases">GitHub Releases</a>.</p>
-            </div>
-            <div class="step reveal">
-                <h4>Загрузите в WordPress</h4>
-                <p>Плагины → Добавить новый → Загрузить плагин → выберите <code>wp-ru-max.zip</code> → Установить.</p>
-            </div>
-            <div class="step reveal">
-                <h4>Активируйте лицензию</h4>
-                <p>Меню <strong>Ru-max → Активация</strong>. Ключ имеет формат <code>WPRM-XXXX-XXXX-XXXX-XXXX</code>.</p>
-            </div>
-            <div class="step reveal">
-                <h4>Подключите бота MAX</h4>
-                <p>Получите токен на <a href="https://max.ru/partner">max.ru/partner</a> и вставьте на вкладке «Главная».</p>
-            </div>
-        </div>
+/* ===== Stats ===== */
+.stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-top: 56px;
+}
+.stat {
+    padding: 22px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-brd);
+    border-radius: var(--radius);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    text-align: center;
+    transition: transform .25s ease, background .25s ease;
+}
+.stat:hover { transform: translateY(-3px); background: var(--glass-bg-h); }
+.stat .num {
+    font-size: 32px; font-weight: 800;
+    background: linear-gradient(135deg, var(--accent-2), var(--accent-3));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.stat .lbl { color: var(--text-soft); font-size: 13.5px; margin-top: 4px; }
+@media (max-width: 760px) { .stats { grid-template-columns: repeat(2, 1fr); } }
 
-        <div style="margin-top:32px;">
-            <pre><code># Через FTP/SSH
-git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
-    /var/www/site/wp-content/plugins/wp-ru-max</code></pre>
-        </div>
-    </div>
-</section>
+/* ===== Секции ===== */
+section { padding: 90px 0; position: relative; }
+.section-head { text-align: center; max-width: 760px; margin: 0 auto 52px; }
+.section-head .kicker {
+    display: inline-block;
+    color: var(--accent-2);
+    font-weight: 600; font-size: 12.5px; letter-spacing: .2em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}
+.section-head h2 {
+    font-size: clamp(28px, 4vw, 44px);
+    margin: 0 0 12px;
+    font-weight: 800; letter-spacing: -0.01em;
+}
+.section-head p { color: #ffffff; font-size: 17px; margin: 0; opacity: .92; }
 
-<!-- ===== PRICING ===== -->
-<section id="pricing">
-    <div class="container">
-        <div class="section-head">
-            <span class="kicker">Лицензия</span>
-            <h2>Заплатите один раз — пользуйтесь всегда</h2>
-            <p>Бессрочная лицензия с привязкой к домену. Все обновления плагина и поддержка — в стоимости.</p>
-        </div>
+/* ===== Карточки возможностей ===== */
+.features {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+.card {
+    position: relative;
+    padding: 28px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-brd);
+    border-radius: var(--radius);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    box-shadow: var(--glass-shadow);
+    transition: transform .25s ease, background .25s ease, border-color .25s ease;
+    overflow: hidden;
+}
+.card::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(124,92,255,0.15), transparent 50%);
+    opacity: 0; transition: opacity .25s ease;
+    pointer-events: none;
+}
+.card:hover {
+    transform: translateY(-5px);
+    background: var(--glass-bg-h);
+    border-color: rgba(255,255,255,0.22);
+}
+.card:hover::before { opacity: 1; }
+.card .icon {
+    width: 50px; height: 50px;
+    border-radius: 14px;
+    display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    color: #fff;
+    margin-bottom: 16px;
+    font-size: 24px;
+    box-shadow: 0 10px 26px rgba(124,92,255,0.5);
+}
+.card .icon.alt   { background: linear-gradient(135deg, var(--accent-2), #4f8bff); box-shadow: 0 10px 26px rgba(0,212,255,0.45); }
+.card .icon.alt2  { background: linear-gradient(135deg, var(--success), #16a085); box-shadow: 0 10px 26px rgba(46,213,115,0.45); }
+.card .icon.alt3  { background: linear-gradient(135deg, var(--warning), #ff7a00); box-shadow: 0 10px 26px rgba(255,186,8,0.4); }
+.card .icon.alt4  { background: linear-gradient(135deg, #ff4757, #dc2626); box-shadow: 0 10px 26px rgb(216, 32, 19,0.45); }
+.card .icon.alt5  { background: linear-gradient(135deg, #4f8bff, #7c5cff); box-shadow: 0 10px 26px rgba(79,139,255,0.45); }
+.card h3 { margin: 0 0 8px; font-size: 19px; font-weight: 700; }
+.card p  { margin: 0; color: var(--text-soft); font-size: 15px; }
+@media (max-width: 960px) { .features { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .features { grid-template-columns: 1fr; } }
 
-        <div class="pricing">
-            <div class="price reveal">
-                <h3>1 домен</h3>
-                <div class="amount">2 200 ₽</div>
-                <div class="per">2 200 ₽ за домен · разовый платёж</div>
-                <ul>
-                    <li>Активация на одном домене</li>
-                    <li>Все функции плагина</li>
-                    <li>Бессрочное использование</li>
-                    <li>Все обновления включены</li>
-                </ul>
-                <a href="#activation" class="btn btn-ghost">Активировать</a>
-            </div>
+/* ===== Compatibility table ===== */
+.compat {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-brd);
+    border-radius: var(--radius);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    overflow: hidden;
+    box-shadow: var(--glass-shadow);
+}
+.compat .row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    padding: 14px 22px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    align-items: center;
+    transition: background .15s ease;
+}
+.compat .row:hover { background: rgba(255,255,255,0.04); }
+.compat .row:last-child { border-bottom: 0; }
+.compat .row .name { color: var(--text); font-weight: 500; }
+.compat .row .val  { color: var(--success); font-weight: 600; font-size: 14.5px; }
+.compat .row .val.muted { color: var(--text-muted); }
 
-            <div class="price featured reveal">
-                <span class="tag">Популярно</span>
-                <h3>2 домена</h3>
-                <div class="amount">4 000 ₽</div>
-                <span class="save">Экономия ~9% · 2 000 ₽ за домен</span>
-                <div class="per">разовый платёж</div>
-                <ul>
-                    <li>Активация на двух доменах</li>
-                    <li>Все функции плагина</li>
-                    <li>Бессрочное использование</li>
-                    <li>Все обновления включены</li>
-                    <li>Приоритетная поддержка</li>
-                </ul>
-                <a href="#activation" class="btn btn-primary">Активировать</a>
-            </div>
+/* ===== Demo / Preview cards ===== */
+.demo {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+.demo-card {
+    padding: 0;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-brd);
+    border-radius: var(--radius);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    overflow: hidden;
+    box-shadow: var(--glass-shadow);
+    transition: transform .25s ease, border-color .25s ease;
+}
+.demo-card:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.22); }
+.demo-card .head {
+    padding: 18px 20px;
+    background: rgba(0,0,0,0.25);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; gap: 12px;
+}
+.demo-card .head .icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: grid; place-items: center; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(124,92,255,0.4);
+}
+.demo-card .head h4 { margin: 0; font-size: 15.5px; }
+.demo-card .body { padding: 20px; }
 
-            <div class="price reveal">
-                <h3>5 доменов</h3>
-                <div class="amount">7 000 ₽</div>
-                <span class="save">Экономия 36% · 1 400 ₽ за домен</span>
-                <div class="per">разовый платёж</div>
-                <ul>
-                    <li>Активация на пяти доменах</li>
-                    <li>Все функции плагина</li>
-                    <li>Бессрочное использование</li>
-                    <li>Все обновления включены</li>
-                    <li>Персональные консультации</li>
-                </ul>
-                <a href="#activation" class="btn btn-ghost">Активировать</a>
-            </div>
-        </div>
-    </div>
-</section>
+/* Стилизация «сообщения в MAX» */
+.msg {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    font-size: 13.5px;
+    color: var(--text-soft);
+    position: relative;
+}
+.msg .from {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+    color: var(--text); font-weight: 600; font-size: 13px;
+}
+.msg .from .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    box-shadow: 0 0 8px var(--accent);
+}
+.msg .from .time { margin-left: auto; color: var(--text-muted); font-weight: 400; font-size: 11.5px; }
+.msg b { color: var(--text); font-weight: 600; }
 
-<!-- ===== FAQ ===== -->
-<section id="faq">
-    <div class="container">
-        <div class="section-head">
-            <span class="kicker">Вопросы и ответы</span>
-            <h2>Коротко о главном</h2>
-        </div>
+/* «Чат-виджет» превью */
+.bubble {
+    position: relative;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    color: #fff;
+    border-radius: 18px 18px 18px 6px;
+    padding: 12px 16px;
+    font-size: 13.5px;
+    max-width: 85%;
+    box-shadow: 0 10px 26px rgba(124,92,255,0.4);
+    margin-bottom: 14px;
+}
+.fab {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    display: grid; place-items: center;
+    color: #fff; font-size: 22px; font-weight: 800;
+    box-shadow: 0 14px 34px rgba(124,92,255,0.55);
+    margin-left: auto;
+    position: relative;
+}
+.fab::after {
+    content: ""; position: absolute; inset: -4px; border-radius: 50%;
+    border: 2px solid rgba(124,92,255,0.5);
+    animation: ripple 2.2s ease-out infinite;
+}
+@keyframes ripple {
+    0%   { transform: scale(0.9); opacity: 1; }
+    100% { transform: scale(1.6); opacity: 0; }
+}
 
-        <div class="faq">
-            <details class="reveal" open>
-                <summary>Где взять токен бота MAX?</summary>
-                <p>На платформе <a href="https://max.ru/partner">max.ru/partner</a> → раздел «Чат-боты» → «Интеграция» → «Получить токен». Вставьте его на вкладке <strong>Ru-max → Главная</strong> и нажмите «Проверить подключение».</p>
-            </details>
-            <details class="reveal">
-                <summary>Как узнать ID канала или группы?</summary>
-                <p>Для публичного канала — никнейм с <code>@</code>, например <code>@my_channel</code>. Для группы — числовой ID, который можно получить через бота <code>@get_id_bot</code> в самом мессенджере MAX.</p>
-            </details>
-            <details class="reveal">
-                <summary>Работает ли плагин с WooCommerce?</summary>
-                <p>Да. Все email-уведомления WooCommerce (новый заказ, смена статуса, оплата и т.д.) перехватываются и пересылаются в личный чат с ботом MAX.</p>
-            </details>
-            <details class="reveal">
-                <summary>Поддерживаются ли Contact Form 7, Elementor, Gravity Forms?</summary>
-                <p>Да. Плагин работает с любыми формами, отправляющими уведомления через стандартный <code>wp_mail()</code> WordPress: CF7, Elementor Forms, Gravity Forms, Ninja Forms и другими.</p>
-            </details>
-            <details class="reveal">
-                <summary>Лицензия действительно бессрочная?</summary>
-                <p>Да. Один платёж — пожизненная активация для указанного домена. Никаких подписок, продлений и абонентской платы. Все обновления плагина включены в стоимость.</p>
-            </details>
-            <details class="reveal">
-                <summary>Что будет, если ключ отозвать?</summary>
-                <p>Плагин ходит на сервер рукодер.рф и сверяет статус ключа: при открытии вкладки «Активация» — мгновенно, в фоне — раз в час. Если ключ отозван, статус сразу переключается на <code>suspended</code> и платные функции отключаются.</p>
-            </details>
-            <details class="reveal">
-                <summary>Как работают обновления?</summary>
-                <p>Плагин раз в 12 часов проверяет <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases">GitHub Releases</a>. Если есть новая версия — в WordPress появится стандартное уведомление «Доступно обновление», устанавливается в один клик.</p>
-            </details>
-            <details class="reveal">
-                <summary>Почему звук виджета не играет сразу?</summary>
-                <p>Браузеры блокируют автовоспроизведение звука до первого взаимодействия пользователя со страницей. Звук сыграет сразу после первого клика, касания или прокрутки.</p>
-            </details>
-        </div>
-    </div>
-</section>
+@media (max-width: 960px) { .demo { grid-template-columns: 1fr; } }
 
-<!-- ===== GALLERY ===== -->
-<section id="gallery">
-    <div class="container">
-        <div class="section-head">
-            <span class="kicker">Галерея</span>
-            <h2>Скриншоты и баннеры</h2>
-            <p>Так выглядит плагин внутри админки WordPress и сообщения в мессенджере MAX.</p>
-        </div>
+/* ===== Steps ===== */
+.steps {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    counter-reset: step;
+}
+.step {
+    padding: 26px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-brd);
+    border-radius: var(--radius);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    position: relative;
+    counter-increment: step;
+    transition: transform .25s ease;
+}
+.step:hover { transform: translateY(-4px); }
+.step::before {
+    content: counter(step, decimal-leading-zero);
+    position: absolute; top: 18px; right: 22px;
+    font-size: 32px; font-weight: 800; opacity: 0.22;
+    background: linear-gradient(135deg, var(--accent-2), var(--accent-3));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.step h4 { margin: 0 0 8px; font-size: 16.5px; }
+.step p  { margin: 0; color: var(--text-soft); font-size: 14.5px; }
+@media (max-width: 960px) { .steps { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .steps { grid-template-columns: 1fr; } }
 
-        <div class="gallery">
-            <a class="g-tile g-wide reveal" href="assets/horizontal-5.jpg" target="_blank" rel="noopener">
-                <img src="assets/horizontal-5.jpg" alt="WP Ru-max — баннер">
-            </a>
-            <a class="g-tile reveal" href="assets/horizontal-1.jpg" target="_blank" rel="noopener">
-                <img src="assets/horizontal-1.jpg" alt="Скриншот плагина 1">
-            </a>
-            <a class="g-tile reveal" href="assets/horizontal-2.jpg" target="_blank" rel="noopener">
-                <img src="assets/horizontal-2.jpg" alt="Скриншот плагина 2">
-            </a>
-            <a class="g-tile reveal" href="assets/horizontal-4.jpg" target="_blank" rel="noopener">
-                <img src="assets/horizontal-4.jpg" alt="Скриншот плагина 3">
-            </a>
-            <a class="g-tile g-tall reveal" href="assets/vertical.jpg" target="_blank" rel="noopener">
-                <img src="assets/vertical.jpg" alt="Вертикальный баннер">
-            </a>
-            <a class="g-tile reveal" href="assets/horizontal-1.jpeg" target="_blank" rel="noopener">
-                <img src="assets/horizontal-1.jpeg" alt="Скриншот плагина 4">
-            </a>
-        </div>
-    </div>
-</section>
+/* ===== Pricing ===== */
+.pricing {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 22px;
+    align-items: stretch;
+}
+.price {
+    padding: 32px 28px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-brd);
+    border-radius: var(--radius);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    box-shadow: var(--glass-shadow);
+    position: relative;
+    display: flex; flex-direction: column;
+    transition: transform .25s ease;
+}
+.price:hover { transform: translateY(-5px); }
+.price.featured {
+    border-color: rgba(124,92,255,0.6);
+    background: linear-gradient(180deg, rgba(124,92,255,0.22), rgba(255,255,255,0.05));
+    box-shadow: 0 22px 64px rgba(124,92,255,0.4);
+}
+.price.featured::before {
+    content: ""; position: absolute; inset: -1px; border-radius: var(--radius); padding: 1px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    pointer-events: none;
+}
+.price .tag {
+    position: absolute; top: -12px; right: 22px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    color: #fff; font-size: 12px; font-weight: 700;
+    padding: 5px 12px; border-radius: 999px;
+    letter-spacing: .04em;
+    box-shadow: 0 8px 22px rgba(124,92,255,0.5);
+}
+.price h3 { margin: 0 0 4px; font-size: 18px; color: var(--text-soft); font-weight: 600; }
+.price .amount {
+    font-size: 44px; font-weight: 800; margin: 6px 0;
+    background: linear-gradient(135deg, #fff, var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.price .per { color: var(--text-muted); font-size: 14px; margin-bottom: 18px; }
+.price ul { list-style: none; padding: 0; margin: 0 0 24px; flex: 1; }
+.price ul li {
+    padding: 8px 0; color: var(--text-soft); font-size: 14.5px;
+    display: flex; align-items: flex-start; gap: 10px;
+}
+.price ul li::before {
+    content: "✓"; color: var(--success); font-weight: 800; flex-shrink: 0;
+}
+.price .save {
+    display: inline-block; margin-top: -10px; margin-bottom: 12px;
+    color: var(--success); font-weight: 600; font-size: 13px;
+}
+@media (max-width: 960px) { .pricing { grid-template-columns: 1fr; } }
 
-<!-- ===== USEFUL LINKS ===== -->
-<section id="links">
-    <div class="container">
-        <div class="section-head">
-            <span class="kicker">Документация и ресурсы</span>
-            <h2>Полезные ссылки</h2>
-            <p>Вся документация, исходники и официальные страницы — в одном месте.</p>
-        </div>
+/* ===== FAQ ===== */
+.faq { max-width: 860px; margin: 0 auto; display: grid; gap: 12px; }
+.faq details {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-brd);
+    border-radius: var(--radius-sm);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    padding: 0 22px;
+    transition: background .2s ease, border-color .2s ease;
+}
+.faq details:hover { border-color: rgba(255,255,255,0.2); }
+.faq details[open] { background: var(--glass-bg-h); border-color: rgba(124,92,255,0.4); }
+.faq summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 18px 0;
+    font-weight: 600;
+    font-size: 16px;
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 16px;
+    color: var(--text);
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+    content: "+"; font-size: 24px; color: var(--accent-2);
+    transition: transform .2s ease;
+    line-height: 1;
+}
+.faq details[open] summary::after { transform: rotate(45deg); color: var(--accent-3); }
+.faq details p {
+    margin: 0 0 18px; color: var(--text-soft); font-size: 15px;
+}
 
-        <div class="features">
-            <a class="card link-card reveal" href="https://github.com/RuCoder-sudo/wp-ru-max" target="_blank" rel="noopener">
-                <div class="icon alt5">📦</div>
-                <h3>GitHub репозиторий</h3>
-                <p>Исходный код плагина, релизы, история коммитов и трекер задач.</p>
-            </a>
-            <a class="card link-card reveal" href="https://github.com/RuCoder-sudo/wp-ru-max/blob/main/wp-ru-max/README.md" target="_blank" rel="noopener">
-                <div class="icon alt2">📄</div>
-                <h3>README плагина</h3>
-                <p>Подробное описание возможностей, требований, установки и changelog.</p>
-            </a>
-            <a class="card link-card reveal" href="https://github.com/RuCoder-sudo/wp-ru-max/wiki" target="_blank" rel="noopener">
-                <div class="icon alt">📚</div>
-                <h3>Wiki проекта</h3>
-                <p>Полное руководство: главная, активация, автопубликация, виджет, уведомления, логи, требования.</p>
-            </a>
-            <a class="card link-card reveal" href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">
-                <div class="icon alt3">⬇</div>
-                <h3>GitHub Releases</h3>
-                <p>Скачайте последний ZIP-архив плагина и загрузите его в WordPress.</p>
-            </a>
-            <a class="card link-card reveal" href="https://max.ru" target="_blank" rel="noopener">
-                <div class="icon">М</div>
-                <h3>Мессенджер MAX</h3>
-                <p>Официальный сайт российского мессенджера MAX (max.ru) — установите приложение и создайте бота.</p>
-            </a>
-            <a class="card link-card reveal" href="https://max.ru/partner" target="_blank" rel="noopener">
-                <div class="icon alt4">🤖</div>
-                <h3>MAX для партнёров</h3>
-                <p>Платформа max.ru/partner — регистрация бота, получение токена, настройка интеграции.</p>
-            </a>
-        </div>
-    </div>
-</section>
+/* ===== Author / Contacts ===== */
+.author {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 24px;
+    align-items: stretch;
+}
+.author .panel {
+    padding: 32px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-brd);
+    border-radius: var(--radius);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    box-shadow: var(--glass-shadow);
+}
+.author .panel h3 { margin-top: 0; font-size: 22px; }
+.author .panel p  { color: var(--text-soft); }
+.author .who {
+    display: flex; align-items: center; gap: 16px; margin-bottom: 16px;
+}
+.author .who .ava {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    color: #fff; display: grid; place-items: center;
+    font-weight: 800; font-size: 22px;
+    box-shadow: 0 12px 30px rgba(124,92,255,0.5);
+    flex-shrink: 0;
+}
+.author .who .meta strong { display: block; font-size: 18px; }
+.author .who .meta span   { color: var(--text-muted); font-size: 13.5px; }
 
-<!-- ===== CTA banner ===== -->
-<section style="padding-top:0;">
-    <div class="container">
-        <div class="cta-banner reveal">
-            <div>
-                <h3>Готовы подключить MAX к своему сайту?</h3>
-                <p>Скачайте плагин с GitHub и активируйте лицензию за 5 минут.</p>
-            </div>
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" class="btn btn-primary">⬇ Скачать</a>
-                <a href="#activation" class="btn btn-ghost">Как активировать</a>
-            </div>
-        </div>
-    </div>
-</section>
+.contacts { display: grid; gap: 12px; }
+.contact-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 16px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    transition: background .2s ease, transform .2s ease, border-color .2s ease;
+    color: var(--text);
+    text-decoration: none;
+}
+.contact-row:hover {
+    background: rgba(255,255,255,0.08);
+    transform: translateX(4px);
+    border-color: rgba(124,92,255,0.4);
+    color: var(--text);
+}
+.contact-row .ic {
+    width: 38px; height: 38px; border-radius: 10px;
+    display: grid; place-items: center; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent-2), var(--accent));
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(0,212,255,0.3);
+}
+.contact-row .info {
+    display: flex; flex-direction: column; line-height: 1.25;
+}
+.contact-row .info .lbl { color: var(--text-muted); font-size: 12px; }
+.contact-row .info .val { font-weight: 600; font-size: 14.5px; color: var(--text); margin-top: 2px; }
 
-<!-- ===== AUTHOR / CONTACTS ===== -->
-<section id="author">
-    <div class="container">
-        <div class="section-head">
-            <span class="kicker">Автор и поддержка</span>
-            <h2>Сделано вручную, поддерживается лично</h2>
-            <p>За плагином стоит один разработчик. Никакой бюрократии — пишите напрямую.</p>
-        </div>
+@media (max-width: 860px) { .author { grid-template-columns: 1fr; } }
 
-        <div class="author">
-            <div class="panel reveal">
-                <div class="who">
-                    <div class="ava">СС</div>
-                    <div class="meta">
-                        <strong>Сергей Солошенко</strong>
-                        <span>RuCoder · WordPress / Full Stack с 2018 года</span>
-                    </div>
-                </div>
-                <p>
-                    Разрабатываю продающие сайты на WordPress / WooCommerce, сложные backend-решения,
-                    кастомные плагины и модули, Telegram-боты, парсеры, CRM и автоматизацию.
-                </p>
-                <p style="color:var(--text-muted); font-style:italic; border-left:3px solid var(--accent); padding-left:14px;">
-                    «Сайт как для себя» — именно так можно обозначить мой главный принцип работы.
-                </p>
-                <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:18px;">
-                    <a href="https://рукодер.рф" class="btn btn-primary btn-sm" target="_blank" rel="noopener">Сайт рукодер.рф</a>
-                    <a href="https://github.com/RuCoder-sudo" class="btn btn-ghost btn-sm" target="_blank" rel="noopener">GitHub</a>
-                </div>
-            </div>
+/* ===== License request form ===== */
+.form-panel {
+    background: linear-gradient(180deg, rgba(255,71,87,0.08), rgba(124,92,255,0.06));
+    border-color: rgba(255,71,87,0.25);
+    position: relative;
+    overflow: hidden;
+}
+.form-panel::before {
+    content: ""; position: absolute; inset: -1px; border-radius: var(--radius); padding: 1px;
+    background: linear-gradient(135deg, var(--accent-3), var(--accent), var(--accent-2));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    pointer-events: none; opacity: .55;
+}
+.form-head { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 22px; }
+.form-icon {
+    width: 52px; height: 52px; border-radius: 14px; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 24px;
+    background: linear-gradient(135deg, var(--accent-3), var(--accent));
+    box-shadow: 0 12px 28px rgba(255,71,87,0.45);
+}
+.form-head h3 { margin: 0 0 4px; font-size: 22px; color: var(--text); }
+.form-head p  { margin: 0; color: var(--text-soft); font-size: 14.5px; }
 
-            <div class="panel reveal">
-                <h3 style="margin-top:0;">Связь со мной</h3>
-                <div class="contacts">
-                    <a class="contact-row" href="https://t.me/RussCoder" target="_blank" rel="noopener">
-                        <span class="ic">✈</span>
-                        <span class="info">
-                            <span class="lbl">Telegram</span>
-                            <span class="val">@RussCoder</span>
-                        </span>
-                    </a>
-                    <a class="contact-row" href="tel:+79859855397">
-                        <span class="ic">📞</span>
-                        <span class="info">
-                            <span class="lbl">Телефон / WhatsApp</span>
-                            <span class="val">+7 (985) 985-53-97</span>
-                        </span>
-                    </a>
-                    <a class="contact-row" href="mailto:rucoder.rf@yandex.ru">
-                        <span class="ic">✉</span>
-                        <span class="info">
-                            <span class="lbl">Email</span>
-                            <span class="val">rucoder.rf@yandex.ru</span>
-                        </span>
-                    </a>
-                    <a class="contact-row" href="https://max.ru/u/f9LHodD0cOJYpSQb9uTP6ebD3rtqiv_-gbY1D1csXSQAuyEfUChlnjzWVSA" target="_blank" rel="noopener">
-                        <span class="ic" style="background: linear-gradient(135deg, #ff4757, var(--accent));">М</span>
-                        <span class="info">
-                            <span class="lbl">MAX (max.ru)</span>
-                            <span class="val">Написать в MAX</span>
-                        </span>
-                    </a>
-                    <a class="contact-row" href="https://vk.com/ruscoder" target="_blank" rel="noopener">
-                        <span class="ic" style="background: linear-gradient(135deg, #4f8bff, #0077ff);">VK</span>
-                        <span class="info">
-                            <span class="lbl">ВКонтакте</span>
-                            <span class="val">vk.com/ruscoder</span>
-                        </span>
-                    </a>
-                    <a class="contact-row" href="https://github.com/RuCoder-sudo/wp-ru-max/issues" target="_blank" rel="noopener">
-                        <span class="ic">🐛</span>
-                        <span class="info">
-                            <span class="lbl">Баг-репорты и предложения</span>
-                            <span class="val">GitHub Issues</span>
-                        </span>
-                    </a>
-                </div>
-            </div>
-        </div>
+.lic-form .form-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+}
+.lic-form .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.lic-form .field label {
+    font-size: 13px; font-weight: 600; color: var(--text-soft);
+    letter-spacing: .02em;
+}
+.lic-form .field .req { color: var(--accent-3); }
+.lic-form .field input {
+    padding: 12px 14px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14.5px;
+    transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+.lic-form .field input::placeholder { color: var(--text-muted); }
+.lic-form .field input:hover { border-color: rgba(255,255,255,0.22); }
+.lic-form .field input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: rgba(0,0,0,0.55);
+    box-shadow: 0 0 0 3px rgba(124,92,255,0.25);
+}
+.lic-form .field small { color: var(--text-muted); font-size: 12.5px; line-height: 1.45; }
 
-    </div>
-</section>
+.lic-form .field-checkbox { margin: 8px 0 6px; }
+.lic-form .field-checkbox label {
+    display: flex; gap: 12px; align-items: flex-start;
+    cursor: pointer;
+    color: var(--text-soft);
+    font-size: 14px;
+    line-height: 1.5;
+}
+.lic-form .field-checkbox input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none;
+    width: 20px; height: 20px; flex-shrink: 0;
+    margin-top: 1px;
+    border: 1.5px solid rgba(255,255,255,0.25);
+    border-radius: 6px;
+    background: rgba(0,0,0,0.4);
+    cursor: pointer;
+    position: relative;
+    transition: all .15s ease;
+}
+.lic-form .field-checkbox input[type="checkbox"]:hover { border-color: var(--accent); }
+.lic-form .field-checkbox input[type="checkbox"]:checked {
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    border-color: transparent;
+}
+.lic-form .field-checkbox input[type="checkbox"]:checked::after {
+    content: "✓";
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    color: #fff; font-size: 13px; font-weight: 800;
+    line-height: 1;
+}
 
-<!-- ===== ACTIVATION FLOW ===== -->
-<section id="activation">
-    <div class="container">
-        <div class="section-head">
-            <span class="kicker">Активация</span>
-            <h2>Всё просто — активация прямо в плагине</h2>
-            <p>Никаких внешних форм и личных кабинетов. Скачайте плагин, установите его в WordPress и заполните короткую форму запроса ключа прямо в админке.</p>
-        </div>
+.lic-form .form-actions {
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+.lic-form .form-note { color: var(--text-muted); font-size: 13px; }
 
-        <div class="activation-flow">
-            <div class="activation-card reveal">
-                <div class="num">1</div>
-                <span class="icon-emoji">⬇</span>
-                <h4>Скачайте плагин</h4>
-                <p>Возьмите свежий ZIP-архив плагина в GitHub Releases — это бесплатно.</p>
-            </div>
-            <div class="activation-card reveal">
-                <div class="num">2</div>
-                <span class="icon-emoji">⚙</span>
-                <h4>Установите в WordPress</h4>
-                <p>Плагины → Добавить новый → Загрузить плагин. Стандартная установка за минуту.</p>
-            </div>
-            <div class="activation-card reveal">
-                <div class="num">3</div>
-                <span class="icon-emoji">📝</span>
-                <h4>Заполните форму в плагине</h4>
-                <p>Вкладка <strong>Ru-max → Активация</strong>. Запрос ключа отправляется прямо из админки сайта.</p>
-            </div>
-            <div class="activation-card reveal">
-                <div class="num">4</div>
-                <span class="icon-emoji">✓</span>
-                <h4>Оплатите и активируйте</h4>
-                <p>После запроса я пришлю способы оплаты. Оплатили — получили код активации — всё работает!</p>
-            </div>
-        </div>
+@media (max-width: 660px) {
+    .lic-form .form-grid { grid-template-columns: 1fr; }
+    .form-head { flex-direction: column; gap: 12px; }
+}
 
-        <div class="activation-highlight reveal">
-            <div class="big-icon">🚀</div>
-            <div style="flex:1; min-width:260px;">
-                <strong>Главное: форма запроса ключа находится прямо в плагине.</strong>
-                <p>Вам не нужно регистрироваться на сторонних сайтах. Установили плагин → нажали «Запросить ключ» в админке → получили ответ на email → ввели ключ → всё активно. Просто и понятно.</p>
-            </div>
-        </div>
-    </div>
-</section>
+/* «Спасибо» баннер после отправки формы */
+.thanks-banner {
+    margin-bottom: 20px;
+    padding: 16px 22px;
+    background: linear-gradient(135deg, rgba(46,213,115,0.18), rgba(0,212,255,0.12));
+    border: 1px solid rgba(46,213,115,0.4);
+    border-radius: 14px;
+    color: var(--text);
+    font-size: 15px;
+    display: flex; align-items: center; gap: 12px;
+}
+.thanks-banner .ok {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: grid; place-items: center; flex-shrink: 0;
+    background: var(--success); color: #fff; font-weight: 800;
+    box-shadow: 0 6px 18px rgba(46,213,115,0.5);
+}
 
-<!-- ===== FOOTER ===== -->
-<footer class="site-footer">
-    <div class="container">
-        <div class="footer-grid">
-            <div class="footer-about">
-                <div class="footer-brand">
-                    <img src="assets/icon.png" alt="WP Ru-max">
-                    <div>
-                        <div class="ttl">WP Ru-max</div>
-                        <div class="sub">Интеграция WordPress × MAX</div>
-                    </div>
-                </div>
-                <p>Плагин для WordPress, который связывает ваш сайт с российским мессенджером MAX: автопубликация, уведомления и чат-виджет.</p>
-                <p>Бессрочная лицензия с привязкой к домену. Активация занимает 5 минут — прямо в админке вашего сайта.</p>
-            </div>
+/* ===== Code block ===== */
+code {
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    background: rgba(255,255,255,0.08);
+    padding: 2px 7px;
+    border-radius: 6px;
+    color: var(--accent-2);
+    border: 1px solid rgba(255,255,255,0.06);
+}
+pre {
+    background: rgba(0,0,0,0.55);
+    border: 1px solid var(--glass-brd);
+    border-radius: var(--radius-sm);
+    padding: 20px 22px;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: #e6edf3;
+}
+pre code { background: transparent; padding: 0; border: 0; color: inherit; }
 
-            <div class="footer-col">
-                <h5>Навигация</h5>
-                <a href="#features">Возможности</a>
-                <a href="#install">Установка</a>
-                <a href="#pricing">Лицензия</a>
-                <a href="#activation">Активация</a>
-                <a href="#faq">FAQ</a>
-                <a href="docs.html">Документация</a>
-            </div>
+/* ===== CTA banner ===== */
+.cta-banner {
+    margin: 0 auto;
+    max-width: var(--max-w);
+    padding: 48px 40px;
+    background: linear-gradient(135deg, rgba(124,92,255,0.22), rgba(0,212,255,0.18));
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: var(--radius);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    box-shadow: 0 24px 64px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    align-items: center;
+}
+.cta-banner h3 { margin: 0 0 6px; font-size: clamp(20px, 2.4vw, 28px); }
+.cta-banner p  { margin: 0; color: var(--text-soft); }
+@media (max-width: 760px) { .cta-banner { grid-template-columns: 1fr; text-align: center; } }
 
-            <div class="footer-col">
-                <h5>Контакты</h5>
-                <a href="https://рукодер.рф" target="_blank" rel="noopener">рукодер.рф</a>
-                <a href="https://t.me/RussCoder" target="_blank" rel="noopener">Telegram @RussCoder</a>
-                <a href="mailto:rucoder.rf@yandex.ru">rucoder.rf@yandex.ru</a>
-                <a href="tel:+79859855397">+7 (985) 985-53-97</a>
-                <a href="https://github.com/RuCoder-sudo/wp-ru-max" target="_blank" rel="noopener">GitHub</a>
-            </div>
-        </div>
+/* ===== Footer ===== */
+footer {
+    padding: 50px 0 40px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    margin-top: 60px;
+}
+footer a { color: var(--text-soft); }
+footer .made { font-size: 13px; margin-top: 8px; opacity: 0.7; }
 
-        <div class="footer-legal">
-            <div class="copy">
-                Copyright © 2025 <span class="brand-name">«🆁🆄🅲🅾🅳🅴🆁»</span> — Солошенко Сергей Геннадьевич
-            </div>
-            <div class="inn">ИНН: 772076225347</div>
-            <div>Разработка сайтов с <span class="heart">❤</span> | Все права защищены</div>
-            <div class="rights">WP Ru-max v1.0.21 · GPLv2 · сделано в России</div>
-        </div>
-    </div>
-</footer>
+/* ===== Docs page ===== */
+.doc-layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 32px;
+    margin-top: 24px;
+}
+.doc-toc {
+    position: sticky;
+    top: 100px;
+    align-self: start;
+    padding: 20px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-brd);
+    border-radius: var(--radius);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+.doc-toc h4 {
+    margin: 0 0 12px; font-size: 12px; letter-spacing: .15em;
+    text-transform: uppercase; color: var(--text-muted);
+}
+.doc-toc a {
+    display: block; padding: 7px 10px; border-radius: 8px;
+    color: var(--text-soft); font-size: 14px;
+    transition: all .15s ease;
+}
+.doc-toc a:hover { background: rgba(255,255,255,0.06); color: var(--text); }
 
-<script>
-// Reveal-on-scroll
-const io = new IntersectionObserver((entries) => {
-    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('on'); });
-}, { threshold: 0.12 });
-document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+.doc-body {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-brd);
+    border-radius: var(--radius);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    padding: 36px 40px;
+    box-shadow: var(--glass-shadow);
+}
+.doc-body h2 {
+    margin-top: 36px;
+    padding-top: 26px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    font-size: 24px;
+}
+.doc-body h2:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.doc-body h3 { margin-top: 22px; font-size: 18px; color: var(--text); }
+.doc-body p, .doc-body li { color: var(--text-soft); }
+.doc-body ul, .doc-body ol { padding-left: 22px; }
+.doc-body table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14.5px; }
+.doc-body th, .doc-body td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.doc-body th { color: var(--text-muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
 
-// Эффект «волны» по матовому стеклу — следует за курсором мыши
-const glassSelector = '.card, .panel, .price, .step, .demo-card, .stat, .compat, .mockup, .cta-banner, .form-panel, .activation-card';
-document.querySelectorAll(glassSelector).forEach(el => {
-    el.addEventListener('pointermove', (e) => {
-        const rect = el.getBoundingClientRect();
-        const x = ((e.clientX - rect.left) / rect.width) * 100;
-        const y = ((e.clientY - rect.top) / rect.height) * 100;
-        el.style.setProperty('--mx', x + '%');
-        el.style.setProperty('--my', y + '%');
-    });
-});
-</script>
+@media (max-width: 900px) {
+    .doc-layout { grid-template-columns: 1fr; }
+    .doc-toc { position: static; }
+    .doc-body { padding: 24px 20px; }
+}
 
-</body>
-</html>
+/* ===== Reveal on scroll ===== */
+.reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity .6s ease, transform .6s ease;
+}
+.reveal.on { opacity: 1; transform: none; }
+
+/* ===== Mouse-tracked frosted-glass wave =====
+   Каждый glass-блок (.card, .panel, .price, .step, .demo-card, .stat,
+   .compat, .mockup, .cta-banner) получает мягкую «волну» подсветки,
+   которая следует за курсором. Координаты задаются через --mx/--my из JS. */
+.card, .panel, .price, .step, .demo-card, .stat,
+.compat, .mockup, .cta-banner, .form-panel, .activation-card {
+    position: relative;
+    overflow: hidden;
+}
+.card::after, .panel::after, .price::after, .step::after, .demo-card::after,
+.stat::after, .compat::after, .mockup::after, .cta-banner::after,
+.form-panel::after, .activation-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+        260px circle at var(--mx, 50%) var(--my, 50%),
+        rgba(255, 178, 122, 0.22),
+        rgba(214, 51, 71, 0.10) 40%,
+        transparent 70%
+    );
+    opacity: 0;
+    transition: opacity .35s ease;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    z-index: 1;
+}
+.card:hover::after, .panel:hover::after, .price:hover::after, .step:hover::after,
+.demo-card:hover::after, .stat:hover::after, .compat:hover::after,
+.mockup:hover::after, .cta-banner:hover::after, .form-panel:hover::after,
+.activation-card:hover::after { opacity: 1; }
+.card > *, .panel > *, .price > *, .step > *, .demo-card > *,
+.stat > *, .compat > *, .mockup > *, .cta-banner > *,
+.form-panel > *, .activation-card > * { position: relative; z-index: 2; }
+
+/* ===== Activation flow (как это работает у клиента) ===== */
+.activation-flow {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    counter-reset: actstep;
+}
+.activation-card {
+    padding: 28px 24px;
+    background: linear-gradient(180deg, rgba(214,51,71,0.12), rgba(255,255,255,0.04));
+    border: 1px solid rgba(255,91,61,0.30);
+    border-radius: var(--radius);
+    backdrop-filter: blur(22px) saturate(150%);
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+    box-shadow: 0 18px 48px rgba(0,0,0,0.45);
+    counter-increment: actstep;
+    transition: transform .25s ease, border-color .25s ease;
+}
+.activation-card:hover { transform: translateY(-5px); border-color: rgba(255,91,61,0.55); }
+.activation-card .num {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    color: #fff; font-weight: 800; font-size: 18px;
+    box-shadow: 0 10px 24px rgba(214,51,71,0.5);
+    margin-bottom: 14px;
+}
+.activation-card h4 { margin: 0 0 8px; font-size: 17px; color: #fff; }
+.activation-card p  { margin: 0; color: #ffffff; opacity: .9; font-size: 14.5px; line-height: 1.55; }
+.activation-card .icon-emoji { font-size: 24px; margin-bottom: 8px; display: block; }
+@media (max-width: 960px) { .activation-flow { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .activation-flow { grid-template-columns: 1fr; } }
+
+.activation-highlight {
+    margin-top: 28px;
+    padding: 24px 28px;
+    background: linear-gradient(135deg, rgba(214,51,71,0.18), rgba(255,91,61,0.12));
+    border: 1px solid rgba(255,91,61,0.35);
+    border-radius: var(--radius);
+    color: #fff;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    backdrop-filter: blur(20px);
+}
+.activation-highlight .big-icon {
+    width: 56px; height: 56px; border-radius: 14px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    display: grid; place-items: center; flex-shrink: 0;
+    font-size: 28px;
+    box-shadow: 0 12px 30px rgba(214,51,71,0.5);
+}
+.activation-highlight strong { color: #fff; font-size: 17px; }
+.activation-highlight p { margin: 4px 0 0; color: #ffffff; opacity: .92; font-size: 14.5px; }
+
+/* ===== Pretty footer ===== */
+.site-footer {
+    margin-top: 80px;
+    padding: 56px 0 32px;
+    background: linear-gradient(180deg, transparent, rgba(214,51,71,0.10) 40%, rgba(10,6,8,0.85));
+    border-top: 1px solid rgba(255,91,61,0.25);
+    position: relative;
+    overflow: hidden;
+}
+.site-footer::before {
+    content: "";
+    position: absolute; left: 50%; top: 0;
+    width: 60%; height: 2px; transform: translateX(-50%);
+    background: linear-gradient(90deg, transparent, var(--accent-3), var(--accent), transparent);
+    filter: blur(.5px);
+}
+.footer-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr;
+    gap: 36px;
+    margin-bottom: 36px;
+}
+.footer-brand {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 14px;
+}
+.footer-brand img {
+    width: 48px; height: 48px; border-radius: 12px;
+    box-shadow: 0 8px 22px rgba(214,51,71,0.5);
+}
+.footer-brand .ttl { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: .3px; }
+.footer-brand .sub { font-size: 13px; color: var(--text-muted); }
+.footer-about p {
+    margin: 0 0 8px; color: #f1e6e3; font-size: 14px; line-height: 1.6;
+}
+.footer-col h5 {
+    margin: 0 0 14px; font-size: 12px; color: var(--accent-2);
+    text-transform: uppercase; letter-spacing: .15em; font-weight: 700;
+}
+.footer-col a {
+    display: block; padding: 6px 0; color: #f1e6e3; font-size: 14px;
+    transition: color .2s ease, transform .2s ease;
+}
+.footer-col a:hover { color: var(--accent-3); transform: translateX(3px); }
+.footer-legal {
+    border-top: 1px solid rgba(255,91,61,0.2);
+    padding-top: 24px;
+    text-align: center;
+    color: #f1e6e3;
+    font-size: 13.5px;
+    line-height: 1.85;
+}
+.footer-legal .copy {
+    font-size: 15px; color: #fff; font-weight: 600; margin-bottom: 6px;
+    letter-spacing: .3px;
+}
+.footer-legal .copy .brand-name {
+    background: linear-gradient(135deg, var(--accent-3), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    font-weight: 800; letter-spacing: 1px;
+}
+.footer-legal .heart {
+    display: inline-block; color: var(--accent-3);
+    animation: heartbeat 1.6s ease-in-out infinite;
+}
+@keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    25%      { transform: scale(1.18); }
+    50%      { transform: scale(1); }
+}
+.footer-legal .inn { color: var(--text-muted); font-size: 13px; }
+.footer-legal .rights { color: var(--text-muted); font-size: 12.5px; margin-top: 4px; }
+@media (max-width: 800px) {
+    .footer-grid { grid-template-columns: 1fr; gap: 28px; }
+}
