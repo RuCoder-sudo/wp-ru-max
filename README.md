@@ -270,9 +270,7 @@
 | GitHub Issues | [github.com/RuCoder-sudo/wp-ru-max/issues](https://github.com/RuCoder-sudo/wp-ru-max/issues) |
 
 ---
-<img src="https://img.shields.io/github/repo-size/RuCoder-sudo/wp-ru-max" alt="Размер">
-<img src="https://img.shields.io/github/stars/RuCoder-sudo/wp-ru-max?style=social" alt="Stars">
-<img src="https://img.shields.io/badge/MAX-Messenger-blueviolet" alt="MAX">
+<img src="https://img.shields.io/github/stars/RuCoder-sudo/wp-ru-max?style=social" alt="Stars"> <img src="https://img.shields.io/badge/MAX-Messenger-blueviolet" alt="MAX">
 ---
 
 ## Лицензия
