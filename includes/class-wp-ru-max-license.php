@@ -25,6 +25,7 @@ class WP_Ru_Max_License {
     const MAX_ATTEMPTS    = 5;
     const BLOCK_MINUTES   = 60;
     const RECHECK_DAYS    = 1;
+    const RECHECK_SECONDS = 3600; // фоновая перепроверка раз в час
 
     // URL API проверки ключей (рукодер.рф в Punycode для надёжности)
     const VERIFY_URL      = 'https://xn--d1acnqieq.xn--p1ai/wp-json/wp-ru-max-km/v1/verify';
@@ -46,6 +47,7 @@ class WP_Ru_Max_License {
         add_action( 'wp_ajax_wp_ru_max_activate_license',   array( $this, 'ajax_activate_license' ) );
         add_action( 'wp_ajax_wp_ru_max_request_license',    array( $this, 'ajax_request_license' ) );
         add_action( 'wp_ajax_wp_ru_max_deactivate_license', array( $this, 'ajax_deactivate_license' ) );
+        add_action( 'wp_ajax_wp_ru_max_recheck_license',    array( $this, 'ajax_recheck_license' ) );
         add_action( 'admin_notices',                         array( $this, 'show_activation_notice' ) );
     }
 
@@ -144,10 +146,11 @@ class WP_Ru_Max_License {
             wp_send_json_error( 'Нет прав доступа.' );
         }
 
-        $name    = isset( $_POST['req_name'] )  ? sanitize_text_field( wp_unslash( $_POST['req_name'] ) )  : '';
-        $email   = isset( $_POST['req_email'] ) ? sanitize_email( wp_unslash( $_POST['req_email'] ) )       : '';
-        $consent = isset( $_POST['consent'] )   ? filter_var( $_POST['consent'], FILTER_VALIDATE_BOOLEAN )  : false;
-        $mailing = isset( $_POST['mailing'] )   ? filter_var( $_POST['mailing'], FILTER_VALIDATE_BOOLEAN )  : false;
+        $name    = isset( $_POST['req_name'] )   ? sanitize_text_field( wp_unslash( $_POST['req_name'] ) )   : '';
+        $email   = isset( $_POST['req_email'] )  ? sanitize_email( wp_unslash( $_POST['req_email'] ) )       : '';
+        $social  = isset( $_POST['req_social'] ) ? sanitize_text_field( wp_unslash( $_POST['req_social'] ) ) : '';
+        $consent = isset( $_POST['consent'] )    ? filter_var( $_POST['consent'], FILTER_VALIDATE_BOOLEAN )  : false;
+        $mailing = isset( $_POST['mailing'] )    ? filter_var( $_POST['mailing'], FILTER_VALIDATE_BOOLEAN )  : false;
 
         if ( empty( $name ) ) {
             wp_send_json_error( 'Укажите ваше имя.' );
@@ -167,10 +170,11 @@ class WP_Ru_Max_License {
 
         $subject = 'Запрос лицензии WP Ru-max — ' . $name;
         $body  = "=== НОВЫЙ ЗАПРОС ЛИЦЕНЗИИ WP Ru-max ===\n\n";
-        $body .= "Имя:   " . $name . "\n";
-        $body .= "Email: " . $email . "\n";
-        $body .= "Сайт:  " . $site_url . "\n";
-        $body .= "Домен: " . $domain . "\n\n";
+        $body .= "Имя:    " . $name . "\n";
+        $body .= "Email:  " . $email . "\n";
+        $body .= "Соцсеть/мессенджер: " . ( $social !== '' ? $social : '— не указано —' ) . "\n";
+        $body .= "Сайт:   " . $site_url . "\n";
+        $body .= "Домен:  " . $domain . "\n\n";
         $body .= "Согласие на обработку данных: Да\n";
         $body .= "Согласие на рассылку: " . ( $mailing ? 'Да' : 'Нет' ) . "\n";
         $body .= "Дата запроса: " . current_time( 'd.m.Y H:i:s' ) . "\n\n";
@@ -242,8 +246,8 @@ class WP_Ru_Max_License {
     }
 
     /**
-     * Периодическая перепроверка активного ключа (раз в 7 дней)
-     * Вызывайте при желании из admin_init
+     * Периодическая перепроверка активного ключа (раз в час).
+     * Вызывается из init на каждой загрузке админки.
      */
     public static function recheck_if_needed() {
         if ( ! self::is_active() ) {
@@ -251,10 +255,28 @@ class WP_Ru_Max_License {
         }
         $data = self::get_data();
         $last = strtotime( $data['last_verified'] ?? '2000-01-01' );
-        if ( ( time() - $last ) < ( self::RECHECK_DAYS * DAY_IN_SECONDS ) ) {
+        if ( ( time() - $last ) < self::RECHECK_SECONDS ) {
             return;
         }
+        self::do_recheck( $data );
+    }
 
+    /**
+     * Принудительная перепроверка ключа без учёта интервала.
+     * Возвращает обновлённые данные лицензии.
+     */
+    public static function force_recheck() {
+        $data = self::get_data();
+        if ( empty( $data['key'] ) ) {
+            return $data;
+        }
+        return self::do_recheck( $data );
+    }
+
+    /**
+     * Внутренняя реализация перепроверки.
+     */
+    private static function do_recheck( $data ) {
         $instance = self::instance();
         $result   = $instance->verify_key( $data['key'] ?? '' );
 
@@ -262,7 +284,9 @@ class WP_Ru_Max_License {
             $error_code = $result->get_error_code();
             if ( $error_code === 'invalid_key' ) {
                 // Ключ отозван или недействителен — немедленная блокировка
-                $data['status'] = 'suspended';
+                $data['status']         = 'suspended';
+                $data['recheck_failed'] = 0;
+                WP_Ru_Max_Logger::log( 'license', 'error', 'Лицензия отозвана сервером — плагин деактивирован.' );
             } else {
                 // Сетевая ошибка — мягкая блокировка после 2 неудачных попыток
                 $data['recheck_failed'] = ( $data['recheck_failed'] ?? 0 ) + 1;
@@ -271,10 +295,27 @@ class WP_Ru_Max_License {
                 }
             }
         } else {
+            $data['status']         = 'active';
             $data['recheck_failed'] = 0;
             $data['last_verified']  = current_time( 'mysql' );
         }
         update_option( self::OPTION_KEY, $data );
+        return $data;
+    }
+
+    /**
+     * AJAX: ручная перепроверка лицензии (кнопка в админке)
+     */
+    public function ajax_recheck_license() {
+        check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
+        }
+        $data = self::force_recheck();
+        if ( ! empty( $data['status'] ) && $data['status'] === 'active' ) {
+            wp_send_json_success( array( 'status' => 'active', 'message' => 'Лицензия действительна.' ) );
+        }
+        wp_send_json_error( 'Лицензия отозвана или недействительна. Плагин деактивирован.' );
     }
 
     /**
