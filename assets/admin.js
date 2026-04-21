@@ -294,11 +294,16 @@
         var $btn = $(this).prop('disabled', true).text('Сохранение...');
         var chatUrl = $('#chat_widget_url').val().trim();
         doAjax('wp_ru_max_save_settings', {
-            chat_widget_enabled:  $('#chat_widget_enabled').is(':checked') ? '1' : '0',
-            chat_widget_size:     $('input[name="chat_widget_size"]:checked').val() || 'medium',
-            chat_widget_url:      chatUrl,
-            chat_widget_message:  $('#chat_widget_message').val(),
-            chat_widget_position: $('input[name="chat_widget_position"]:checked').val() || 'right',
+            chat_widget_enabled:       $('#chat_widget_enabled').is(':checked') ? '1' : '0',
+            chat_widget_size:          $('input[name="chat_widget_size"]:checked').val() || 'medium',
+            chat_widget_url:           chatUrl,
+            chat_widget_message:       $('#chat_widget_message').val(),
+            chat_widget_position:      $('input[name="chat_widget_position"]:checked').val() || 'right',
+            chat_widget_bottom_offset: parseInt($('#chat_widget_bottom_offset').val(), 10) || 20,
+            chat_widget_show_delay:    parseInt($('input[name="chat_widget_show_delay"]:checked').val(), 10) || 0,
+            chat_widget_sound:         $('input[name="chat_widget_sound"]:checked').val() || 'none',
+            chat_widget_sound_delay:   parseInt($('input[name="chat_widget_sound_delay"]:checked').val(), 10) || 3,
+            chat_widget_animation:     $('input[name="chat_widget_animation"]:checked').val() || 'none',
         }, function (res) {
             $btn.prop('disabled', false).text('Сохранить');
             if (res.success) {
@@ -311,6 +316,57 @@
                 showNotice($('#chat_widget_result'), 'error', res.data);
             }
         });
+    });
+
+    /* -- Sound preview buttons (admin panel) -- */
+    function adminPlaySound(type) {
+        try {
+            var AC  = window.AudioContext || window.webkitAudioContext;
+            if (!AC) { alert('Ваш браузер не поддерживает Web Audio API'); return; }
+            var ctx = new AC();
+
+            function tone(freq, startOff, vol, dur) {
+                var osc  = ctx.createOscillator();
+                var gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                var t = ctx.currentTime + startOff;
+                osc.frequency.setValueAtTime(freq, t);
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(vol, t + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+                osc.start(t);
+                osc.stop(t + dur + 0.05);
+            }
+
+            if (type === 'sound1') {
+                tone(880, 0, 0.18, 0.35);
+                tone(1100, 0.22, 0.12, 0.28);
+            } else if (type === 'sound2') {
+                var osc  = ctx.createOscillator();
+                var gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                var t = ctx.currentTime;
+                osc.frequency.setValueAtTime(200, t);
+                osc.frequency.exponentialRampToValueAtTime(900, t + 0.12);
+                osc.frequency.exponentialRampToValueAtTime(600, t + 0.28);
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.38, t + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+                osc.start(t);
+                osc.stop(t + 0.5);
+            } else if (type === 'sound3') {
+                tone(523.25, 0, 0.12, 0.55);
+            }
+        } catch(e) { console.warn('WP Ru-max audio error:', e); }
+    }
+
+    $(document).on('click', '.wp-ru-max-preview-sound', function (e) {
+        e.preventDefault();
+        adminPlaySound($(this).data('sound'));
     });
 
     /* -- History Tab -- */
