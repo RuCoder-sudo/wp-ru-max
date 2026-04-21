@@ -78,6 +78,18 @@ class WP_Ru_Max {
                 'chat_widget_url'        => '',
                 'chat_widget_message'    => 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!',
                 'chat_widget_position'   => 'right',
+                'chat_widget_retention_enabled' => false,
+                'chat_widget_retention_title'   => 'Специальное предложение!',
+                'chat_widget_retention_message' => 'Уже уходите? Получите скидку 10% на первый заказ, если ответим на ваш вопрос в течение 5 минут!',
+                'chat_widget_retention_text_align'    => 'left',
+                'chat_widget_retention_buttons_align' => 'right',
+                'chat_widget_retention_btn_radius'    => 8,
+                'chat_widget_retention_stay_text'     => 'Остаться',
+                'chat_widget_retention_leave_text'    => 'Все равно уйти',
+                'chat_widget_retention_stay_bg'       => '#4a90d9',
+                'chat_widget_retention_stay_color'    => '#ffffff',
+                'chat_widget_retention_leave_bg'      => '#f0f0f0',
+                'chat_widget_retention_leave_color'   => '#555555',
             ) );
         }
     }
