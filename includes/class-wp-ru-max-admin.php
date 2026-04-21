@@ -168,7 +168,28 @@ class WP_Ru_Max_Admin {
                 case 'chat_widget_position':
                 case 'chat_widget_sound':
                 case 'chat_widget_animation':
+                case 'chat_widget_retention_title':
+                case 'chat_widget_retention_stay_text':
+                case 'chat_widget_retention_leave_text':
                     $settings[ $field ] = sanitize_text_field( $value );
+                    break;
+                case 'chat_widget_retention_message':
+                    $settings[ $field ] = sanitize_textarea_field( $value );
+                    break;
+                case 'chat_widget_retention_text_align':
+                case 'chat_widget_retention_buttons_align':
+                    $allowed_align = array( 'left', 'center', 'right' );
+                    $settings[ $field ] = in_array( $value, $allowed_align, true ) ? $value : 'left';
+                    break;
+                case 'chat_widget_retention_btn_radius':
+                    $settings[ $field ] = max( 0, min( 50, intval( $value ) ) );
+                    break;
+                case 'chat_widget_retention_stay_bg':
+                case 'chat_widget_retention_stay_color':
+                case 'chat_widget_retention_leave_bg':
+                case 'chat_widget_retention_leave_color':
+                    $hex = sanitize_hex_color( $value );
+                    if ( $hex ) { $settings[ $field ] = $hex; }
                     break;
                 case 'excerpt_max_chars':
                 case 'chat_widget_bottom_offset':
@@ -207,10 +228,11 @@ class WP_Ru_Max_Admin {
                     break;
             }
         } else {
-            $allowed_text = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation' );
-            $allowed_textarea = array( 'notify_template' );
-            $allowed_bool = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled' );
-            $allowed_int  = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay' );
+            $allowed_text = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align' );
+            $allowed_textarea = array( 'notify_template', 'chat_widget_retention_message' );
+            $allowed_bool = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled' );
+            $allowed_int  = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius' );
+            $allowed_color = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
             $allowed_array = array( 'post_types', 'channels', 'notify_chat_ids' );
 
             foreach ( $allowed_text as $key ) {
@@ -233,6 +255,12 @@ class WP_Ru_Max_Admin {
                     $settings[ $key ] = filter_var( $_POST[ $key ], FILTER_VALIDATE_BOOLEAN );
                 }
                 // Do NOT reset to false if key is absent — partial saves must not destroy other modules.
+            }
+            foreach ( $allowed_color as $key ) {
+                if ( isset( $_POST[ $key ] ) ) {
+                    $hex = sanitize_hex_color( wp_unslash( $_POST[ $key ] ) );
+                    if ( $hex ) { $settings[ $key ] = $hex; }
+                }
             }
             foreach ( $allowed_array as $key ) {
                 if ( isset( $_POST[ $key ] ) && is_array( $_POST[ $key ] ) ) {
@@ -1078,6 +1106,42 @@ class WP_Ru_Max_Admin {
                 <li><a href="https://рукодер.рф/" target="_blank" rel="noopener">Разработка сайтов под ключ</a></li>
             </ul>
         </div>
+
+        <div class="wp-ru-max-card">
+            <h3>Система скидок на лицензии</h3>
+            <p>При покупке нескольких доменов действует прогрессивная скидка:</p>
+            <table class="widefat striped" style="max-width:520px;">
+                <thead>
+                    <tr>
+                        <th>Количество доменов</th>
+                        <th>Цена</th>
+                        <th>Цена за домен</th>
+                        <th>Экономия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1 домен</td>
+                        <td><strong>2&nbsp;200&nbsp;₽</strong></td>
+                        <td>2&nbsp;200&nbsp;₽/шт</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>2 домена</td>
+                        <td><strong>4&nbsp;000&nbsp;₽</strong></td>
+                        <td>2&nbsp;000&nbsp;₽/шт</td>
+                        <td>~9%</td>
+                    </tr>
+                    <tr>
+                        <td>5 доменов</td>
+                        <td><strong>7&nbsp;000&nbsp;₽</strong></td>
+                        <td>1&nbsp;400&nbsp;₽/шт</td>
+                        <td><strong>36%</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="description" style="margin-top:8px;">Чем больше доменов — тем выгоднее. Для покупки нескольких лицензий свяжитесь с нами.</p>
+        </div>
         <?php
     }
 
@@ -1092,6 +1156,18 @@ class WP_Ru_Max_Admin {
         $sound         = $settings['chat_widget_sound']       ?? 'none';
         $sound_delay   = isset( $settings['chat_widget_sound_delay'] )   ? (int) $settings['chat_widget_sound_delay']   : 3;
         $animation     = $settings['chat_widget_animation']   ?? 'none';
+        $retention_enabled = ! empty( $settings['chat_widget_retention_enabled'] );
+        $retention_title   = $settings['chat_widget_retention_title']   ?? 'Специальное предложение!';
+        $retention_message = $settings['chat_widget_retention_message'] ?? 'Уже уходите? Получите скидку 10% на первый заказ, если ответим на ваш вопрос в течение 5 минут!';
+        $retention_text_align    = $settings['chat_widget_retention_text_align']    ?? 'left';
+        $retention_buttons_align = $settings['chat_widget_retention_buttons_align'] ?? 'right';
+        $retention_btn_radius    = isset( $settings['chat_widget_retention_btn_radius'] ) ? (int) $settings['chat_widget_retention_btn_radius'] : 8;
+        $retention_stay_text     = $settings['chat_widget_retention_stay_text']     ?? 'Остаться';
+        $retention_leave_text    = $settings['chat_widget_retention_leave_text']    ?? 'Все равно уйти';
+        $retention_stay_bg       = $settings['chat_widget_retention_stay_bg']       ?? '#4a90d9';
+        $retention_stay_color    = $settings['chat_widget_retention_stay_color']    ?? '#ffffff';
+        $retention_leave_bg      = $settings['chat_widget_retention_leave_bg']      ?? '#f0f0f0';
+        $retention_leave_color   = $settings['chat_widget_retention_leave_color']   ?? '#555555';
         ?>
         <div class="wp-ru-max-card">
             <h2>Чат-виджет MAX</h2>
@@ -1286,6 +1362,103 @@ class WP_Ru_Max_Admin {
                                 <?php endforeach; ?>
                             </div>
                             <p class="description" style="margin-top:8px;">Анимация для привлечения внимания к кнопке чата.</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="wp-ru-max-card">
+                <h3>Сообщения на удержание</h3>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="chat_widget_retention_enabled">Удержание</label></th>
+                        <td>
+                            <label class="wp-ru-max-switch">
+                                <input type="checkbox" id="chat_widget_retention_enabled" <?php checked( $retention_enabled ); ?> />
+                                <span class="wp-ru-max-switch-slider"></span>
+                            </label>
+                            <span style="margin-left:10px;">Включить попап удержания при попытке закрыть приветственное сообщение</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="chat_widget_retention_title">Заголовок окна</label></th>
+                        <td>
+                            <textarea id="chat_widget_retention_title" name="chat_widget_retention_title" rows="2" class="large-text" placeholder="Специальное предложение!"><?php echo esc_textarea( $retention_title ); ?></textarea>
+                            <p class="description">Заголовок попапа удержания (поддерживаются переносы строк).</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="chat_widget_retention_message">Сообщение удержания</label></th>
+                        <td>
+                            <textarea id="chat_widget_retention_message" name="chat_widget_retention_message" rows="4" class="large-text" placeholder="Уже уходите? Получите скидку 10% на первый заказ..."><?php echo esc_textarea( $retention_message ); ?></textarea>
+                            <p class="description">Текст сообщения, которое появится при попытке закрыть чат (поддерживаются переносы строк).</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label>Выравнивание текста</label></th>
+                        <td>
+                            <?php foreach ( array( 'left' => 'По левому краю', 'center' => 'По центру', 'right' => 'По правому краю' ) as $val => $lbl ) : ?>
+                                <label style="margin-right:14px;cursor:pointer;">
+                                    <input type="radio" name="chat_widget_retention_text_align" value="<?php echo esc_attr( $val ); ?>" <?php checked( $retention_text_align, $val ); ?> />
+                                    <?php echo esc_html( $lbl ); ?>
+                                </label>
+                            <?php endforeach; ?>
+                            <p class="description">Выравнивание заголовка и сообщения внутри попапа.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="chat_widget_retention_stay_text">Текст кнопки «Остаться»</label></th>
+                        <td>
+                            <input type="text" id="chat_widget_retention_stay_text" name="chat_widget_retention_stay_text" value="<?php echo esc_attr( $retention_stay_text ); ?>" class="regular-text" placeholder="Остаться" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="chat_widget_retention_leave_text">Текст кнопки «Уйти»</label></th>
+                        <td>
+                            <input type="text" id="chat_widget_retention_leave_text" name="chat_widget_retention_leave_text" value="<?php echo esc_attr( $retention_leave_text ); ?>" class="regular-text" placeholder="Все равно уйти" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label>Выравнивание кнопок</label></th>
+                        <td>
+                            <?php foreach ( array( 'left' => 'По левому краю', 'center' => 'По центру', 'right' => 'По правому краю' ) as $val => $lbl ) : ?>
+                                <label style="margin-right:14px;cursor:pointer;">
+                                    <input type="radio" name="chat_widget_retention_buttons_align" value="<?php echo esc_attr( $val ); ?>" <?php checked( $retention_buttons_align, $val ); ?> />
+                                    <?php echo esc_html( $lbl ); ?>
+                                </label>
+                            <?php endforeach; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="chat_widget_retention_btn_radius">Закругление кнопок (px)</label></th>
+                        <td>
+                            <input type="range" id="chat_widget_retention_btn_radius_range" min="0" max="50" value="<?php echo esc_attr( $retention_btn_radius ); ?>" style="width:200px;vertical-align:middle;" />
+                            <input type="number" id="chat_widget_retention_btn_radius" name="chat_widget_retention_btn_radius" value="<?php echo esc_attr( $retention_btn_radius ); ?>" min="0" max="50" style="width:70px;" />
+                            <p class="description">От 0 (квадратные) до 50 (овальные) пикселей.</p>
+                            <script>
+                            (function(){
+                                var r = document.getElementById('chat_widget_retention_btn_radius_range');
+                                var n = document.getElementById('chat_widget_retention_btn_radius');
+                                if (r && n) {
+                                    r.addEventListener('input', function(){ n.value = r.value; });
+                                    n.addEventListener('input', function(){ r.value = n.value; });
+                                }
+                            })();
+                            </script>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label>Цвета кнопки «Остаться»</label></th>
+                        <td>
+                            <label style="margin-right:14px;">Фон: <input type="color" name="chat_widget_retention_stay_bg" value="<?php echo esc_attr( $retention_stay_bg ); ?>" /></label>
+                            <label>Текст: <input type="color" name="chat_widget_retention_stay_color" value="<?php echo esc_attr( $retention_stay_color ); ?>" /></label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label>Цвета кнопки «Уйти»</label></th>
+                        <td>
+                            <label style="margin-right:14px;">Фон: <input type="color" name="chat_widget_retention_leave_bg" value="<?php echo esc_attr( $retention_leave_bg ); ?>" /></label>
+                            <label>Текст: <input type="color" name="chat_widget_retention_leave_color" value="<?php echo esc_attr( $retention_leave_color ); ?>" /></label>
                         </td>
                     </tr>
                 </table>
