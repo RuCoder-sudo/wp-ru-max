@@ -1,4 +1,4 @@
-# 📡 Интеграция WordPress с мессенджером MAX
+# Интеграция WordPress с мессенджером MAX
 
 [Русская версия](#-wp-ru-max--интеграция-wordpress-с-мессенджером-max) | [English version](#-wp-ru-max--wordpress-integration-with-max-messenger)
 
