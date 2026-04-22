@@ -289,7 +289,7 @@
 
 ---
 <div align="center"> <img src="https://komarev.com/ghpvc/?username=RuCoder-sudo&style=flat-square&color=blue" alt="Views wp-ru-max" /> </div>
----
+
 
 <div align="center">
 Разработано с ❤️ — <a href="https://рукодер.рф">РуКодер</a> · Сергей Солошенко
