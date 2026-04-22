@@ -47,14 +47,13 @@
 - Полная таблица всех событий (отправки, ошибки, тесты).
 - Фильтрация по типу, дате, статусу.
 - Просмотр подробного JSON-лога каждого запроса.
-
 <p align="center">
-  <img src="assets/sending-publications-1.png" alt="Notifications 1" width="400">
-  <img src="assets/sending-publications-2.png" alt="Notifications 2" width="400">
-  <img src="assets/personal-notifications-1.png" alt="Notifications 1" width="400">
-  <img src="assets/personal-notifications-2.png" alt="Notifications 2" width="400">
-  <img src="assets/сhat-widget.png" alt="Чат виджет 1" width="400">
-  <img src="assets/chat-widget-4.png" alt="Чат виджет 4" width="400">
+  <img src="assets/sending-publications-1.png" alt="Notifications 1">
+  <img src="assets/sending-publications-2.png" alt="Notifications 2">
+  <img src="assets/personal-notifications-1.png" alt="Notifications 1">
+  <img src="assets/personal-notifications-2.png" alt="Notifications 2">
+  <img src="assets/сhat-widget.png" alt="Чат виджет 1">
+  <img src="assets/chat-widget-4.png" alt="Чат виджет 4">
 </p>
 
 #### Тестирование
