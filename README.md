@@ -288,6 +288,8 @@
 Плагин распространяется под лицензией [GPL-2.0+](https://www.gnu.org/licenses/gpl-2.0.html).
 
 ---
+<div align="center"> <img src="https://komarev.com/ghpvc/?username=RuCoder-sudo&style=flat-square&color=blue" alt="Views wp-ru-max" /> </div>
+---
 
 <div align="center">
 Разработано с ❤️ — <a href="https://рукодер.рф">РуКодер</a> · Сергей Солошенко
