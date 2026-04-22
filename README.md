@@ -38,6 +38,11 @@
 - Поддержка **WooCommerce** (новые заказы), **Contact Form 7**, **Elementor Forms**, **Gravity Forms**, **Ninja Forms** и любых других форм, использующих `wp_mail()`.
 - Каждое письмо дублируется в личный чат с ботом MAX.
 
+<p align="center">
+  <img src="assets/personal-notifications-1.png" alt="Notifications 1" width="400">
+  <img src="assets/personal-notifications-2.png" alt="Notifications 2" width="400">
+</p>
+
 #### Чат-виджет
 - Плавающая кнопка MAX на сайте.
 - Анимация «печатания» для приветственного сообщения.
