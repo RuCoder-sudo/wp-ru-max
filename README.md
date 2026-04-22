@@ -54,8 +54,6 @@
 <div align="center">
   <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: nowrap;">
     <img src="assets/chat-widget-1.png" alt="Чат виджет 1" width="200">
-    <img src="assets/chat-widget-2.png" alt="Чат виджет 2" width="200">
-    <img src="assets/chat-widget-3.png" alt="Чат виджет 3" width="200">
     <img src="assets/chat-widget-4.png" alt="Чат виджет 4" width="200">
   </div>
 </div>
