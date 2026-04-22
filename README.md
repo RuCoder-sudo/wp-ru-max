@@ -33,37 +33,29 @@
 - Поддержка миниатюры (изображение прикрепляется к сообщению).
 - Возможность отключить ссылку «Читать полностью».
 
-<p align="center">
-  <img src="assets/sending-publications-1.png" alt="Notifications 1" width="400">
-  <img src="assets/sending-publications-2.png" alt="Notifications 2" width="400">
-</p>
-
 #### Личные уведомления
 - Перехват всех email-уведомлений WordPress.
 - Поддержка **WooCommerce** (новые заказы), **Contact Form 7**, **Elementor Forms**, **Gravity Forms**, **Ninja Forms** и любых других форм, использующих `wp_mail()`.
 - Каждое письмо дублируется в личный чат с ботом MAX.
-
-<p align="center">
-  <img src="assets/personal-notifications-1.png" alt="Notifications 1" width="400">
-  <img src="assets/personal-notifications-2.png" alt="Notifications 2" width="400">
-</p>
 
 #### Чат-виджет
 - Плавающая кнопка MAX на сайте.
 - Анимация «печатания» для приветственного сообщения.
 - Полная кастомизация внешнего вида (через настройки плагина).
 
-<div align="center">
-  <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: nowrap;">
-    <img src="assets/сhat-widget.png" alt="Чат виджет 1" width="200">
-    <img src="assets/chat-widget-4.png" alt="Чат виджет 4" width="200">
-  </div>
-</div>
-
 #### История и логи
 - Полная таблица всех событий (отправки, ошибки, тесты).
 - Фильтрация по типу, дате, статусу.
 - Просмотр подробного JSON-лога каждого запроса.
+
+<p align="center">
+  <img src="assets/sending-publications-1.png" alt="Notifications 1" width="400">
+  <img src="assets/sending-publications-2.png" alt="Notifications 2" width="400">
+  <img src="assets/personal-notifications-1.png" alt="Notifications 1" width="400">
+  <img src="assets/personal-notifications-2.png" alt="Notifications 2" width="400">
+  <img src="assets/сhat-widget.png" alt="Чат виджет 1" width="400">
+  <img src="assets/chat-widget-4.png" alt="Чат виджет 4" width="400">
+</p>
 
 #### Тестирование
 - Встроенная проверка подключения к боту MAX.
