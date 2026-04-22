@@ -285,8 +285,9 @@
 |---|---|
 | Telegram | [@RussCoder](https://t.me/RussCoder) |
 | WhatsApp | +7 (985) 985-53-97 |
-| Email | support@рукодер.рф |
+| Email | rucoder.rf@yandex.ru |
 | Сайт | [рукодер.рф](https://рукодер.рф) |
+| GitHub Сайт | [wp-ru-max](https://rucoder-sudo.github.io/wp-ru-max/) |
 | GitHub Issues | [github.com/RuCoder-sudo/wp-ru-max/issues](https://github.com/RuCoder-sudo/wp-ru-max/issues) |
 
 ---
