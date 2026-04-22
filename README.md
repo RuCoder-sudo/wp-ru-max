@@ -33,6 +33,11 @@
 - Поддержка миниатюры (изображение прикрепляется к сообщению).
 - Возможность отключить ссылку «Читать полностью».
 
+<p align="center">
+  <img src="assets/sending-publications-1.png" alt="Notifications 1" width="400">
+  <img src="assets/sending-publications-2.png" alt="Notifications 2" width="400">
+</p>
+
 #### Личные уведомления
 - Перехват всех email-уведомлений WordPress.
 - Поддержка **WooCommerce** (новые заказы), **Contact Form 7**, **Elementor Forms**, **Gravity Forms**, **Ninja Forms** и любых других форм, использующих `wp_mail()`.
