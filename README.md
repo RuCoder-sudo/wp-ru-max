@@ -52,8 +52,8 @@
   <img src="assets/sending-publications-2.png" alt="Notifications 2">
   <img src="assets/personal-notifications-1.png" alt="Notifications 1">
   <img src="assets/personal-notifications-2.png" alt="Notifications 2">
-  <img src="assets/сhat-widget.png" alt="Чат виджет 1">
   <img src="assets/chat-widget-4.png" alt="Чат виджет 4">
+  <img src="assets/сhat-widget.png" alt="Чат виджет 1">
 </p>
 
 #### Тестирование
