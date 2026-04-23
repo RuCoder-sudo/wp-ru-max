@@ -1,4 +1,4 @@
-/* WP Ru-max Chat Widget v1.0.17 */
+/* WP Ru-max Chat Widget v1.0.22 */
 (function () {
     'use strict';
 
@@ -7,8 +7,14 @@
     var showDelay  = typeof cfg.showDelay  === 'number' ? cfg.showDelay  : 0;
     var sound      = cfg.sound      || 'none';
     var soundDelay = typeof cfg.soundDelay === 'number' ? cfg.soundDelay : 3000;
+    var soundPages          = cfg.soundPages          || 'all';
+    var soundSpecificPages  = Array.isArray(cfg.soundSpecificPages) ? cfg.soundSpecificPages : [];
+    var soundOncePerSession = !!cfg.soundOncePerSession;
+    var hideDelay   = typeof cfg.hideDelay   === 'number' ? cfg.hideDelay   : 0;
+    var repeatDelay = typeof cfg.repeatDelay === 'number' ? cfg.repeatDelay : 0;
     var animation  = cfg.animation  || 'none';
     var retentionEnabled = !!cfg.retentionEnabled;
+    var homeUrl    = cfg.homeUrl    || '/';
 
     var widget   = document.getElementById('wp-ru-max-widget');
     var balloon  = document.getElementById('wp-ru-max-balloon');
@@ -18,6 +24,56 @@
     var retentionModal = document.getElementById('wp-ru-max-retention-modal');
 
     if (!widget || !balloon || !typingEl) return;
+
+    /* ================================================================== */
+    /* PAGE-MATCH HELPER for sound location filter                          */
+    /* ================================================================== */
+    function normalizePath(p) {
+        if (!p) return '/';
+        try {
+            // If full URL, extract pathname
+            if (p.indexOf('http://') === 0 || p.indexOf('https://') === 0 || p.indexOf('//') === 0) {
+                var a = document.createElement('a');
+                a.href = p;
+                p = a.pathname || '/';
+            }
+        } catch (e) {}
+        if (p.charAt(0) !== '/') p = '/' + p;
+        // Strip trailing slash (keep root '/')
+        if (p.length > 1) p = p.replace(/\/+$/, '');
+        return p || '/';
+    }
+
+    function isHomePage() {
+        var here = normalizePath(window.location.pathname);
+        var home = normalizePath(homeUrl ? (function(){ var a=document.createElement('a'); a.href=homeUrl; return a.pathname; })() : '/');
+        return here === home || here === '/' || here === '';
+    }
+
+    function soundAllowedHere() {
+        if (soundPages === 'all') return true;
+        if (soundPages === 'home') return isHomePage();
+        if (soundPages === 'specific') {
+            var here = normalizePath(window.location.pathname);
+            for (var i = 0; i < soundSpecificPages.length; i++) {
+                if (normalizePath(soundSpecificPages[i]) === here) return true;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    /* Once-per-session storage flag */
+    var SESSION_FLAG = 'wpRuMaxSoundPlayed';
+    function sessionAlreadyPlayed() {
+        if (!soundOncePerSession) return false;
+        try { return window.sessionStorage && sessionStorage.getItem(SESSION_FLAG) === '1'; }
+        catch (e) { return false; }
+    }
+    function markSessionPlayed() {
+        if (!soundOncePerSession) return;
+        try { if (window.sessionStorage) sessionStorage.setItem(SESSION_FLAG, '1'); } catch (e) {}
+    }
 
     /* ================================================================== */
     /* CLOSE / RETENTION                                                    */
@@ -88,14 +144,12 @@
 
     /* ================================================================== */
     /* SOUND ENGINE                                                         */
-    /* Must be set up IMMEDIATELY — before any delay timers —              */
-    /* so we catch interactions that happen before the widget appears.     */
     /* ================================================================== */
 
     var audioCtx          = null;
-    var userInteracted    = false;   /* has the user touched/clicked/scrolled? */
-    var pendingSoundAt    = null;    /* absolute ms when sound should fire     */
-    var soundPlayed       = false;   /* fire only once                         */
+    var userInteracted    = false;
+    var pendingSoundAt    = null;
+    var soundPlayed       = false;
 
     var INTERACTION_EVENTS = ['click', 'touchstart', 'keydown', 'scroll', 'mousemove'];
 
@@ -103,12 +157,10 @@
         if (userInteracted) return;
         userInteracted = true;
 
-        /* Remove listeners — only need one interaction */
         INTERACTION_EVENTS.forEach(function (ev) {
             document.removeEventListener(ev, unlockAudio, true);
         });
 
-        /* Create / resume AudioContext now that the browser allows it */
         if (!audioCtx) {
             var AC = window.AudioContext || window.webkitAudioContext;
             if (AC) {
@@ -119,7 +171,6 @@
             audioCtx.resume();
         }
 
-        /* If the widget has already appeared and the sound timer has elapsed, play now */
         if (pendingSoundAt !== null && !soundPlayed) {
             var wait = pendingSoundAt - Date.now();
             if (wait <= 0) {
@@ -130,14 +181,16 @@
         }
     }
 
-    /* Register listeners immediately — before any delay timers */
     INTERACTION_EVENTS.forEach(function (ev) {
         document.addEventListener(ev, unlockAudio, true);
     });
 
     function fireSound() {
         if (soundPlayed) return;
+        if (!soundAllowedHere()) return;
+        if (sessionAlreadyPlayed()) return;
         soundPlayed = true;
+        markSessionPlayed();
         doPlaySound(sound);
     }
 
@@ -161,12 +214,10 @@
         if (audioCtx.state === 'suspended') { audioCtx.resume(); }
 
         if (type === 'sound1') {
-            /* Новое сообщение — двойной мелодичный звон */
             playTone(audioCtx, 880,  0,    0.18, 0.35);
             playTone(audioCtx, 1100, 0.22, 0.12, 0.28);
 
         } else if (type === 'sound2') {
-            /* Всплывающее окно — нарастающий pop */
             var osc  = audioCtx.createOscillator();
             var gain = audioCtx.createGain();
             osc.type = 'sine';
@@ -183,12 +234,10 @@
             osc.stop(t + 0.5);
 
         } else if (type === 'sound3') {
-            /* Тихий сигнал — мягкий тон C5 */
             playTone(audioCtx, 523.25, 0, 0.12, 0.55);
         }
     }
 
-    /* Expose for admin preview (admin.js uses its own AudioContext per click) */
     window.wpRuMaxPlaySound = doPlaySound;
 
     /* ================================================================== */
@@ -196,8 +245,10 @@
     /* ================================================================== */
     var typed     = '';
     var charIndex = 0;
+    var typingActive = false;
 
     function typeChar() {
+        if (!typingActive) return;
         if (charIndex < message.length) {
             typed += message.charAt(charIndex);
             typingEl.innerHTML = typed + '<span class="wp-ru-max-cursor"></span>';
@@ -206,6 +257,13 @@
         } else {
             typingEl.innerHTML = typed;
         }
+    }
+
+    function startTyping() {
+        typed = '';
+        charIndex = 0;
+        typingActive = true;
+        typeChar();
     }
 
     /* ================================================================== */
@@ -233,34 +291,54 @@
     }
 
     /* ================================================================== */
-    /* SHOW WIDGET (after configured delay)                                 */
+    /* WIDGET HIDE / REPEAT CYCLE                                           */
     /* ================================================================== */
-    setTimeout(function () {
+    function hideWidget() {
+        widget.style.transition = 'opacity 0.4s ease';
+        widget.style.opacity = '0';
+        setTimeout(function () {
+            widget.style.display = 'none';
+            widget.style.opacity = '1';
+            widget.style.transition = '';
+            // Mark balloon as not closed so it can re-appear next cycle
+            balloon.dataset.closed = '';
+        }, 400);
+    }
 
+    function showWidgetCycle() {
         widget.style.display = 'block';
         showBalloon();
-        typeChar();
+        startTyping();
         scheduleAutoHide();
 
-        /* Attention animation starts after balloon auto-hides */
         if (animation && animation !== 'none' && iconEl) {
             setTimeout(startAnimation, 13500);
         }
 
-        /* Schedule sound                                                   */
-        /* If user has already interacted — set a plain setTimeout.         */
-        /* If not — store the target time; unlockAudio() will pick it up.   */
         if (sound && sound !== 'none') {
             pendingSoundAt = Date.now() + soundDelay;
+            soundPlayed = false; // allow next cycle to play (still gated by once-per-session)
 
             if (userInteracted) {
-                /* AudioContext already unlocked — just wait the delay */
                 setTimeout(fireSound, soundDelay);
             }
-            /* else: unlockAudio() will call fireSound() when user interacts */
         }
 
-    }, showDelay);
+        // Schedule auto-hide of the entire widget
+        if (hideDelay > 0) {
+            setTimeout(function () {
+                hideWidget();
+                if (repeatDelay > 0) {
+                    setTimeout(showWidgetCycle, repeatDelay);
+                }
+            }, hideDelay);
+        }
+    }
+
+    /* ================================================================== */
+    /* SHOW WIDGET (after configured delay)                                 */
+    /* ================================================================== */
+    setTimeout(showWidgetCycle, showDelay);
 
     /* ================================================================== */
     /* HOVER — restore balloon unless manually closed                       */
@@ -278,7 +356,9 @@
             'wp-ru-max-anim-pulse',
             'wp-ru-max-anim-ripple',
             'wp-ru-max-anim-bounce',
-            'wp-ru-max-anim-shake'
+            'wp-ru-max-anim-shake',
+            'wp-ru-max-anim-glow',
+            'wp-ru-max-anim-rotate'
         );
         if (animation && animation !== 'none') {
             iconEl.classList.add('wp-ru-max-anim-' + animation);
