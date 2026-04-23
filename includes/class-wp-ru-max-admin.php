@@ -195,7 +195,19 @@ class WP_Ru_Max_Admin {
                 case 'chat_widget_bottom_offset':
                 case 'chat_widget_show_delay':
                 case 'chat_widget_sound_delay':
+                case 'chat_widget_hide_delay':
+                case 'chat_widget_repeat_delay':
                     $settings[ $field ] = max( 0, intval( $value ) );
+                    break;
+                case 'chat_widget_sound_pages':
+                    $allowed_pages = array( 'all', 'home', 'specific' );
+                    $settings[ $field ] = in_array( $value, $allowed_pages, true ) ? $value : 'all';
+                    break;
+                case 'chat_widget_sound_specific_pages':
+                    $settings[ $field ] = sanitize_textarea_field( $value );
+                    break;
+                case 'chat_widget_sound_once_per_session':
+                    $settings[ $field ] = filter_var( $value, FILTER_VALIDATE_BOOLEAN );
                     break;
                 case 'notify_template':
                     $settings[ $field ] = sanitize_textarea_field( $value );
@@ -228,10 +240,10 @@ class WP_Ru_Max_Admin {
                     break;
             }
         } else {
-            $allowed_text = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align' );
-            $allowed_textarea = array( 'notify_template', 'chat_widget_retention_message' );
-            $allowed_bool = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled' );
-            $allowed_int  = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius' );
+            $allowed_text = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages' );
+            $allowed_textarea = array( 'notify_template', 'chat_widget_retention_message', 'chat_widget_sound_specific_pages' );
+            $allowed_bool = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session' );
+            $allowed_int  = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay' );
             $allowed_color = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
             $allowed_array = array( 'post_types', 'channels', 'notify_chat_ids' );
 
@@ -1107,6 +1119,27 @@ class WP_Ru_Max_Admin {
             </ul>
         </div>
 
+        <div class="wp-ru-max-card">
+            <h3>Согласие пользователя</h3>
+            <p>
+                Используя плагин WP Ru-max и активируя лицензию, пользователь подтверждает, что
+                <strong>ознакомлен с указанными ниже страницами</strong> и даёт согласие на обработку
+                его <strong>email, имени, фамилии и домена</strong> для обработки заявки и отправки
+                лицензионного ключа активации:
+            </p>
+            <ul>
+                <li><a href="https://github.com/RuCoder-sudo/wp-ru-max/wiki/Политика-плагина" target="_blank" rel="noopener">Политика плагина</a></li>
+                <li><a href="https://github.com/RuCoder-sudo/wp-ru-max/wiki/Возврат-и-отзыв-лицензии" target="_blank" rel="noopener">Возврат и отзыв лицензии</a></li>
+                <li><a href="https://github.com/RuCoder-sudo/wp-ru-max/wiki/Пользовательское-соглашение" target="_blank" rel="noopener">Пользовательское соглашение</a></li>
+                <li><a href="https://github.com/RuCoder-sudo/wp-ru-max/wiki/Политика-конфиденциальности" target="_blank" rel="noopener">Политика конфиденциальности</a></li>
+            </ul>
+            <p class="description">
+                Отправляя запрос на получение лицензионного ключа на вкладке «Активация», вы подтверждаете
+                согласие с указанными документами и даёте разрешение на обработку ваших персональных данных
+                в целях рассмотрения заявки, генерации и отправки ключа активации.
+            </p>
+        </div>
+
         <?php
     }
 
@@ -1120,6 +1153,11 @@ class WP_Ru_Max_Admin {
         $show_delay    = isset( $settings['chat_widget_show_delay'] )    ? (int) $settings['chat_widget_show_delay']    : 0;
         $sound         = $settings['chat_widget_sound']       ?? 'none';
         $sound_delay   = isset( $settings['chat_widget_sound_delay'] )   ? (int) $settings['chat_widget_sound_delay']   : 3;
+        $sound_pages          = $settings['chat_widget_sound_pages']           ?? 'all';
+        $sound_specific_pages = $settings['chat_widget_sound_specific_pages']  ?? '';
+        $sound_once_per_session = ! empty( $settings['chat_widget_sound_once_per_session'] );
+        $hide_delay    = isset( $settings['chat_widget_hide_delay'] )    ? (int) $settings['chat_widget_hide_delay']    : 0;
+        $repeat_delay  = isset( $settings['chat_widget_repeat_delay'] )  ? (int) $settings['chat_widget_repeat_delay']  : 0;
         $animation     = $settings['chat_widget_animation']   ?? 'none';
         $retention_enabled = ! empty( $settings['chat_widget_retention_enabled'] );
         $retention_title   = $settings['chat_widget_retention_title']   ?? 'Специальное предложение!';
@@ -1248,6 +1286,50 @@ class WP_Ru_Max_Admin {
                             <p class="description">Через сколько секунд после загрузки страницы показать виджет посетителю.</p>
                         </td>
                     </tr>
+                    <tr>
+                        <th scope="row"><label>Скрыть виджет через</label></th>
+                        <td>
+                            <?php
+                            $hide_options = array(
+                                0   => 'Не скрывать',
+                                10  => 'Через 10 секунд',
+                                20  => 'Через 20 секунд',
+                                30  => 'Через 30 секунд',
+                                60  => 'Через 1 минуту',
+                                120 => 'Через 2 минуты',
+                            );
+                            foreach ( $hide_options as $val => $label ) :
+                            ?>
+                            <label style="display:inline-flex;align-items:center;margin-right:20px;margin-bottom:8px;cursor:pointer;">
+                                <input type="radio" name="chat_widget_hide_delay" value="<?php echo esc_attr( $val ); ?>" <?php checked( $hide_delay, $val ); ?> style="margin-right:6px;" />
+                                <?php echo esc_html( $label ); ?>
+                            </label>
+                            <?php endforeach; ?>
+                            <p class="description">Через сколько секунд после появления значок чата автоматически скроется, чтобы не мешать посетителю. «Не скрывать» — значок остаётся постоянно.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label>Повторно показать через</label></th>
+                        <td>
+                            <?php
+                            $repeat_options = array(
+                                0   => 'Не показывать повторно',
+                                30  => 'Через 30 секунд',
+                                60  => 'Через 1 минуту',
+                                120 => 'Через 2 минуты',
+                                300 => 'Через 5 минут',
+                                600 => 'Через 10 минут',
+                            );
+                            foreach ( $repeat_options as $val => $label ) :
+                            ?>
+                            <label style="display:inline-flex;align-items:center;margin-right:20px;margin-bottom:8px;cursor:pointer;">
+                                <input type="radio" name="chat_widget_repeat_delay" value="<?php echo esc_attr( $val ); ?>" <?php checked( $repeat_delay, $val ); ?> style="margin-right:6px;" />
+                                <?php echo esc_html( $label ); ?>
+                            </label>
+                            <?php endforeach; ?>
+                            <p class="description">Через сколько секунд после автоскрытия снова показать значок. Работает только если включено «Скрыть виджет через».</p>
+                        </td>
+                    </tr>
                 </table>
             </div>
 
@@ -1300,6 +1382,52 @@ class WP_Ru_Max_Admin {
                             <p class="description">Через сколько секунд после появления виджета проиграть звук уведомления.</p>
                         </td>
                     </tr>
+                    <tr>
+                        <th scope="row"><label>Где проигрывать звук</label></th>
+                        <td>
+                            <div style="display:flex;flex-direction:column;gap:8px;">
+                                <label style="cursor:pointer;">
+                                    <input type="radio" name="chat_widget_sound_pages" value="all" <?php checked( $sound_pages, 'all' ); ?> />
+                                    На всех страницах сайта
+                                </label>
+                                <label style="cursor:pointer;">
+                                    <input type="radio" name="chat_widget_sound_pages" value="home" <?php checked( $sound_pages, 'home' ); ?> />
+                                    Только на главной странице
+                                </label>
+                                <label style="cursor:pointer;">
+                                    <input type="radio" name="chat_widget_sound_pages" value="specific" <?php checked( $sound_pages, 'specific' ); ?> />
+                                    Только на выбранных страницах
+                                </label>
+                            </div>
+                            <div id="chat_widget_sound_specific_wrap" style="margin-top:10px;<?php echo $sound_pages === 'specific' ? '' : 'display:none;'; ?>">
+                                <textarea id="chat_widget_sound_specific_pages" name="chat_widget_sound_specific_pages" rows="4" class="large-text" placeholder="/contacts&#10;/about&#10;/services/seo"><?php echo esc_textarea( $sound_specific_pages ); ?></textarea>
+                                <p class="description">Укажите пути страниц (по одному на строку), на которых нужно проигрывать звук. Например: <code>/contacts</code>, <code>/about</code>. Можно указать как полный URL, так и относительный путь — сравнение идёт по совпадению с текущим путём.</p>
+                            </div>
+                            <p class="description" style="margin-top:8px;">Решает проблему «звук срабатывает на каждой странице» — выберите главную или конкретные страницы (например, «Контакты»), и звук будет играть только там.</p>
+                            <script>
+                            (function(){
+                                var radios = document.getElementsByName('chat_widget_sound_pages');
+                                var wrap = document.getElementById('chat_widget_sound_specific_wrap');
+                                for (var i = 0; i < radios.length; i++) {
+                                    radios[i].addEventListener('change', function(){
+                                        wrap.style.display = (this.value === 'specific' && this.checked) ? '' : 'none';
+                                    });
+                                }
+                            })();
+                            </script>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label>Один раз за сессию</label></th>
+                        <td>
+                            <label class="wp-ru-max-switch" style="vertical-align:middle;">
+                                <input type="checkbox" id="chat_widget_sound_once_per_session" <?php checked( $sound_once_per_session ); ?> />
+                                <span class="wp-ru-max-switch-slider"></span>
+                            </label>
+                            <span style="margin-left:10px;">Проигрывать звук только один раз за визит (не на каждой странице)</span>
+                            <p class="description">Когда включено — звук уведомления прозвучит только один раз во время посещения сайта посетителем, даже если он переходит между страницами. Это убирает раздражающее повторение звука.</p>
+                        </td>
+                    </tr>
                 </table>
             </div>
 
@@ -1317,6 +1445,8 @@ class WP_Ru_Max_Admin {
                                     'ripple'  => 'Рябь',
                                     'bounce'  => 'Подпрыгивание',
                                     'shake'   => 'Покачивание',
+                                    'glow'    => 'Свечение',
+                                    'rotate'  => 'Вращение',
                                 );
                                 foreach ( $anim_options as $val => $label ) :
                                 ?>
