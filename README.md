@@ -1,7 +1,7 @@
 # Интеграция WordPress с мессенджером MAX
 
 <p align="center">
-  <img src="assets/banneruss.png" alt="WP Ru-max — отправка постов и уведомлений в MAX">
+  <img src="assets/wp max.webp" alt="WP Ru-max — отправка постов и уведомлений в MAX">
 </p>
 
 <div align="center">
