@@ -650,3 +650,25 @@
     60%      { transform: rotate(6deg); }
     70%      { transform: rotate(0deg); }
 }
+.preview-icon.wp-ru-max-anim-glow {
+    animation: wp-ru-max-glow 2s ease-in-out infinite;
+}
+@keyframes wp-ru-max-glow {
+    0%, 100% {
+        box-shadow: 0 0 0px 0px rgba(99, 102, 241, 0.0);
+        filter: brightness(1);
+    }
+    50% {
+        box-shadow: 0 0 28px 6px rgba(99, 102, 241, 0.85);
+        filter: brightness(1.15);
+    }
+}
+.preview-icon.wp-ru-max-anim-rotate {
+    animation: wp-ru-max-rotate 3s ease-in-out infinite;
+    transform-origin: center center;
+}
+@keyframes wp-ru-max-rotate {
+    0%   { transform: rotate(0deg); }
+    60%  { transform: rotate(360deg); }
+    100% { transform: rotate(360deg); }
+}
