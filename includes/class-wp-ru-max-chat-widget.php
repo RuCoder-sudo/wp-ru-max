@@ -67,7 +67,35 @@ class WP_Ru_Max_Chat_Widget {
         $show_delay    = isset( $settings['chat_widget_show_delay'] )    ? (int) $settings['chat_widget_show_delay']      : 0;
         $sound         = isset( $settings['chat_widget_sound'] )         ? $settings['chat_widget_sound']                 : 'none';
         $sound_delay   = isset( $settings['chat_widget_sound_delay'] )   ? (int) $settings['chat_widget_sound_delay']     : 3;
+        $sound_pages          = isset( $settings['chat_widget_sound_pages'] )          ? $settings['chat_widget_sound_pages']          : 'all';
+        $sound_specific_pages = isset( $settings['chat_widget_sound_specific_pages'] ) ? (string) $settings['chat_widget_sound_specific_pages'] : '';
+        $sound_once_per_session = ! empty( $settings['chat_widget_sound_once_per_session'] );
+        $hide_delay    = isset( $settings['chat_widget_hide_delay'] )    ? (int) $settings['chat_widget_hide_delay']      : 0;
+        $repeat_delay  = isset( $settings['chat_widget_repeat_delay'] )  ? (int) $settings['chat_widget_repeat_delay']    : 0;
         $animation     = isset( $settings['chat_widget_animation'] )     ? $settings['chat_widget_animation']             : 'none';
+
+        // Build list of normalized specific page paths
+        $specific_pages_list = array();
+        if ( $sound_pages === 'specific' && ! empty( $sound_specific_pages ) ) {
+            $lines = preg_split( '/\r\n|\r|\n/', $sound_specific_pages );
+            foreach ( $lines as $line ) {
+                $line = trim( $line );
+                if ( $line === '' ) { continue; }
+                // Strip protocol+host if a full URL provided
+                $parsed = parse_url( $line );
+                if ( ! empty( $parsed['path'] ) ) {
+                    $line = $parsed['path'];
+                } elseif ( ! empty( $parsed['host'] ) ) {
+                    $line = '/';
+                }
+                if ( $line === '' ) { $line = '/'; }
+                if ( $line[0] !== '/' ) { $line = '/' . $line; }
+                $line = rtrim( $line, '/' );
+                if ( $line === '' ) { $line = '/'; }
+                $specific_pages_list[] = $line;
+            }
+            $specific_pages_list = array_values( array_unique( $specific_pages_list ) );
+        }
         $retention_enabled = ! empty( $settings['chat_widget_retention_enabled'] );
         $retention_title   = isset( $settings['chat_widget_retention_title'] )   ? $settings['chat_widget_retention_title']   : 'Специальное предложение!';
         $retention_message = isset( $settings['chat_widget_retention_message'] ) ? $settings['chat_widget_retention_message'] : 'Уже уходите? Получите скидку 10% на первый заказ, если ответим на ваш вопрос в течение 5 минут!';
@@ -118,12 +146,18 @@ class WP_Ru_Max_Chat_Widget {
     </a>
     <script>
     window.wpRuMaxSettings = <?php echo wp_json_encode( array(
-        'message'           => $message,
-        'showDelay'         => $show_delay * 1000,
-        'sound'             => $sound,
-        'soundDelay'        => $sound_delay * 1000,
-        'animation'         => $animation,
-        'retentionEnabled'  => (bool) $retention_enabled,
+        'message'              => $message,
+        'showDelay'            => $show_delay * 1000,
+        'sound'                => $sound,
+        'soundDelay'           => $sound_delay * 1000,
+        'soundPages'           => $sound_pages,
+        'soundSpecificPages'   => $specific_pages_list,
+        'soundOncePerSession'  => (bool) $sound_once_per_session,
+        'hideDelay'            => $hide_delay * 1000,
+        'repeatDelay'          => $repeat_delay * 1000,
+        'animation'            => $animation,
+        'retentionEnabled'     => (bool) $retention_enabled,
+        'homeUrl'              => home_url( '/' ),
     ) ); ?>;
     </script>
 </div>
