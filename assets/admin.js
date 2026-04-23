@@ -283,7 +283,7 @@
 
     $('input[name="chat_widget_animation"]').on('change', function () {
         var $icon = $('.wp-ru-max-preview-widget .preview-icon');
-        $icon.removeClass('wp-ru-max-anim-pulse wp-ru-max-anim-ripple wp-ru-max-anim-bounce wp-ru-max-anim-shake');
+        $icon.removeClass('wp-ru-max-anim-pulse wp-ru-max-anim-ripple wp-ru-max-anim-bounce wp-ru-max-anim-shake wp-ru-max-anim-glow wp-ru-max-anim-rotate');
         var val = $(this).val();
         if (val && val !== 'none') {
             $icon.addClass('wp-ru-max-anim-' + val);
@@ -318,8 +318,13 @@
             chat_widget_position:      $('input[name="chat_widget_position"]:checked').val() || 'right',
             chat_widget_bottom_offset: parseInt($('#chat_widget_bottom_offset').val(), 10) || 20,
             chat_widget_show_delay:    parseInt($('input[name="chat_widget_show_delay"]:checked').val(), 10) || 0,
+            chat_widget_hide_delay:    parseInt($('input[name="chat_widget_hide_delay"]:checked').val(), 10) || 0,
+            chat_widget_repeat_delay:  parseInt($('input[name="chat_widget_repeat_delay"]:checked').val(), 10) || 0,
             chat_widget_sound:         $('input[name="chat_widget_sound"]:checked').val() || 'none',
             chat_widget_sound_delay:   parseInt($('input[name="chat_widget_sound_delay"]:checked').val(), 10) || 3,
+            chat_widget_sound_pages:   $('input[name="chat_widget_sound_pages"]:checked').val() || 'all',
+            chat_widget_sound_specific_pages: $('#chat_widget_sound_specific_pages').val() || '',
+            chat_widget_sound_once_per_session: $('#chat_widget_sound_once_per_session').is(':checked') ? '1' : '0',
             chat_widget_animation:     $('input[name="chat_widget_animation"]:checked').val() || 'none',
             chat_widget_retention_enabled:        $('#chat_widget_retention_enabled').is(':checked') ? '1' : '0',
             chat_widget_retention_title:          $('#chat_widget_retention_title').val() || '',
