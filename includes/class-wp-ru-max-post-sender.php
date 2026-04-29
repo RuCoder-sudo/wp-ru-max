@@ -48,7 +48,9 @@ class WP_Ru_Max_Post_Sender {
         }
 
         $skip = get_post_meta( $post->ID, '_wp_ru_max_skip', true );
-        if ( $skip === '1' ) {
+        // Только значение '1' означает «не отправлять». Любое другое
+        // ('0', '', null, отсутствие записи) — отправлять.
+        if ( $skip === '1' || $skip === 1 || $skip === true ) {
             WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — автоотправка отключена для этой статьи.", array( 'post_id' => $post->ID ) );
             return;
         }
