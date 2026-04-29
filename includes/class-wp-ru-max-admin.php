@@ -20,6 +20,7 @@ class WP_Ru_Max_Admin {
         add_action( 'admin_head',                        array( $this, 'admin_icon_css' ) );
         add_action( 'admin_enqueue_scripts',             array( $this, 'enqueue_admin_scripts' ) );
         add_action( 'enqueue_block_editor_assets',       array( $this, 'enqueue_gutenberg_panel' ) );
+        add_action( 'init',                              array( $this, 'maybe_migrate_skip_meta' ), 5 );
         add_action( 'init',                              array( $this, 'register_post_meta' ) );
         add_action( 'wp_ajax_wp_ru_max_save_settings',   array( $this, 'ajax_save_settings' ) );
         add_action( 'wp_ajax_wp_ru_max_test_connection', array( $this, 'ajax_test_connection' ) );
@@ -31,23 +32,82 @@ class WP_Ru_Max_Admin {
         add_filter( 'plugin_action_links_' . WP_RU_MAX_PLUGIN_BASENAME, array( $this, 'add_plugin_links' ) );
     }
 
+    /**
+     * Имя метаключа для тумблера «Автоотправка в MAX».
+     * Намеренно БЕЗ ведущего подчёркивания, чтобы исключить конфликт с
+     * «protected meta» в WordPress: protected-ключи REST API (Гутенберг)
+     * молча отказывается обновлять, даже при register_post_meta + auth_callback.
+     */
+    const SKIP_META_KEY        = 'wp_ru_max_skip';
+    const SKIP_META_KEY_LEGACY = '_wp_ru_max_skip';
+
+    /**
+     * Одноразовая миграция значений из старого protected-ключа
+     * `_wp_ru_max_skip` в новый публичный ключ `wp_ru_max_skip`.
+     */
+    public function maybe_migrate_skip_meta() {
+        if ( get_option( 'wp_ru_max_skip_meta_migrated_v1' ) ) {
+            return;
+        }
+        global $wpdb;
+        // Переименовываем только те строки, где новой записи ещё нет.
+        $wpdb->query( $wpdb->prepare(
+            "UPDATE {$wpdb->postmeta} pm1
+             LEFT JOIN {$wpdb->postmeta} pm2
+                 ON pm2.post_id = pm1.post_id AND pm2.meta_key = %s
+             SET pm1.meta_key = %s
+             WHERE pm1.meta_key = %s AND pm2.meta_id IS NULL",
+            self::SKIP_META_KEY,
+            self::SKIP_META_KEY,
+            self::SKIP_META_KEY_LEGACY
+        ) );
+        // Удаляем оставшиеся дубликаты старого ключа.
+        $wpdb->query( $wpdb->prepare(
+            "DELETE FROM {$wpdb->postmeta} WHERE meta_key = %s",
+            self::SKIP_META_KEY_LEGACY
+        ) );
+        update_option( 'wp_ru_max_skip_meta_migrated_v1', 1 );
+    }
+
+    /**
+     * Дефолтное значение тумблера «Автоотправка в MAX».
+     *
+     * '1' = автоотправка ВЫКЛ (статья НЕ будет отправлена в MAX автоматически).
+     * '0' = автоотправка ВКЛ.
+     *
+     * По умолчанию выключено — автор сам осознанно включает отправку
+     * для нужной статьи.
+     */
+    const SKIP_META_DEFAULT = '1';
+
     public function register_post_meta() {
         $post_types = get_post_types( array( 'public' => true ) );
         foreach ( $post_types as $post_type ) {
-            register_post_meta( $post_type, '_wp_ru_max_skip', array(
+            register_post_meta( $post_type, self::SKIP_META_KEY, array(
                 'show_in_rest'      => array(
                     'schema' => array(
                         'type'    => 'string',
                         'enum'    => array( '0', '1' ),
                         'context' => array( 'view', 'edit' ),
+                        'default' => self::SKIP_META_DEFAULT,
                     ),
                 ),
                 'single'            => true,
                 'type'              => 'string',
-                'default'           => '0',
+                'default'           => self::SKIP_META_DEFAULT,
                 'sanitize_callback' => array( $this, 'sanitize_skip_meta' ),
                 'auth_callback'     => function() { return current_user_can( 'edit_posts' ); },
             ) );
+
+            // Серверная страховка для REST/Гутенберга — читаем значение
+            // напрямую из объекта WP_REST_Request (это надёжнее, чем
+            // парсить php://input, который к моменту save_post может
+            // быть уже прочитан REST-сервером).
+            add_action(
+                'rest_after_insert_' . $post_type,
+                array( $this, 'persist_skip_meta_from_rest' ),
+                10, 3
+            );
         }
     }
 
@@ -64,12 +124,54 @@ class WP_Ru_Max_Admin {
     }
 
     /**
-     * Серверная страховочная запись значения «Автоотправка в MAX».
+     * Серверная страховочная запись значения «Автоотправка в MAX»
+     * для REST-контекста (Гутенберг).
      *
-     * Из-за особенностей WordPress с protected meta-ключами (префикс `_`)
-     * и REST API (Гутенберг) значение `_wp_ru_max_skip` могло не сохраняться
-     * стандартным механизмом editPost → REST. Здесь явно читаем значение
-     * из тела REST-запроса и записываем его в postmeta.
+     * Важно: WordPress при update_post_meta для значения, совпадающего
+     * с зарегистрированным `default`, может физически удалить запись из
+     * postmeta (так как «значение по умолчанию и так применится»).
+     * Чтобы быть устойчивыми к этому поведению, для дефолтного значения
+     * мы тоже вызываем update_post_meta — get_post_meta всё равно вернёт
+     * правильное значение через дефолт, либо явно сохранённую запись.
+     */
+    public function persist_skip_meta_from_rest( $post, $request, $creating ) {
+        if ( ! ( $request instanceof WP_REST_Request ) ) {
+            return;
+        }
+        if ( ! is_object( $post ) || empty( $post->ID ) ) {
+            return;
+        }
+        if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+            return;
+        }
+
+        $meta = $request->get_param( 'meta' );
+        if ( ! is_array( $meta ) ) {
+            return;
+        }
+
+        if ( array_key_exists( self::SKIP_META_KEY, $meta ) ) {
+            $normalized = $this->sanitize_skip_meta( $meta[ self::SKIP_META_KEY ] );
+            // Удаляем потенциальные дубликаты (на случай рассинхрона)
+            // и записываем единственное явное значение.
+            delete_post_meta( $post->ID, self::SKIP_META_KEY );
+            add_post_meta( $post->ID, self::SKIP_META_KEY, $normalized, true );
+
+            WP_Ru_Max_Logger::log(
+                'post_sender',
+                'info',
+                sprintf( 'Тумблер «Автоотправка в MAX» для записи #%d сохранён через REST: %s',
+                    $post->ID,
+                    $normalized === '1' ? 'ВЫКЛ' : 'ВКЛ'
+                ),
+                array( 'post_id' => $post->ID, 'value' => $normalized )
+            );
+        }
+    }
+
+    /**
+     * Серверная страховочная запись для классического редактора
+     * и любых не-REST контекстов сохранения записи.
      */
     public function persist_skip_meta_on_save( $post_id, $post ) {
         if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) ) {
@@ -78,36 +180,26 @@ class WP_Ru_Max_Admin {
         if ( ! current_user_can( 'edit_post', $post_id ) ) {
             return;
         }
-
-        // Защита от вызова в неподходящих контекстах (например, импорт).
         if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+            return;
+        }
+        // REST обрабатывается отдельно через rest_after_insert_*.
+        if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
             return;
         }
 
         $value = null;
-
-        // 1. Запрос из Гутенберга (REST API).
-        if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
-            $raw = file_get_contents( 'php://input' );
-            if ( ! empty( $raw ) ) {
-                $payload = json_decode( $raw, true );
-                if ( is_array( $payload ) && isset( $payload['meta'] ) && is_array( $payload['meta'] ) && array_key_exists( '_wp_ru_max_skip', $payload['meta'] ) ) {
-                    $value = $payload['meta']['_wp_ru_max_skip'];
-                }
-            }
-        }
-
-        // 2. Классический редактор / form-post.
-        if ( $value === null && isset( $_POST['_wp_ru_max_skip'] ) ) {
-            $value = wp_unslash( $_POST['_wp_ru_max_skip'] );
+        if ( isset( $_POST[ self::SKIP_META_KEY ] ) ) {
+            $value = wp_unslash( $_POST[ self::SKIP_META_KEY ] );
+        } elseif ( isset( $_POST[ self::SKIP_META_KEY_LEGACY ] ) ) {
+            $value = wp_unslash( $_POST[ self::SKIP_META_KEY_LEGACY ] );
         }
 
         if ( $value === null ) {
             return;
         }
 
-        $normalized = $this->sanitize_skip_meta( $value );
-        update_post_meta( $post_id, '_wp_ru_max_skip', $normalized );
+        update_post_meta( $post_id, self::SKIP_META_KEY, $this->sanitize_skip_meta( $value ) );
     }
 
     public function admin_icon_css() {
@@ -136,11 +228,19 @@ class WP_Ru_Max_Admin {
             return;
         }
 
+        // Версия скрипта = время изменения файла. Это гарантирует
+        // сброс кэша браузера на старый gutenberg-panel.js даже без
+        // изменения общей версии плагина.
+        $gutenberg_js_path = WP_RU_MAX_PLUGIN_DIR . 'assets/gutenberg-panel.js';
+        $gutenberg_js_ver  = file_exists( $gutenberg_js_path )
+            ? (string) filemtime( $gutenberg_js_path )
+            : WP_RU_MAX_VERSION;
+
         wp_enqueue_script(
             'wp-ru-max-gutenberg',
             WP_RU_MAX_PLUGIN_URL . 'assets/gutenberg-panel.js',
             array( 'jquery', 'wp-plugins', 'wp-edit-post', 'wp-element', 'wp-components', 'wp-data' ),
-            WP_RU_MAX_VERSION,
+            $gutenberg_js_ver,
             true
         );
         wp_localize_script( 'wp-ru-max-gutenberg', 'wpRuMaxGutenberg', array(
