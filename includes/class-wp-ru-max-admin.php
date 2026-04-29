@@ -22,14 +22,190 @@ class WP_Ru_Max_Admin {
         add_action( 'enqueue_block_editor_assets',       array( $this, 'enqueue_gutenberg_panel' ) );
         add_action( 'init',                              array( $this, 'maybe_migrate_skip_meta' ), 5 );
         add_action( 'init',                              array( $this, 'register_post_meta' ) );
+        add_action( 'rest_api_init',                     array( $this, 'register_rest_routes' ) );
         add_action( 'wp_ajax_wp_ru_max_save_settings',   array( $this, 'ajax_save_settings' ) );
         add_action( 'wp_ajax_wp_ru_max_test_connection', array( $this, 'ajax_test_connection' ) );
         add_action( 'wp_ajax_wp_ru_max_send_test_message', array( $this, 'ajax_send_test_message' ) );
         add_action( 'wp_ajax_wp_ru_max_get_logs',        array( $this, 'ajax_get_logs' ) );
         add_action( 'wp_ajax_wp_ru_max_clear_logs',      array( $this, 'ajax_clear_logs' ) );
         add_action( 'wp_ajax_wp_ru_max_send_post_now',   array( $this, 'ajax_send_post_now' ) );
+        add_action( 'wp_ajax_wp_ru_max_get_skip',        array( $this, 'ajax_get_skip' ) );
+        add_action( 'wp_ajax_wp_ru_max_set_skip',        array( $this, 'ajax_set_skip' ) );
         add_action( 'save_post',                         array( $this, 'persist_skip_meta_on_save' ), 10, 2 );
         add_filter( 'plugin_action_links_' . WP_RU_MAX_PLUGIN_BASENAME, array( $this, 'add_plugin_links' ) );
+    }
+
+    /**
+     * Регистрация собственного REST-маршрута для тумблера «Автоотправка».
+     *
+     * Используем СВОЁ простое API вместо стандартного meta-через-REST,
+     * потому что у некоторых пользователей Гутенберг по неизвестной причине
+     * не отправляет meta-поле в теле запроса (хук rest_after_insert не
+     * срабатывает или приходит без нашего ключа). Свой маршрут даёт нам
+     * 100% контроль: тумблер сохраняется СРАЗУ при клике, без ожидания
+     * «Сохранить черновик».
+     */
+    public function register_rest_routes() {
+        register_rest_route( 'wp-ru-max/v1', '/skip/(?P<post_id>\d+)', array(
+            array(
+                'methods'             => 'GET',
+                'callback'            => array( $this, 'rest_get_skip' ),
+                'permission_callback' => array( $this, 'rest_skip_permission' ),
+                'args'                => array(
+                    'post_id' => array( 'validate_callback' => 'is_numeric' ),
+                ),
+            ),
+            array(
+                'methods'             => 'POST',
+                'callback'            => array( $this, 'rest_set_skip' ),
+                'permission_callback' => array( $this, 'rest_skip_permission' ),
+                'args'                => array(
+                    'post_id' => array( 'validate_callback' => 'is_numeric' ),
+                    'on'      => array( 'required' => true ),
+                ),
+            ),
+        ) );
+    }
+
+    public function rest_skip_permission( $request ) {
+        $post_id = (int) $request['post_id'];
+        return $post_id > 0 && current_user_can( 'edit_post', $post_id );
+    }
+
+    /**
+     * GET /wp-json/wp-ru-max/v1/skip/{post_id}
+     * Возвращает текущее состояние тумблера ИЗ БД (с очисткой кэша).
+     */
+    public function rest_get_skip( $request ) {
+        $post_id = (int) $request['post_id'];
+        wp_cache_delete( $post_id, 'post_meta' );
+
+        $skip = get_post_meta( $post_id, self::SKIP_META_KEY, true );
+        if ( $skip === '' || $skip === null || $skip === false ) {
+            $legacy = get_post_meta( $post_id, self::SKIP_META_KEY_LEGACY, true );
+            if ( $legacy !== '' && $legacy !== null && $legacy !== false ) {
+                $skip = $legacy;
+            }
+        }
+        $skip_str = is_scalar( $skip ) ? trim( (string) $skip ) : '';
+        $is_on    = ( $skip_str === '0' );
+
+        return rest_ensure_response( array(
+            'on'     => $is_on,
+            'stored' => $skip_str,
+        ) );
+    }
+
+    /**
+     * POST /wp-json/wp-ru-max/v1/skip/{post_id}
+     * Body: { on: true|false|1|0 }
+     * Сохраняет состояние тумблера и сразу читает обратно из БД.
+     */
+    public function rest_set_skip( $request ) {
+        $post_id = (int) $request['post_id'];
+        $on_raw  = $request->get_param( 'on' );
+
+        // Любое истинное значение → ВКЛ ('0' в нашей семантике).
+        $is_on = ( $on_raw === true || $on_raw === 1 || $on_raw === '1' || $on_raw === 'true' || $on_raw === 'on' );
+        $value = $is_on ? '0' : '1';
+
+        update_post_meta( $post_id, self::SKIP_META_KEY, $value );
+        // Старый ключ удаляем, чтобы не было путаницы.
+        delete_post_meta( $post_id, self::SKIP_META_KEY_LEGACY );
+
+        // Контрольное чтение БЕЗ кэша.
+        wp_cache_delete( $post_id, 'post_meta' );
+        $stored = get_post_meta( $post_id, self::SKIP_META_KEY, true );
+
+        WP_Ru_Max_Logger::log(
+            'post_sender',
+            'info',
+            sprintf(
+                'Тумблер #%d через свой REST: запрошено %s → сохранено "%s" → в БД "%s" (%s)',
+                $post_id,
+                $is_on ? 'ВКЛ' : 'ВЫКЛ',
+                $value,
+                (string) $stored,
+                $stored === '0' ? 'ВКЛ' : 'ВЫКЛ'
+            ),
+            array(
+                'post_id'      => $post_id,
+                'requested_on' => $is_on,
+                'sent_value'   => $value,
+                'stored'       => $stored,
+            )
+        );
+
+        return rest_ensure_response( array(
+            'on'     => ( $stored === '0' ),
+            'stored' => $stored,
+            'sent'   => $value,
+        ) );
+    }
+
+    /**
+     * AJAX-fallback (admin-ajax.php) на случай, если REST-маршрут заблокирован
+     * на сайте (например, Wordfence). По функциональности идентичен rest_set_skip.
+     */
+    public function ajax_set_skip() {
+        check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
+        $post_id = isset( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0;
+        if ( ! $post_id || ! current_user_can( 'edit_post', $post_id ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
+        }
+        $on_raw = isset( $_POST['on'] ) ? wp_unslash( $_POST['on'] ) : '0';
+        $is_on  = ( $on_raw === true || $on_raw === 1 || $on_raw === '1' || $on_raw === 'true' || $on_raw === 'on' );
+        $value  = $is_on ? '0' : '1';
+
+        update_post_meta( $post_id, self::SKIP_META_KEY, $value );
+        delete_post_meta( $post_id, self::SKIP_META_KEY_LEGACY );
+
+        wp_cache_delete( $post_id, 'post_meta' );
+        $stored = get_post_meta( $post_id, self::SKIP_META_KEY, true );
+
+        WP_Ru_Max_Logger::log(
+            'post_sender',
+            'info',
+            sprintf(
+                'Тумблер #%d через AJAX-fallback: запрошено %s → сохранено "%s" → в БД "%s" (%s)',
+                $post_id,
+                $is_on ? 'ВКЛ' : 'ВЫКЛ',
+                $value,
+                (string) $stored,
+                $stored === '0' ? 'ВКЛ' : 'ВЫКЛ'
+            ),
+            array(
+                'post_id'    => $post_id,
+                'sent_value' => $value,
+                'stored'     => $stored,
+            )
+        );
+
+        wp_send_json_success( array(
+            'on'     => ( $stored === '0' ),
+            'stored' => $stored,
+        ) );
+    }
+
+    public function ajax_get_skip() {
+        check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
+        $post_id = isset( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0;
+        if ( ! $post_id || ! current_user_can( 'edit_post', $post_id ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
+        }
+        wp_cache_delete( $post_id, 'post_meta' );
+        $skip = get_post_meta( $post_id, self::SKIP_META_KEY, true );
+        if ( $skip === '' || $skip === null || $skip === false ) {
+            $legacy = get_post_meta( $post_id, self::SKIP_META_KEY_LEGACY, true );
+            if ( $legacy !== '' && $legacy !== null && $legacy !== false ) {
+                $skip = $legacy;
+            }
+        }
+        $skip_str = is_scalar( $skip ) ? trim( (string) $skip ) : '';
+        wp_send_json_success( array(
+            'on'     => ( $skip_str === '0' ),
+            'stored' => $skip_str,
+        ) );
     }
 
     /**
@@ -70,15 +246,18 @@ class WP_Ru_Max_Admin {
     }
 
     /**
-     * Дефолтное значение тумблера «Автоотправка в MAX».
+     * Семантика значений мета-ключа «Автоотправка в MAX»:
      *
-     * '1' = автоотправка ВЫКЛ (статья НЕ будет отправлена в MAX автоматически).
-     * '0' = автоотправка ВКЛ.
+     *   '1' (или отсутствует) = автоотправка ВЫКЛ (по умолчанию).
+     *   '0'                   = автоотправка ВКЛ (автор явно включил).
      *
-     * По умолчанию выключено — автор сам осознанно включает отправку
-     * для нужной статьи.
+     * Намеренно НЕ задаём `default` в register_post_meta:
+     * WordPress в этом случае при сохранении значения, равного default,
+     * выполняет специальную обработку (может удалить запись из postmeta
+     * или иначе вмешаться в стандартное update_metadata). Без default
+     * запись всегда сохраняется явно: '0' или '1'. Дефолт «ВЫКЛ»
+     * реализован на уровне чтения (см. JS и WP_Ru_Max_Post_Sender).
      */
-    const SKIP_META_DEFAULT = '1';
 
     public function register_post_meta() {
         $post_types = get_post_types( array( 'public' => true ) );
@@ -89,20 +268,17 @@ class WP_Ru_Max_Admin {
                         'type'    => 'string',
                         'enum'    => array( '0', '1' ),
                         'context' => array( 'view', 'edit' ),
-                        'default' => self::SKIP_META_DEFAULT,
                     ),
                 ),
                 'single'            => true,
                 'type'              => 'string',
-                'default'           => self::SKIP_META_DEFAULT,
                 'sanitize_callback' => array( $this, 'sanitize_skip_meta' ),
                 'auth_callback'     => function() { return current_user_can( 'edit_posts' ); },
             ) );
 
-            // Серверная страховка для REST/Гутенберга — читаем значение
-            // напрямую из объекта WP_REST_Request (это надёжнее, чем
-            // парсить php://input, который к моменту save_post может
-            // быть уже прочитан REST-сервером).
+            // Серверная страховка: после стандартной REST-обработки мета
+            // принудительно перезаписываем значение из тела запроса —
+            // исключает любые гонки с другими хуками или плагинами.
             add_action(
                 'rest_after_insert_' . $post_type,
                 array( $this, 'persist_skip_meta_from_rest' ),
@@ -113,26 +289,27 @@ class WP_Ru_Max_Admin {
 
     /**
      * Нормализация значения тумблера «Автоотправка в MAX».
-     * Любое истинное / "1" / true → '1' (автоотправка ВЫКЛ для статьи).
-     * Любое ложное / "" / "0" / false → '0' (автоотправка ВКЛ).
+     * Только '0' (включая 0/false/'') трактуется как «ВКЛ».
+     * Всё остальное — '1' (ВЫКЛ, безопасный дефолт).
      */
     public function sanitize_skip_meta( $value ) {
-        if ( $value === '1' || $value === 1 || $value === true || $value === 'true' || $value === 'on' ) {
-            return '1';
+        if ( $value === '0' || $value === 0 || $value === false ) {
+            return '0';
         }
-        return '0';
+        if ( is_string( $value ) && trim( $value ) === '0' ) {
+            return '0';
+        }
+        return '1';
     }
 
     /**
      * Серверная страховочная запись значения «Автоотправка в MAX»
      * для REST-контекста (Гутенберг).
      *
-     * Важно: WordPress при update_post_meta для значения, совпадающего
-     * с зарегистрированным `default`, может физически удалить запись из
-     * postmeta (так как «значение по умолчанию и так применится»).
-     * Чтобы быть устойчивыми к этому поведению, для дефолтного значения
-     * мы тоже вызываем update_post_meta — get_post_meta всё равно вернёт
-     * правильное значение через дефолт, либо явно сохранённую запись.
+     * Используем update_post_meta (а не delete + add) — он атомарен
+     * и не зависит от порядка хуков. Затем сразу читаем значение
+     * обратно из БД и пишем в лог — это даёт однозначное подтверждение,
+     * что именно лежит в postmeta после сохранения.
      */
     public function persist_skip_meta_from_rest( $post, $request, $creating ) {
         if ( ! ( $request instanceof WP_REST_Request ) ) {
@@ -150,23 +327,38 @@ class WP_Ru_Max_Admin {
             return;
         }
 
-        if ( array_key_exists( self::SKIP_META_KEY, $meta ) ) {
-            $normalized = $this->sanitize_skip_meta( $meta[ self::SKIP_META_KEY ] );
-            // Удаляем потенциальные дубликаты (на случай рассинхрона)
-            // и записываем единственное явное значение.
-            delete_post_meta( $post->ID, self::SKIP_META_KEY );
-            add_post_meta( $post->ID, self::SKIP_META_KEY, $normalized, true );
-
-            WP_Ru_Max_Logger::log(
-                'post_sender',
-                'info',
-                sprintf( 'Тумблер «Автоотправка в MAX» для записи #%d сохранён через REST: %s',
-                    $post->ID,
-                    $normalized === '1' ? 'ВЫКЛ' : 'ВКЛ'
-                ),
-                array( 'post_id' => $post->ID, 'value' => $normalized )
-            );
+        if ( ! array_key_exists( self::SKIP_META_KEY, $meta ) ) {
+            return;
         }
+
+        $raw        = $meta[ self::SKIP_META_KEY ];
+        $normalized = $this->sanitize_skip_meta( $raw );
+
+        // Атомарное обновление: WP сам выберет UPDATE или INSERT.
+        update_post_meta( $post->ID, self::SKIP_META_KEY, $normalized );
+
+        // Контрольное чтение из БД — без кэша.
+        wp_cache_delete( $post->ID, 'post_meta' );
+        $stored = get_post_meta( $post->ID, self::SKIP_META_KEY, true );
+
+        WP_Ru_Max_Logger::log(
+            'post_sender',
+            'info',
+            sprintf(
+                'Тумблер «Автоотправка в MAX» для записи #%d: пришло "%s" → нормализовано "%s" → в БД "%s" (%s)',
+                $post->ID,
+                is_scalar( $raw ) ? (string) $raw : gettype( $raw ),
+                $normalized,
+                (string) $stored,
+                $stored === '0' ? 'ВКЛ' : 'ВЫКЛ'
+            ),
+            array(
+                'post_id'    => $post->ID,
+                'raw'        => $raw,
+                'normalized' => $normalized,
+                'stored'     => $stored,
+            )
+        );
     }
 
     /**
@@ -244,9 +436,11 @@ class WP_Ru_Max_Admin {
             true
         );
         wp_localize_script( 'wp-ru-max-gutenberg', 'wpRuMaxGutenberg', array(
-            'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-            'nonce'   => wp_create_nonce( 'wp_ru_max_nonce' ),
-            'iconUrl' => WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png',
+            'ajaxUrl'  => admin_url( 'admin-ajax.php' ),
+            'nonce'    => wp_create_nonce( 'wp_ru_max_nonce' ),
+            'iconUrl'  => WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png',
+            'restUrl'  => esc_url_raw( rest_url( 'wp-ru-max/v1/skip/' ) ),
+            'restNonce'=> wp_create_nonce( 'wp_rest' ),
         ) );
     }
 
