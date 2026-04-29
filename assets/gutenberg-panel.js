@@ -7,8 +7,8 @@
 
     var el               = wp.element.createElement;
     var useState         = wp.element.useState;
+    var useEffect        = wp.element.useEffect;
     var useSelect        = wp.data.useSelect;
-    var useDispatch      = wp.data.useDispatch;
     var registerPlugin   = wp.plugins.registerPlugin;
     var Button           = wp.components.Button;
     var Spinner          = wp.components.Spinner;
@@ -32,36 +32,135 @@
         });
     }
 
+    // Универсальный POST в свой REST-эндпоинт.
+    // Сначала пробуем REST (через apiFetch если доступен, иначе jQuery),
+    // если падает — fallback на admin-ajax.php.
+    function saveSkipState(postId, isOn, onDone) {
+        var done = false;
+        function finish(ok, stored) {
+            if (done) { return; }
+            done = true;
+            if (typeof onDone === 'function') { onDone(ok, stored); }
+        }
+
+        var url = wpRuMaxGutenberg.restUrl + postId;
+        $.ajax({
+            url: url,
+            method: 'POST',
+            data: { on: isOn ? 1 : 0 },
+            beforeSend: function (xhr) {
+                xhr.setRequestHeader('X-WP-Nonce', wpRuMaxGutenberg.restNonce);
+            }
+        }).done(function (res) {
+            finish(true, res && res.stored);
+        }).fail(function () {
+            // Fallback: admin-ajax
+            $.post(wpRuMaxGutenberg.ajaxUrl, {
+                action: 'wp_ru_max_set_skip',
+                nonce:  wpRuMaxGutenberg.nonce,
+                post_id: postId,
+                on:      isOn ? 1 : 0
+            }, function (r) {
+                if (r && r.success) {
+                    finish(true, r.data && r.data.stored);
+                } else {
+                    finish(false, null);
+                }
+            }).fail(function () {
+                finish(false, null);
+            });
+        });
+    }
+
+    function loadSkipState(postId, onDone) {
+        var url = wpRuMaxGutenberg.restUrl + postId;
+        $.ajax({
+            url: url,
+            method: 'GET',
+            beforeSend: function (xhr) {
+                xhr.setRequestHeader('X-WP-Nonce', wpRuMaxGutenberg.restNonce);
+            }
+        }).done(function (res) {
+            onDone(true, !!(res && res.on));
+        }).fail(function () {
+            $.post(wpRuMaxGutenberg.ajaxUrl, {
+                action: 'wp_ru_max_get_skip',
+                nonce:  wpRuMaxGutenberg.nonce,
+                post_id: postId
+            }, function (r) {
+                if (r && r.success) {
+                    onDone(true, !!(r.data && r.data.on));
+                } else {
+                    onDone(false, false);
+                }
+            }).fail(function () {
+                onDone(false, false);
+            });
+        });
+    }
+
     function WpRuMaxPanel() {
         var stateArr = useState({ sending: false, sent: false, error: null });
         var state    = stateArr[0];
         var setState = stateArr[1];
+
+        // Локальное состояние тумблера: true = ВКЛ (автоотправка включена).
+        // По умолчанию — false (ВЫКЛ). Загружаем настоящее значение из БД
+        // через свой REST-эндпоинт сразу после монтирования.
+        var onArr   = useState(false);
+        var isOn    = onArr[0];
+        var setIsOn = onArr[1];
+
+        var savingArr = useState(false);
+        var saving    = savingArr[0];
+        var setSaving = savingArr[1];
+
+        var errArr = useState(null);
+        var saveErr = errArr[0];
+        var setSaveErr = errArr[1];
+
+        var loadedArr = useState(false);
+        var loaded    = loadedArr[0];
+        var setLoaded = loadedArr[1];
 
         var postId = useSelect(function (select) {
             var editor = select('core/editor');
             return editor ? editor.getCurrentPostId() : 0;
         });
 
-        var skipSend = useSelect(function (select) {
-            var editor = select('core/editor');
-            if (!editor) { return true; }
-            var meta = editor.getEditedPostAttribute('meta') || {};
-            // По умолчанию — ВЫКЛ (skip = true). «Включено» только когда
-            // значение явно === '0'. Поддерживаем и новый, и старый ключи.
-            var v = (meta['wp_ru_max_skip'] !== undefined)
-                ? meta['wp_ru_max_skip']
-                : meta['_wp_ru_max_skip'];
-            if (v === '0') { return false; }
-            return true;
-        });
+        // Подгружаем текущее состояние из БД при появлении postId.
+        useEffect(function () {
+            if (!postId) { return; }
+            loadSkipState(postId, function (ok, on) {
+                setIsOn(!!on);
+                setLoaded(true);
+            });
+        }, [postId]);
 
-        var editPost = useDispatch('core/editor').editPost;
+        function handleToggle(newVal) {
+            // Оптимистично обновляем UI.
+            var prev = isOn;
+            setIsOn(!!newVal);
+            setSaving(true);
+            setSaveErr(null);
 
-        function toggleSkip(value) {
-            // Всегда отправляем непустую строку '1' или '0'.
-            // Используем НЕ-protected ключ wp_ru_max_skip — protected meta
-            // (с префиксом `_`) Гутенберг отказывается обновлять через REST.
-            editPost({ meta: { 'wp_ru_max_skip': value ? '1' : '0' } });
+            if (!postId) {
+                setSaving(false);
+                setSaveErr('Сначала сохраните статью как черновик.');
+                setIsOn(prev);
+                return;
+            }
+
+            saveSkipState(postId, !!newVal, function (ok, stored) {
+                setSaving(false);
+                if (!ok) {
+                    setSaveErr('Не удалось сохранить состояние тумблера.');
+                    setIsOn(prev);
+                    return;
+                }
+                // Синхронизируем с тем, что РЕАЛЬНО лежит в БД.
+                setIsOn(stored === '0');
+            });
         }
 
         function sendToMax() {
@@ -93,15 +192,27 @@
 
         var panelContent = [];
 
+        var helpText;
+        if (!loaded) {
+            helpText = 'Загрузка состояния…';
+        } else if (saving) {
+            helpText = 'Сохранение…';
+        } else if (saveErr) {
+            helpText = saveErr;
+        } else if (isOn) {
+            helpText = 'Эта статья будет автоматически отправлена в MAX при публикации.';
+        } else {
+            helpText = 'Эта статья НЕ будет отправлена в MAX автоматически.';
+        }
+
         panelContent.push(
             el(ToggleControl, {
                 key:      'toggle',
-                label:    skipSend ? 'Автоотправка в MAX: ВЫКЛ' : 'Автоотправка в MAX: ВКЛ',
-                checked:  !skipSend,
-                onChange: function (val) { toggleSkip(!val); },
-                help:     skipSend
-                    ? 'Эта статья НЕ будет отправлена в MAX автоматически.'
-                    : 'Эта статья будет автоматически отправлена в MAX при публикации.'
+                label:    isOn ? 'Автоотправка в MAX: ВКЛ' : 'Автоотправка в MAX: ВЫКЛ',
+                checked:  isOn,
+                disabled: !loaded || saving,
+                onChange: handleToggle,
+                help:     helpText
             })
         );
 
