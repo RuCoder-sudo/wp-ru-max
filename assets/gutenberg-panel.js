@@ -44,19 +44,24 @@
 
         var skipSend = useSelect(function (select) {
             var editor = select('core/editor');
-            if (!editor) { return false; }
-            var meta = editor.getEditedPostAttribute('meta');
-            // Признаём «выкл» только если значение === '1'.
-            // Любое другое значение ('0', '', undefined) считается «вкл».
-            return !!(meta && meta['_wp_ru_max_skip'] === '1');
+            if (!editor) { return true; }
+            var meta = editor.getEditedPostAttribute('meta') || {};
+            // По умолчанию — ВЫКЛ (skip = true). «Включено» только когда
+            // значение явно === '0'. Поддерживаем и новый, и старый ключи.
+            var v = (meta['wp_ru_max_skip'] !== undefined)
+                ? meta['wp_ru_max_skip']
+                : meta['_wp_ru_max_skip'];
+            if (v === '0') { return false; }
+            return true;
         });
 
         var editPost = useDispatch('core/editor').editPost;
 
         function toggleSkip(value) {
-            // Всегда отправляем непустую строку '1' или '0',
-            // чтобы значение не совпадало с дефолтом и не удалялось WP.
-            editPost({ meta: { '_wp_ru_max_skip': value ? '1' : '0' } });
+            // Всегда отправляем непустую строку '1' или '0'.
+            // Используем НЕ-protected ключ wp_ru_max_skip — protected meta
+            // (с префиксом `_`) Гутенберг отказывается обновлять через REST.
+            editPost({ meta: { 'wp_ru_max_skip': value ? '1' : '0' } });
         }
 
         function sendToMax() {
