@@ -27,6 +27,7 @@ class WP_Ru_Max_Admin {
         add_action( 'wp_ajax_wp_ru_max_get_logs',        array( $this, 'ajax_get_logs' ) );
         add_action( 'wp_ajax_wp_ru_max_clear_logs',      array( $this, 'ajax_clear_logs' ) );
         add_action( 'wp_ajax_wp_ru_max_send_post_now',   array( $this, 'ajax_send_post_now' ) );
+        add_action( 'save_post',                         array( $this, 'persist_skip_meta_on_save' ), 10, 2 );
         add_filter( 'plugin_action_links_' . WP_RU_MAX_PLUGIN_BASENAME, array( $this, 'add_plugin_links' ) );
     }
 
@@ -37,16 +38,76 @@ class WP_Ru_Max_Admin {
                 'show_in_rest'      => array(
                     'schema' => array(
                         'type'    => 'string',
+                        'enum'    => array( '0', '1' ),
                         'context' => array( 'view', 'edit' ),
                     ),
                 ),
                 'single'            => true,
                 'type'              => 'string',
-                'default'           => '',
-                'sanitize_callback' => 'sanitize_text_field',
+                'default'           => '0',
+                'sanitize_callback' => array( $this, 'sanitize_skip_meta' ),
                 'auth_callback'     => function() { return current_user_can( 'edit_posts' ); },
             ) );
         }
+    }
+
+    /**
+     * Нормализация значения тумблера «Автоотправка в MAX».
+     * Любое истинное / "1" / true → '1' (автоотправка ВЫКЛ для статьи).
+     * Любое ложное / "" / "0" / false → '0' (автоотправка ВКЛ).
+     */
+    public function sanitize_skip_meta( $value ) {
+        if ( $value === '1' || $value === 1 || $value === true || $value === 'true' || $value === 'on' ) {
+            return '1';
+        }
+        return '0';
+    }
+
+    /**
+     * Серверная страховочная запись значения «Автоотправка в MAX».
+     *
+     * Из-за особенностей WordPress с protected meta-ключами (префикс `_`)
+     * и REST API (Гутенберг) значение `_wp_ru_max_skip` могло не сохраняться
+     * стандартным механизмом editPost → REST. Здесь явно читаем значение
+     * из тела REST-запроса и записываем его в postmeta.
+     */
+    public function persist_skip_meta_on_save( $post_id, $post ) {
+        if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) ) {
+            return;
+        }
+        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+            return;
+        }
+
+        // Защита от вызова в неподходящих контекстах (например, импорт).
+        if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+            return;
+        }
+
+        $value = null;
+
+        // 1. Запрос из Гутенберга (REST API).
+        if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+            $raw = file_get_contents( 'php://input' );
+            if ( ! empty( $raw ) ) {
+                $payload = json_decode( $raw, true );
+                if ( is_array( $payload ) && isset( $payload['meta'] ) && is_array( $payload['meta'] ) && array_key_exists( '_wp_ru_max_skip', $payload['meta'] ) ) {
+                    $value = $payload['meta']['_wp_ru_max_skip'];
+                }
+            }
+        }
+
+        // 2. Классический редактор / form-post.
+        if ( $value === null && isset( $_POST['_wp_ru_max_skip'] ) ) {
+            $value = wp_unslash( $_POST['_wp_ru_max_skip'] );
+        }
+
+        if ( $value === null ) {
+            return;
+        }
+
+        $normalized = $this->sanitize_skip_meta( $value );
+        update_post_meta( $post_id, '_wp_ru_max_skip', $normalized );
     }
 
     public function admin_icon_css() {
