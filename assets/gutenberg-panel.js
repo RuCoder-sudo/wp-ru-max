@@ -46,13 +46,17 @@
             var editor = select('core/editor');
             if (!editor) { return false; }
             var meta = editor.getEditedPostAttribute('meta');
-            return meta && meta['_wp_ru_max_skip'] === '1';
+            // Признаём «выкл» только если значение === '1'.
+            // Любое другое значение ('0', '', undefined) считается «вкл».
+            return !!(meta && meta['_wp_ru_max_skip'] === '1');
         });
 
         var editPost = useDispatch('core/editor').editPost;
 
         function toggleSkip(value) {
-            editPost({ meta: { '_wp_ru_max_skip': value ? '1' : '' } });
+            // Всегда отправляем непустую строку '1' или '0',
+            // чтобы значение не совпадало с дефолтом и не удалялось WP.
+            editPost({ meta: { '_wp_ru_max_skip': value ? '1' : '0' } });
         }
 
         function sendToMax() {
