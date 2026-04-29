@@ -3,7 +3,7 @@
  * Plugin Name:       WP Ru-max
  * Plugin URI:        https://рукодер.рф/wp-ru-max/
  * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Elementor и настраиваемый чат-виджет с анимацией и звуком.
- * Version:           1.0.22
+ * Version:           1.0.23
  * Author:            Сергей Солошенко (RuCoder)
  * Author URI:        https://рукодер.рф/
  * License:           GPL v2 or later
@@ -59,7 +59,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'WP_RU_MAX_VERSION', '1.0.22' );
+define( 'WP_RU_MAX_VERSION', '1.0.23' );
 define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
 define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
