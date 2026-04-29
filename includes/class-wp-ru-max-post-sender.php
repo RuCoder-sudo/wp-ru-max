@@ -47,11 +47,19 @@ class WP_Ru_Max_Post_Sender {
             return;
         }
 
-        $skip = get_post_meta( $post->ID, '_wp_ru_max_skip', true );
-        // Только значение '1' означает «не отправлять». Любое другое
-        // ('0', '', null, отсутствие записи) — отправлять.
-        if ( $skip === '1' || $skip === 1 || $skip === true ) {
-            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — автоотправка отключена для этой статьи.", array( 'post_id' => $post->ID ) );
+        // Сначала читаем новый ключ; для обратной совместимости — старый.
+        $skip = get_post_meta( $post->ID, 'wp_ru_max_skip', true );
+        if ( $skip === '' || $skip === null || $skip === false ) {
+            $legacy = get_post_meta( $post->ID, '_wp_ru_max_skip', true );
+            if ( $legacy !== '' && $legacy !== null && $legacy !== false ) {
+                $skip = $legacy;
+            }
+        }
+
+        // По умолчанию автоотправка ВЫКЛ (skip = '1'). Отправляем только
+        // если автор явно ВКЛЮЧИЛ автоотправку для этой статьи (skip = '0').
+        if ( $skip !== '0' ) {
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — автоотправка отключена для этой статьи (по умолчанию ВЫКЛ).", array( 'post_id' => $post->ID, 'skip' => $skip ) );
             return;
         }
 
