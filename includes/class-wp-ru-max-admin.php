@@ -35,16 +35,6 @@ class WP_Ru_Max_Admin {
         add_filter( 'plugin_action_links_' . WP_RU_MAX_PLUGIN_BASENAME, array( $this, 'add_plugin_links' ) );
     }
 
-    /**
-     * Регистрация собственного REST-маршрута для тумблера «Автоотправка».
-     *
-     * Используем СВОЁ простое API вместо стандартного meta-через-REST,
-     * потому что у некоторых пользователей Гутенберг по неизвестной причине
-     * не отправляет meta-поле в теле запроса (хук rest_after_insert не
-     * срабатывает или приходит без нашего ключа). Свой маршрут даёт нам
-     * 100% контроль: тумблер сохраняется СРАЗУ при клике, без ожидания
-     * «Сохранить черновик».
-     */
     public function register_rest_routes() {
         register_rest_route( 'wp-ru-max/v1', '/skip/(?P<post_id>\d+)', array(
             array(
@@ -72,10 +62,6 @@ class WP_Ru_Max_Admin {
         return $post_id > 0 && current_user_can( 'edit_post', $post_id );
     }
 
-    /**
-     * GET /wp-json/wp-ru-max/v1/skip/{post_id}
-     * Возвращает текущее состояние тумблера ИЗ БД (с очисткой кэша).
-     */
     public function rest_get_skip( $request ) {
         $post_id = (int) $request['post_id'];
         wp_cache_delete( $post_id, 'post_meta' );
@@ -96,24 +82,16 @@ class WP_Ru_Max_Admin {
         ) );
     }
 
-    /**
-     * POST /wp-json/wp-ru-max/v1/skip/{post_id}
-     * Body: { on: true|false|1|0 }
-     * Сохраняет состояние тумблера и сразу читает обратно из БД.
-     */
     public function rest_set_skip( $request ) {
         $post_id = (int) $request['post_id'];
         $on_raw  = $request->get_param( 'on' );
 
-        // Любое истинное значение → ВКЛ ('0' в нашей семантике).
         $is_on = ( $on_raw === true || $on_raw === 1 || $on_raw === '1' || $on_raw === 'true' || $on_raw === 'on' );
         $value = $is_on ? '0' : '1';
 
         update_post_meta( $post_id, self::SKIP_META_KEY, $value );
-        // Старый ключ удаляем, чтобы не было путаницы.
         delete_post_meta( $post_id, self::SKIP_META_KEY_LEGACY );
 
-        // Контрольное чтение БЕЗ кэша.
         wp_cache_delete( $post_id, 'post_meta' );
         $stored = get_post_meta( $post_id, self::SKIP_META_KEY, true );
 
@@ -143,10 +121,6 @@ class WP_Ru_Max_Admin {
         ) );
     }
 
-    /**
-     * AJAX-fallback (admin-ajax.php) на случай, если REST-маршрут заблокирован
-     * на сайте (например, Wordfence). По функциональности идентичен rest_set_skip.
-     */
     public function ajax_set_skip() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
         $post_id = isset( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0;
@@ -208,25 +182,14 @@ class WP_Ru_Max_Admin {
         ) );
     }
 
-    /**
-     * Имя метаключа для тумблера «Автоотправка в MAX».
-     * Намеренно БЕЗ ведущего подчёркивания, чтобы исключить конфликт с
-     * «protected meta» в WordPress: protected-ключи REST API (Гутенберг)
-     * молча отказывается обновлять, даже при register_post_meta + auth_callback.
-     */
     const SKIP_META_KEY        = 'wp_ru_max_skip';
     const SKIP_META_KEY_LEGACY = '_wp_ru_max_skip';
 
-    /**
-     * Одноразовая миграция значений из старого protected-ключа
-     * `_wp_ru_max_skip` в новый публичный ключ `wp_ru_max_skip`.
-     */
     public function maybe_migrate_skip_meta() {
         if ( get_option( 'wp_ru_max_skip_meta_migrated_v1' ) ) {
             return;
         }
         global $wpdb;
-        // Переименовываем только те строки, где новой записи ещё нет.
         $wpdb->query( $wpdb->prepare(
             "UPDATE {$wpdb->postmeta} pm1
              LEFT JOIN {$wpdb->postmeta} pm2
@@ -237,27 +200,12 @@ class WP_Ru_Max_Admin {
             self::SKIP_META_KEY,
             self::SKIP_META_KEY_LEGACY
         ) );
-        // Удаляем оставшиеся дубликаты старого ключа.
         $wpdb->query( $wpdb->prepare(
             "DELETE FROM {$wpdb->postmeta} WHERE meta_key = %s",
             self::SKIP_META_KEY_LEGACY
         ) );
         update_option( 'wp_ru_max_skip_meta_migrated_v1', 1 );
     }
-
-    /**
-     * Семантика значений мета-ключа «Автоотправка в MAX»:
-     *
-     *   '1' (или отсутствует) = автоотправка ВЫКЛ (по умолчанию).
-     *   '0'                   = автоотправка ВКЛ (автор явно включил).
-     *
-     * Намеренно НЕ задаём `default` в register_post_meta:
-     * WordPress в этом случае при сохранении значения, равного default,
-     * выполняет специальную обработку (может удалить запись из postmeta
-     * или иначе вмешаться в стандартное update_metadata). Без default
-     * запись всегда сохраняется явно: '0' или '1'. Дефолт «ВЫКЛ»
-     * реализован на уровне чтения (см. JS и WP_Ru_Max_Post_Sender).
-     */
 
     public function register_post_meta() {
         $post_types = get_post_types( array( 'public' => true ) );
@@ -276,9 +224,6 @@ class WP_Ru_Max_Admin {
                 'auth_callback'     => function() { return current_user_can( 'edit_posts' ); },
             ) );
 
-            // Серверная страховка: после стандартной REST-обработки мета
-            // принудительно перезаписываем значение из тела запроса —
-            // исключает любые гонки с другими хуками или плагинами.
             add_action(
                 'rest_after_insert_' . $post_type,
                 array( $this, 'persist_skip_meta_from_rest' ),
@@ -287,11 +232,6 @@ class WP_Ru_Max_Admin {
         }
     }
 
-    /**
-     * Нормализация значения тумблера «Автоотправка в MAX».
-     * Только '0' (включая 0/false/'') трактуется как «ВКЛ».
-     * Всё остальное — '1' (ВЫКЛ, безопасный дефолт).
-     */
     public function sanitize_skip_meta( $value ) {
         if ( $value === '0' || $value === 0 || $value === false ) {
             return '0';
@@ -302,15 +242,6 @@ class WP_Ru_Max_Admin {
         return '1';
     }
 
-    /**
-     * Серверная страховочная запись значения «Автоотправка в MAX»
-     * для REST-контекста (Гутенберг).
-     *
-     * Используем update_post_meta (а не delete + add) — он атомарен
-     * и не зависит от порядка хуков. Затем сразу читаем значение
-     * обратно из БД и пишем в лог — это даёт однозначное подтверждение,
-     * что именно лежит в postmeta после сохранения.
-     */
     public function persist_skip_meta_from_rest( $post, $request, $creating ) {
         if ( ! ( $request instanceof WP_REST_Request ) ) {
             return;
@@ -334,10 +265,8 @@ class WP_Ru_Max_Admin {
         $raw        = $meta[ self::SKIP_META_KEY ];
         $normalized = $this->sanitize_skip_meta( $raw );
 
-        // Атомарное обновление: WP сам выберет UPDATE или INSERT.
         update_post_meta( $post->ID, self::SKIP_META_KEY, $normalized );
 
-        // Контрольное чтение из БД — без кэша.
         wp_cache_delete( $post->ID, 'post_meta' );
         $stored = get_post_meta( $post->ID, self::SKIP_META_KEY, true );
 
@@ -361,10 +290,6 @@ class WP_Ru_Max_Admin {
         );
     }
 
-    /**
-     * Серверная страховочная запись для классического редактора
-     * и любых не-REST контекстов сохранения записи.
-     */
     public function persist_skip_meta_on_save( $post_id, $post ) {
         if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) ) {
             return;
@@ -375,7 +300,6 @@ class WP_Ru_Max_Admin {
         if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
             return;
         }
-        // REST обрабатывается отдельно через rest_after_insert_*.
         if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
             return;
         }
@@ -407,6 +331,20 @@ class WP_Ru_Max_Admin {
     padding: 7px 0 0 !important;
     opacity: 1 !important;
 }
+/* Connection status indicator */
+.wp-ru-max-status-dot {
+    font-size: 18px;
+    line-height: 1;
+    vertical-align: middle;
+    margin-right: 4px;
+}
+.wp-ru-max-status-dot.status-green { color: #00a32a; }
+.wp-ru-max-status-dot.status-red   { color: #d63638; }
+.wp-ru-max-status-dot.status-unknown { color: #999; }
+/* Legacy support */
+.wp-ru-max-status-indicator.status-success { color: #00a32a; }
+.wp-ru-max-status-indicator.status-error   { color: #d63638; }
+.wp-ru-max-status-indicator.status-unknown { color: #999; }
 </style>
         <?php
     }
@@ -420,9 +358,6 @@ class WP_Ru_Max_Admin {
             return;
         }
 
-        // Версия скрипта = время изменения файла. Это гарантирует
-        // сброс кэша браузера на старый gutenberg-panel.js даже без
-        // изменения общей версии плагина.
         $gutenberg_js_path = WP_RU_MAX_PLUGIN_DIR . 'assets/gutenberg-panel.js';
         $gutenberg_js_ver  = file_exists( $gutenberg_js_path )
             ? (string) filemtime( $gutenberg_js_path )
@@ -552,7 +487,13 @@ class WP_Ru_Max_Admin {
                 case 'chat_widget_sound_delay':
                 case 'chat_widget_hide_delay':
                 case 'chat_widget_repeat_delay':
+                case 'send_delay_seconds':
+                case 'retry_count':
+                case 'retry_delay_seconds':
                     $settings[ $field ] = max( 0, intval( $value ) );
+                    break;
+                case 'image_size_limit_mb':
+                    $settings[ $field ] = max( 0, floatval( $value ) );
                     break;
                 case 'chat_widget_sound_pages':
                     $allowed_pages = array( 'all', 'home', 'specific' );
@@ -585,6 +526,8 @@ class WP_Ru_Max_Admin {
                 case 'post_types':
                 case 'channels':
                 case 'notify_chat_ids':
+                case 'filter_categories':
+                case 'filter_tags':
                     if ( is_array( $value ) ) {
                         $settings[ $field ] = array_map( 'sanitize_text_field', $value );
                     } elseif ( is_string( $value ) && ! empty( $value ) ) {
@@ -595,12 +538,13 @@ class WP_Ru_Max_Admin {
                     break;
             }
         } else {
-            $allowed_text = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages' );
-            $allowed_textarea = array( 'notify_template', 'chat_widget_retention_message', 'chat_widget_sound_specific_pages' );
-            $allowed_bool = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session' );
-            $allowed_int  = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay' );
-            $allowed_color = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
-            $allowed_array = array( 'post_types', 'channels', 'notify_chat_ids' );
+            $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages' );
+            $allowed_textarea = array( 'notify_template', 'post_message_template', 'chat_widget_retention_message', 'chat_widget_sound_specific_pages' );
+            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session' );
+            $allowed_int      = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay', 'send_delay_seconds', 'retry_count', 'retry_delay_seconds' );
+            $allowed_float    = array( 'image_size_limit_mb' );
+            $allowed_color    = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
+            $allowed_array    = array( 'post_types', 'channels', 'notify_chat_ids', 'filter_categories', 'filter_tags' );
 
             foreach ( $allowed_text as $key ) {
                 if ( isset( $_POST[ $key ] ) ) {
@@ -612,6 +556,11 @@ class WP_Ru_Max_Admin {
                     $settings[ $key ] = max( 0, intval( $_POST[ $key ] ) );
                 }
             }
+            foreach ( $allowed_float as $key ) {
+                if ( isset( $_POST[ $key ] ) ) {
+                    $settings[ $key ] = max( 0, floatval( $_POST[ $key ] ) );
+                }
+            }
             foreach ( $allowed_textarea as $key ) {
                 if ( isset( $_POST[ $key ] ) ) {
                     $settings[ $key ] = sanitize_textarea_field( wp_unslash( $_POST[ $key ] ) );
@@ -621,7 +570,6 @@ class WP_Ru_Max_Admin {
                 if ( isset( $_POST[ $key ] ) ) {
                     $settings[ $key ] = filter_var( $_POST[ $key ], FILTER_VALIDATE_BOOLEAN );
                 }
-                // Do NOT reset to false if key is absent — partial saves must not destroy other modules.
             }
             foreach ( $allowed_color as $key ) {
                 if ( isset( $_POST[ $key ] ) ) {
@@ -658,12 +606,6 @@ class WP_Ru_Max_Admin {
         }
 
         // Кнопки публикаций (JSON)
-        if ( ! isset( $_POST['post_buttons_json'] ) && ! isset( $_POST['field'] ) && isset( $_POST['post_sender_enabled'] ) ) {
-            WP_Ru_Max_Logger::log( 'settings', 'warning',
-                'Сохранение «Отправки публикаций» — поле post_buttons_json НЕ получено. Проверьте JS.',
-                array( 'post_keys' => array_keys( $_POST ) )
-            );
-        }
         if ( isset( $_POST['post_buttons_json'] ) ) {
             $json_raw = wp_unslash( $_POST['post_buttons_json'] );
             $raw      = json_decode( $json_raw, true );
@@ -677,16 +619,8 @@ class WP_Ru_Max_Admin {
                     }
                 }
                 $settings['post_buttons'] = $buttons;
-                WP_Ru_Max_Logger::log( 'settings', 'info',
-                    'Кнопки публикаций сохранены: ' . count( $buttons ) . ' шт.',
-                    array( 'buttons' => $buttons )
-                );
             } else {
                 $settings['post_buttons'] = array();
-                WP_Ru_Max_Logger::log( 'settings', 'warning',
-                    'post_buttons_json получен, но не удалось распарсить JSON.',
-                    array( 'raw' => substr( $json_raw, 0, 300 ), 'json_error' => json_last_error_msg() )
-                );
             }
         }
 
@@ -901,8 +835,8 @@ class WP_Ru_Max_Admin {
         <?php if ( ! empty( $settings['bot_token'] ) ) : ?>
         <div class="wp-ru-max-card wp-ru-max-status">
             <h3>Статус подключения</h3>
-            <div id="bot_status">
-                <span class="wp-ru-max-status-indicator status-unknown">●</span>
+            <div id="bot_status" style="display:flex;align-items:center;gap:8px;font-size:15px;">
+                <span class="wp-ru-max-status-dot status-unknown">●</span>
                 <span>Нажмите «Проверить подключение» для проверки статуса.</span>
             </div>
         </div>
@@ -911,7 +845,13 @@ class WP_Ru_Max_Admin {
     }
 
     private function render_tab_post_sender( $settings ) {
-        $enabled = ! empty( $settings['post_sender_enabled'] );
+        $enabled            = ! empty( $settings['post_sender_enabled'] );
+        $send_delay         = isset( $settings['send_delay_seconds'] )    ? (int) $settings['send_delay_seconds']    : 0;
+        $retry_count        = isset( $settings['retry_count'] )           ? (int) $settings['retry_count']           : 2;
+        $retry_delay        = isset( $settings['retry_delay_seconds'] )   ? (int) $settings['retry_delay_seconds']   : 5;
+        $image_limit        = isset( $settings['image_size_limit_mb'] )   ? (float) $settings['image_size_limit_mb'] : 5;
+        $filter_categories  = isset( $settings['filter_categories'] )     ? (array) $settings['filter_categories']   : array();
+        $filter_tags        = isset( $settings['filter_tags'] )           ? (array) $settings['filter_tags']         : array();
         ?>
         <div class="wp-ru-max-card">
             <h2>Отправка публикаций</h2>
@@ -974,28 +914,16 @@ class WP_Ru_Max_Admin {
                                 <input type="checkbox" name="show_read_more" value="1" <?php checked( isset( $settings['show_read_more'] ) ? $settings['show_read_more'] : true ); ?> />
                                 Добавлять ссылку на статью в конце сообщения
                             </label>
-                            <p class="description">Если включено — в конец каждого сообщения добавляется ссылка для перехода к полной статье. Если выключено — сообщение отправляется без ссылки.</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="excerpt_max_chars">Длина анонса (символов)</label></th>
                         <td>
-                            <input
-                                type="number"
-                                id="excerpt_max_chars"
-                                name="excerpt_max_chars"
+                            <input type="number" id="excerpt_max_chars" name="excerpt_max_chars"
                                 value="<?php echo esc_attr( isset( $settings['excerpt_max_chars'] ) ? $settings['excerpt_max_chars'] : 300 ); ?>"
-                                min="0"
-                                max="4096"
-                                step="10"
-                                class="small-text"
-                            />
+                                min="0" max="4096" step="10" class="small-text" />
                             <span> символов</span>
-                            <p class="description">
-                                Максимальное количество символов в анонсе статьи, отправляемом в MAX.<br>
-                                <strong>0</strong> — без ограничений (отправляется весь анонс).<br>
-                                Рекомендуется: <strong>300</strong> для коротких сообщений, <strong>800–1000</strong> для объёмных статей.
-                            </p>
+                            <p class="description"><strong>0</strong> — без ограничений. Рекомендуется: <strong>300</strong>.</p>
                         </td>
                     </tr>
                     <tr>
@@ -1005,7 +933,6 @@ class WP_Ru_Max_Admin {
                                 <input type="checkbox" name="show_action_label" value="1" <?php checked( isset( $settings['show_action_label'] ) ? $settings['show_action_label'] : true ); ?> />
                                 Показывать метку «Новая публикация» / «Обновлённая публикация»
                             </label>
-                            <p class="description">Если выключено — строка с типом публикации не добавляется в начало сообщения.</p>
                         </td>
                     </tr>
                     <tr>
@@ -1015,7 +942,6 @@ class WP_Ru_Max_Admin {
                                 <input type="checkbox" name="show_author_date" value="1" <?php checked( isset( $settings['show_author_date'] ) ? $settings['show_author_date'] : true ); ?> />
                                 Показывать автора и дату в сообщении
                             </label>
-                            <p class="description">Если включено — в сообщение добавляются строки «Автор:» и «Дата:». Если выключено — они не отображаются.</p>
                         </td>
                     </tr>
                     <tr>
@@ -1044,6 +970,99 @@ class WP_Ru_Max_Admin {
             </div>
 
             <div class="wp-ru-max-card">
+                <h3>Фильтр по категориям и тегам</h3>
+                <p class="description">Оставьте все позиции не отмеченными, чтобы отправлять записи из всех категорий/тегов. Если выбрать конкретные — отправка будет только для записей, у которых есть хотя бы одна совпадающая категория или тег.</p>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">Категории</th>
+                        <td>
+                            <?php
+                            $all_cats = get_categories( array( 'hide_empty' => false, 'number' => 200 ) );
+                            if ( ! empty( $all_cats ) ) {
+                                foreach ( $all_cats as $cat ) :
+                                ?>
+                                <label style="display:inline-block;margin-right:16px;margin-bottom:6px;">
+                                    <input type="checkbox" name="filter_categories[]" value="<?php echo esc_attr( $cat->term_id ); ?>"
+                                        <?php checked( in_array( (string) $cat->term_id, array_map( 'strval', $filter_categories ), true ) ); ?> />
+                                    <?php echo esc_html( $cat->name ); ?>
+                                </label>
+                                <?php endforeach;
+                            } else {
+                                echo '<p class="description">Категории не найдены.</p>';
+                            }
+                            ?>
+                            <p class="description" style="margin-top:8px;">Пусто (ничего не отмечено) = отправлять из всех категорий.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Теги</th>
+                        <td>
+                            <?php
+                            $all_tags = get_tags( array( 'hide_empty' => false, 'number' => 200 ) );
+                            if ( ! empty( $all_tags ) ) {
+                                foreach ( $all_tags as $tag ) :
+                                ?>
+                                <label style="display:inline-block;margin-right:16px;margin-bottom:6px;">
+                                    <input type="checkbox" name="filter_tags[]" value="<?php echo esc_attr( $tag->term_id ); ?>"
+                                        <?php checked( in_array( (string) $tag->term_id, array_map( 'strval', $filter_tags ), true ) ); ?> />
+                                    <?php echo esc_html( $tag->name ); ?>
+                                </label>
+                                <?php endforeach;
+                            } else {
+                                echo '<p class="description">Теги не найдены.</p>';
+                            }
+                            ?>
+                            <p class="description" style="margin-top:8px;">Пусто (ничего не отмечено) = отправлять с любыми тегами.</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="wp-ru-max-card">
+                <h3>Задержка и повторные попытки</h3>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label>Задержка отправки</label></th>
+                        <td>
+                            <?php
+                            $delay_opts = array( 0 => 'Без задержки', 30 => '30 секунд', 60 => '1 минута', 120 => '2 минуты', 300 => '5 минут' );
+                            foreach ( $delay_opts as $val => $label ) :
+                            ?>
+                            <label style="display:inline-flex;align-items:center;margin-right:16px;margin-bottom:6px;">
+                                <input type="radio" name="send_delay_seconds" value="<?php echo esc_attr( $val ); ?>" <?php checked( $send_delay, $val ); ?> style="margin-right:5px;" />
+                                <?php echo esc_html( $label ); ?>
+                            </label>
+                            <?php endforeach; ?>
+                            <p class="description">Задержка отправки через WP-Cron — устраняет гонку условий с обработкой изображения.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="retry_count">Число повторных попыток</label></th>
+                        <td>
+                            <input type="number" id="retry_count" name="retry_count" value="<?php echo esc_attr( $retry_count ); ?>" min="0" max="5" class="small-text" />
+                            <p class="description">Сколько раз повторить отправку при ошибке API. <strong>0</strong> — без повторов.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="retry_delay_seconds">Интервал между попытками (сек)</label></th>
+                        <td>
+                            <input type="number" id="retry_delay_seconds" name="retry_delay_seconds" value="<?php echo esc_attr( $retry_delay ); ?>" min="1" max="30" class="small-text" />
+                            <span> сек</span>
+                            <p class="description">Пауза между повторными попытками (1–30 секунд).</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="image_size_limit_mb">Макс. размер изображения (МБ)</label></th>
+                        <td>
+                            <input type="number" id="image_size_limit_mb" name="image_size_limit_mb" value="<?php echo esc_attr( $image_limit ); ?>" min="0" max="50" step="0.5" class="small-text" />
+                            <span> МБ</span>
+                            <p class="description">Изображения тяжелее этого лимита автоматически пропускаются — отправляется только текст сообщения. <strong>0</strong> — без ограничения.</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="wp-ru-max-card">
                 <h3>Шаблон сообщения</h3>
                 <p>Настройте шаблон для публикаций, отправляемых в MAX. Если поле оставить пустым — используется стандартный формат.</p>
                 <table class="form-table">
@@ -1053,8 +1072,7 @@ class WP_Ru_Max_Admin {
                             <textarea id="post_message_template" name="post_message_template" rows="8" class="large-text code"><?php echo esc_textarea( $settings['post_message_template'] ?? '' ); ?></textarea>
                             <p class="description">
                                 Доступные переменные: <code>{title}</code> <code>{excerpt}</code> <code>{url}</code> <code>{author}</code> <code>{date}</code> <code>{status}</code> <code>{site_name}</code> <code>{post_type}</code><br>
-                                Поля записи: <code>{meta_FIELDNAME}</code> — стандартные мета-поля, <code>{acf_FIELDNAME}</code> — поля ACF.<br>
-                                Например: <code>&lt;b&gt;{title}&lt;/b&gt;\n{excerpt}\n\n&lt;a href="{url}"&gt;Читать&lt;/a&gt;</code>
+                                Поля записи: <code>{meta_FIELDNAME}</code> — стандартные мета-поля, <code>{acf_FIELDNAME}</code> — поля ACF.
                             </p>
                         </td>
                     </tr>
@@ -1064,7 +1082,6 @@ class WP_Ru_Max_Admin {
             <div class="wp-ru-max-card">
                 <h3>Встроенные кнопки клавиатуры</h3>
                 <p>Здесь вы можете добавить свои собственные кнопки, которые будут отображаться под каждой публикацией в MAX.</p>
-                <p class="description"><strong>Примечание:</strong> Название кнопки должно быть уникальным и содержать не более 8 английских букв или символов подчеркивания.</p>
 
                 <div id="post_buttons_list" style="margin:12px 0;">
                     <?php
@@ -1085,13 +1102,6 @@ class WP_Ru_Max_Admin {
                     <input type="text" id="new_post_btn_url" class="regular-text" placeholder="https://..." style="flex:1;" />
                     <button type="button" class="button" id="add_post_button">+ Добавить кнопку</button>
                 </div>
-
-                <p class="description">
-                    В поле URL вы можете указать абсолютный или динамический URL, используя теги настраиваемых полей, как в шаблоне сообщения.<br>
-                    Например: <code>https://domain.com</code>, <code>{url}</code>, <code>{home_url}</code><br>
-                    <strong>Примечание:</strong> если вы добавляете теги в качестве параметров URL-запроса, обязательно заключите их в <code>{encode:&lt;tag&gt;}</code>.<br>
-                    Например: <code>{home_url}?utm_source={encode:{title}}</code>
-                </p>
             </div>
 
             <div class="wp-ru-max-card">
@@ -1120,8 +1130,7 @@ class WP_Ru_Max_Admin {
 
             <?php if ( $enabled && empty( $chat_ids ) ) : ?>
             <div style="background:#fff3cd;border-left:4px solid #ffc107;padding:12px 16px;margin:12px 0;border-radius:2px;">
-                <strong>Внимание:</strong> Уведомления включены, но не указан ни один ID чата/группы в поле «Отправлять в».
-                Добавьте ID чата и нажмите <strong>«Сохранить»</strong> — иначе письма будут перехвачены, но никуда не отправлены.
+                <strong>Внимание:</strong> Уведомления включены, но не указан ни один ID чата/группы. Добавьте ID чата и нажмите <strong>«Сохранить»</strong>.
             </div>
             <?php endif; ?>
 
@@ -1142,7 +1151,7 @@ class WP_Ru_Max_Admin {
                         <th scope="row"><label for="notify_from_email">Получать уведомления с этой почты</label></th>
                         <td>
                             <input type="text" id="notify_from_email" name="notify_from_email" value="<?php echo esc_attr( $settings['notify_from_email'] ?? 'any' ); ?>" class="regular-text" placeholder="any" />
-                            <p class="description">Если вы хотите получать уведомления с каждой электронной почты, напишите <code>any</code>. Можно указать несколько через запятую.</p>
+                            <p class="description">Если вы хотите получать уведомления с каждой электронной почты, напишите <code>any</code>.</p>
                         </td>
                     </tr>
                     <tr>
@@ -1157,7 +1166,6 @@ class WP_Ru_Max_Admin {
                                 <?php endforeach; ?>
                             </div>
                             <button type="button" class="button" id="add_notify_channel">+ Добавить канал</button>
-                            <p class="description">Идентификатор чата или группы.</p>
                         </td>
                     </tr>
                 </table>
@@ -1170,33 +1178,21 @@ class WP_Ru_Max_Admin {
             </div>
 
             <div class="wp-ru-max-card">
-                <h3>Уведомления пользователям</h3>
-                <p>Разрешить пользователям получать уведомления по электронной почте в WP Ru-max.</p>
-                <p class="description">Пользователи могут ввести свой ID чата вручную на странице профиля WordPress.</p>
-            </div>
-
-            <div class="wp-ru-max-card">
                 <h3>Шаблон сообщения</h3>
                 <table class="form-table">
                     <tr>
                         <th scope="row"><label for="notify_template">Шаблон</label></th>
                         <td>
                             <textarea id="notify_template" name="notify_template" rows="6" class="large-text code"><?php echo esc_textarea( $settings['notify_template'] ?? "<b>{email_subject}</b>\n{email_message}" ); ?></textarea>
-                            <p class="description">Структура отправляемого сообщения. Доступные переменные: <code>{email_subject}</code> <code>{email_message}</code></p>
+                            <p class="description">Переменные: <code>{email_subject}</code> <code>{email_message}</code></p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label>Форматирование</label></th>
                         <td>
-                            <label>
-                                <input type="radio" name="notify_format" value="none" <?php checked( ( $settings['notify_format'] ?? 'html' ), 'none' ); ?> /> Нет
-                            </label>&nbsp;&nbsp;
-                            <label>
-                                <input type="radio" name="notify_format" value="html" <?php checked( ( $settings['notify_format'] ?? 'html' ), 'html' ); ?> /> HTML стиль
-                            </label>&nbsp;&nbsp;
-                            <label>
-                                <input type="radio" name="notify_format" value="markdown" <?php checked( ( $settings['notify_format'] ?? 'html' ), 'markdown' ); ?> /> Markdown
-                            </label>
+                            <label><input type="radio" name="notify_format" value="none" <?php checked( ( $settings['notify_format'] ?? 'html' ), 'none' ); ?> /> Нет</label>&nbsp;&nbsp;
+                            <label><input type="radio" name="notify_format" value="html" <?php checked( ( $settings['notify_format'] ?? 'html' ), 'html' ); ?> /> HTML стиль</label>&nbsp;&nbsp;
+                            <label><input type="radio" name="notify_format" value="markdown" <?php checked( ( $settings['notify_format'] ?? 'html' ), 'markdown' ); ?> /> Markdown</label>
                         </td>
                     </tr>
                 </table>
@@ -1204,9 +1200,6 @@ class WP_Ru_Max_Admin {
 
             <div class="wp-ru-max-card">
                 <h3>Встроенные кнопки клавиатуры</h3>
-                <p>Здесь вы можете добавить свои собственные кнопки, которые будут отображаться под каждым уведомлением в MAX.</p>
-                <p class="description"><strong>Примечание:</strong> Название кнопки должно быть уникальным и содержать не более 8 английских букв или символов подчеркивания.</p>
-
                 <div id="notify_buttons_list" style="margin:12px 0;">
                     <?php
                     $notify_buttons = isset( $settings['notify_buttons'] ) ? (array) $settings['notify_buttons'] : array();
@@ -1220,18 +1213,11 @@ class WP_Ru_Max_Admin {
                     </div>
                     <?php endforeach; ?>
                 </div>
-
                 <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
                     <input type="text" id="new_notify_btn_text" class="regular-text" placeholder="Название кнопки" style="max-width:160px;" />
                     <input type="text" id="new_notify_btn_url" class="regular-text" placeholder="https://..." style="flex:1;" />
                     <button type="button" class="button" id="add_notify_button">+ Добавить кнопку</button>
                 </div>
-
-                <p class="description">
-                    В поле URL вы можете указать абсолютный URL.<br>
-                    Например: <code>https://domain.com</code><br>
-                    <strong>Примечание:</strong> если кнопка удалена из настроек, она исчезнет из новых уведомлений в MAX.
-                </p>
             </div>
 
             <div class="wp-ru-max-card">
@@ -1261,10 +1247,7 @@ class WP_Ru_Max_Admin {
                             <input type="checkbox" id="send_post_image" <?php checked( isset( $settings['send_post_image'] ) ? $settings['send_post_image'] : true ); ?> />
                             <span class="wp-ru-max-toggle-slider"></span>
                         </label>
-                        <p class="description">
-                            <strong>Включено</strong> — изображение (превью) поста отправляется вместе с сообщением в MAX.<br>
-                            <strong>Выключено</strong> — фото поста не отправляется, только текст.
-                        </p>
+                        <p class="description"><strong>Включено</strong> — изображение (превью) поста отправляется вместе с сообщением в MAX.</p>
                     </td>
                 </tr>
             </table>
@@ -1315,38 +1298,11 @@ class WP_Ru_Max_Admin {
         <div class="wp-ru-max-card">
             <h3>Отладочная информация</h3>
             <table class="form-table wp-ru-max-debug-table">
-                <tr>
-                    <th>Plugin:</th>
-                    <td>WP Ru-max v<?php echo esc_html( WP_RU_MAX_VERSION ); ?></td>
-                </tr>
-                <tr>
-                    <th>WordPress:</th>
-                    <td><?php echo esc_html( get_bloginfo( 'version' ) ); ?></td>
-                </tr>
-                <tr>
-                    <th>PHP:</th>
-                    <td><?php echo esc_html( phpversion() ); ?></td>
-                </tr>
-                <tr>
-                    <th>Action Scheduler:</th>
-                    <td><?php echo class_exists( 'ActionScheduler' ) ? '✓' : '✗ (не установлен)'; ?></td>
-                </tr>
-                <tr>
-                    <th>DOMDocument:</th>
-                    <td><?php echo class_exists( 'DOMDocument' ) ? '✓' : '✗'; ?></td>
-                </tr>
-                <tr>
-                    <th>DOMXPath:</th>
-                    <td><?php echo class_exists( 'DOMXPath' ) ? '✓' : '✗'; ?></td>
-                </tr>
-                <tr>
-                    <th>cURL:</th>
-                    <td><?php echo function_exists( 'curl_version' ) ? '✓' : '✗'; ?></td>
-                </tr>
-                <tr>
-                    <th>API Base:</th>
-                    <td><?php echo esc_html( WP_RU_MAX_API_BASE ); ?></td>
-                </tr>
+                <tr><th>Plugin:</th><td>WP Ru-max v<?php echo esc_html( WP_RU_MAX_VERSION ); ?></td></tr>
+                <tr><th>WordPress:</th><td><?php echo esc_html( get_bloginfo( 'version' ) ); ?></td></tr>
+                <tr><th>PHP:</th><td><?php echo esc_html( phpversion() ); ?></td></tr>
+                <tr><th>cURL:</th><td><?php echo function_exists( 'curl_version' ) ? '✓' : '✗'; ?></td></tr>
+                <tr><th>API Base:</th><td><?php echo esc_html( WP_RU_MAX_API_BASE ); ?></td></tr>
             </table>
         </div>
 
@@ -1381,120 +1337,63 @@ class WP_Ru_Max_Admin {
             <h2>Инструкция по подключению WP Ru-max</h2>
             <p>Следуйте этим шагам, чтобы быстро подключить ваш сайт к мессенджеру MAX.</p>
         </div>
-
         <div class="wp-ru-max-card">
             <h3>Шаг 1: Регистрация на платформе MAX для партнёров</h3>
             <ol>
-                <li>Перейдите на <a href="https://max.ru/partner" target="_blank" rel="noopener"><strong>платформу MAX для партнёров</strong></a> и войдите в аккаунт или зарегистрируйтесь по номеру телефона.</li>
-                <li>Создайте и заполните профиль вашей организации, пройдите необходимую верификацию.</li>
-                <li>Подключение к платформе MAX для партнёров доступно для <strong>юридических лиц и ИП, являющихся резидентами РФ</strong>.</li>
+                <li>Перейдите на <a href="https://max.ru/partner" target="_blank" rel="noopener"><strong>платформу MAX для партнёров</strong></a> и войдите в аккаунт или зарегистрируйтесь.</li>
+                <li>Создайте профиль вашей организации и пройдите верификацию.</li>
             </ol>
         </div>
-
         <div class="wp-ru-max-card">
             <h3>Шаг 2: Создание бота</h3>
             <ol>
                 <li>В личном кабинете перейдите в раздел <strong>«Чат-боты»</strong>.</li>
-                <li>Нажмите <strong>«Создать нового чат-бота»</strong> и заполните все необходимые поля.</li>
+                <li>Нажмите <strong>«Создать нового чат-бота»</strong> и заполните поля.</li>
                 <li>Отправьте бота на модерацию и дождитесь одобрения.</li>
-                <li>После одобрения ваш бот будет готов к работе.</li>
             </ol>
-            <div class="wp-ru-max-tip"><strong>Важно:</strong> Бот должен быть добавлен как администратор в канал или группу, куда он будет отправлять сообщения.</div>
         </div>
-
         <div class="wp-ru-max-card">
             <h3>Шаг 3: Получение токена бота</h3>
             <ol>
-                <li>Авторизуйтесь на платформе MAX для партнёров.</li>
                 <li>Перейдите в раздел <strong>«Чат-боты»</strong> → выберите нужного бота.</li>
                 <li>Откройте раздел <strong>«Интеграция»</strong>.</li>
                 <li>Нажмите <strong>«Получить токен»</strong> и скопируйте значение токена.</li>
             </ol>
-            <div class="wp-ru-max-tip"><strong>Важно:</strong> Никому не передавайте токен бота! Он даёт полный контроль над ботом.</div>
         </div>
-
         <div class="wp-ru-max-card">
             <h3>Шаг 4: Настройка плагина WP Ru-max</h3>
             <ol>
                 <li>Перейдите на вкладку <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=main' ) ); ?>"><strong>«Главная»</strong></a>.</li>
                 <li>Вставьте токен бота в поле <strong>«Токен бота»</strong>.</li>
-                <li>Нажмите <strong>«Проверить подключение»</strong> — должен появиться зелёный статус подтверждения.</li>
+                <li>Нажмите <strong>«Проверить подключение»</strong> — должен появиться зелёный статус.</li>
                 <li>Сохраните настройки.</li>
             </ol>
         </div>
-
         <div class="wp-ru-max-card">
             <h3>Шаг 5: Получение ID канала или чата</h3>
-            <p>Для отправки сообщений нужен числовой ID чата или никнейм канала:</p>
             <ul>
                 <li>Для <strong>публичного канала</strong>: используйте никнейм в формате <code>@channel_name</code>.</li>
-                <li>Для <strong>группы или приватного чата</strong>: добавьте бота в группу и используйте числовой ID (например, <code>-100123456789</code>).</li>
-                <li>Ваш личный ID чата можно узнать, написав боту любое сообщение и проверив ответ через <a href="https://dev.max.ru" target="_blank" rel="noopener">API MAX</a>.</li>
+                <li>Для <strong>группы или приватного чата</strong>: числовой ID (например, <code>-100123456789</code>).</li>
             </ul>
         </div>
-
-        <div class="wp-ru-max-card">
-            <h3>Шаг 6: Настройка получения уведомлений с форм</h3>
-            <p>WP Ru-max автоматически перехватывает все email-уведомления WordPress, включая:</p>
-            <ul>
-                <li><strong>WooCommerce</strong> — новые заказы, изменения статуса, вопросы о товарах</li>
-                <li><strong>Contact Form 7</strong> — любые отправки форм</li>
-                <li><strong>Elementor Forms</strong> — все данные из форм на страницах</li>
-                <li><strong>Любые другие формы</strong>, отправляющие email через WordPress</li>
-                <li><strong>Уведомления WordPress</strong> — регистрации, сбросы паролей и т.д.</li>
-            </ul>
-            <p>Для активации:</p>
-            <ol>
-                <li>Перейдите на вкладку <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=notifications' ) ); ?>"><strong>«Личные уведомления»</strong></a>.</li>
-                <li>Включите модуль тумблером.</li>
-                <li>Добавьте ID вашего чата в поле <strong>«Отправлять в»</strong>.</li>
-                <li>Сохраните настройки и нажмите <strong>«Тестировать»</strong>.</li>
-            </ol>
-        </div>
-
-        <div class="wp-ru-max-card">
-            <h3>Формат уведомлений о заявках</h3>
-            <p>Когда кто-то заполняет форму на вашем сайте, в MAX придёт сообщение вида:</p>
-            <div class="wp-ru-max-message-preview">
-                <p><strong>У нас новая заявка на сайте!</strong></p>
-                <p><em>[данные из формы: имя, фамилия, телефон, email и т.д.]</em></p>
-                <p>Это отличная возможность для нас проявить наш высокий уровень обслуживания. Пожалуйста, перезвоните клиенту и предоставьте всю необходимую информацию и поддержку. Спасибо за вашу оперативность!</p>
-                <p>Не забудьте отметить заявку как обработанную после связи с клиентом.</p>
-            </div>
-        </div>
-
         <div class="wp-ru-max-card">
             <h3>Полезные ссылки</h3>
             <ul>
                 <li><a href="https://max.ru/partner" target="_blank" rel="noopener">Платформа MAX для партнёров</a></li>
                 <li><a href="https://dev.max.ru" target="_blank" rel="noopener">Документация MAX API</a></li>
-                <li><a href="https://dev.max.ru/docs-api/methods/GET/me" target="_blank" rel="noopener">API метод GET /me</a></li>
-                <li><a href="https://docs.fstrk.io/knowledge_base/channels/max" target="_blank" rel="noopener">Инструкция Fasttrack по MAX</a></li>
                 <li><a href="https://рукодер.рф/" target="_blank" rel="noopener">Разработка сайтов под ключ</a></li>
             </ul>
         </div>
-
         <div class="wp-ru-max-card">
             <h3>Согласие пользователя</h3>
-            <p>
-                Используя плагин WP Ru-max и активируя лицензию, пользователь подтверждает, что
-                <strong>ознакомлен с указанными ниже страницами</strong> и даёт согласие на обработку
-                его <strong>email, имени, фамилии и домена</strong> для обработки заявки и отправки
-                лицензионного ключа активации:
-            </p>
+            <p>Используя плагин WP Ru-max и активируя лицензию, пользователь подтверждает, что ознакомлен с указанными ниже страницами и даёт согласие на обработку его <strong>email, имени, фамилии и домена</strong>:</p>
             <ul>
                 <li><a href="https://github.com/RuCoder-sudo/wp-ru-max/wiki/Политика-плагина" target="_blank" rel="noopener">Политика плагина</a></li>
                 <li><a href="https://github.com/RuCoder-sudo/wp-ru-max/wiki/Возврат-и-отзыв-лицензии" target="_blank" rel="noopener">Возврат и отзыв лицензии</a></li>
                 <li><a href="https://github.com/RuCoder-sudo/wp-ru-max/wiki/Пользовательское-соглашение" target="_blank" rel="noopener">Пользовательское соглашение</a></li>
                 <li><a href="https://github.com/RuCoder-sudo/wp-ru-max/wiki/Политика-конфиденциальности" target="_blank" rel="noopener">Политика конфиденциальности</a></li>
             </ul>
-            <p class="description">
-                Отправляя запрос на получение лицензионного ключа на вкладке «Активация», вы подтверждаете
-                согласие с указанными документами и даёте разрешение на обработку ваших персональных данных
-                в целях рассмотрения заявки, генерации и отправки ключа активации.
-            </p>
         </div>
-
         <?php
     }
 
@@ -1516,7 +1415,7 @@ class WP_Ru_Max_Admin {
         $animation     = $settings['chat_widget_animation']   ?? 'none';
         $retention_enabled = ! empty( $settings['chat_widget_retention_enabled'] );
         $retention_title   = $settings['chat_widget_retention_title']   ?? 'Специальное предложение!';
-        $retention_message = $settings['chat_widget_retention_message'] ?? 'Уже уходите? Получите скидку 10% на первый заказ, если ответим на ваш вопрос в течение 5 минут!';
+        $retention_message = $settings['chat_widget_retention_message'] ?? 'Уже уходите? Получите скидку 10% на первый заказ!';
         $retention_text_align    = $settings['chat_widget_retention_text_align']    ?? 'left';
         $retention_buttons_align = $settings['chat_widget_retention_buttons_align'] ?? 'right';
         $retention_btn_radius    = isset( $settings['chat_widget_retention_btn_radius'] ) ? (int) $settings['chat_widget_retention_btn_radius'] : 8;
@@ -1529,8 +1428,7 @@ class WP_Ru_Max_Admin {
         ?>
         <div class="wp-ru-max-card">
             <h2>Чат-виджет MAX</h2>
-            <p>Добавьте на сайт плавающую кнопку MAX с анимацией приветственного сообщения. Посетители смогут нажать на неё и перейти в ваш чат или канал в MAX.</p>
-
+            <p>Добавьте на сайт плавающую кнопку MAX с анимацией приветственного сообщения.</p>
             <div class="wp-ru-max-toggle-row">
                 <label class="wp-ru-max-toggle">
                     <input type="checkbox" id="chat_widget_enabled" <?php checked( $enabled ); ?> />
@@ -1569,28 +1467,20 @@ class WP_Ru_Max_Admin {
                     <tr>
                         <th scope="row"><label for="chat_widget_url">Ссылка на чат *</label></th>
                         <td>
-                            <input type="url" id="chat_widget_url" name="chat_widget_url" value="<?php echo esc_attr( $url ); ?>" class="large-text" placeholder="https://max.ru/YourBotName или ссылка на группу" />
-                            <p class="description">Ссылка, куда переходит пользователь по клику на значок.</p>
+                            <input type="url" id="chat_widget_url" name="chat_widget_url" value="<?php echo esc_attr( $url ); ?>" class="large-text" placeholder="https://max.ru/YourBotName" />
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="chat_widget_message">Приветственное сообщение</label></th>
                         <td>
                             <textarea id="chat_widget_message" name="chat_widget_message" rows="3" class="large-text"><?php echo esc_textarea( $message ); ?></textarea>
-                            <p class="description">Текст, который появляется в анимированном пузыре над значком. Имитирует печатание.</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label>Расположение</label></th>
                         <td>
-                            <label>
-                                <input type="radio" name="chat_widget_position" value="right" <?php checked( $position, 'right' ); ?> />
-                                Справа внизу
-                            </label>&nbsp;&nbsp;&nbsp;
-                            <label>
-                                <input type="radio" name="chat_widget_position" value="left" <?php checked( $position, 'left' ); ?> />
-                                Слева внизу
-                            </label>
+                            <label><input type="radio" name="chat_widget_position" value="right" <?php checked( $position, 'right' ); ?> /> Справа внизу</label>&nbsp;&nbsp;&nbsp;
+                            <label><input type="radio" name="chat_widget_position" value="left" <?php checked( $position, 'left' ); ?> /> Слева внизу</label>
                         </td>
                     </tr>
                     <tr>
@@ -1601,17 +1491,7 @@ class WP_Ru_Max_Admin {
                                 <input type="number" id="chat_widget_bottom_offset" name="chat_widget_bottom_offset" value="<?php echo esc_attr( $bottom_offset ); ?>" min="0" max="200" style="width:70px;" />
                                 <span>px</span>
                             </div>
-                            <p class="description">Задайте отступ значка от нижнего края экрана. Двигайте ползунок вверх/вниз.</p>
-                            <script>
-                            (function(){
-                                var r = document.getElementById('chat_widget_bottom_offset_range');
-                                var n = document.getElementById('chat_widget_bottom_offset');
-                                if(r && n){
-                                    r.addEventListener('input', function(){ n.value = r.value; });
-                                    n.addEventListener('input', function(){ r.value = n.value; });
-                                }
-                            })();
-                            </script>
+                            <script>(function(){var r=document.getElementById('chat_widget_bottom_offset_range');var n=document.getElementById('chat_widget_bottom_offset');if(r&&n){r.addEventListener('input',function(){n.value=r.value;});n.addEventListener('input',function(){r.value=n.value;});}})()</script>
                         </td>
                     </tr>
                 </table>
@@ -1623,66 +1503,34 @@ class WP_Ru_Max_Admin {
                     <tr>
                         <th scope="row"><label>Показать виджет</label></th>
                         <td>
-                            <?php
-                            $delay_options = array(
-                                0  => 'Сразу',
-                                5  => 'Через 5 секунд',
-                                8  => 'Через 8 секунд',
-                                10 => 'Через 10 секунд',
-                                15 => 'Через 15 секунд',
-                            );
-                            foreach ( $delay_options as $val => $label ) :
-                            ?>
-                            <label style="display:inline-flex;align-items:center;margin-right:20px;margin-bottom:8px;cursor:pointer;">
-                                <input type="radio" name="chat_widget_show_delay" value="<?php echo esc_attr( $val ); ?>" <?php checked( $show_delay, $val ); ?> style="margin-right:6px;" />
+                            <?php foreach ( array( 0=>'Сразу', 5=>'Через 5 сек', 8=>'Через 8 сек', 10=>'Через 10 сек', 15=>'Через 15 сек' ) as $val => $label ) : ?>
+                            <label style="display:inline-flex;align-items:center;margin-right:16px;margin-bottom:6px;">
+                                <input type="radio" name="chat_widget_show_delay" value="<?php echo esc_attr( $val ); ?>" <?php checked( $show_delay, $val ); ?> style="margin-right:5px;" />
                                 <?php echo esc_html( $label ); ?>
                             </label>
                             <?php endforeach; ?>
-                            <p class="description">Через сколько секунд после загрузки страницы показать виджет посетителю.</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label>Скрыть виджет через</label></th>
                         <td>
-                            <?php
-                            $hide_options = array(
-                                0   => 'Не скрывать',
-                                10  => 'Через 10 секунд',
-                                20  => 'Через 20 секунд',
-                                30  => 'Через 30 секунд',
-                                60  => 'Через 1 минуту',
-                                120 => 'Через 2 минуты',
-                            );
-                            foreach ( $hide_options as $val => $label ) :
-                            ?>
-                            <label style="display:inline-flex;align-items:center;margin-right:20px;margin-bottom:8px;cursor:pointer;">
-                                <input type="radio" name="chat_widget_hide_delay" value="<?php echo esc_attr( $val ); ?>" <?php checked( $hide_delay, $val ); ?> style="margin-right:6px;" />
+                            <?php foreach ( array( 0=>'Не скрывать', 10=>'10 сек', 20=>'20 сек', 30=>'30 сек', 60=>'1 мин', 120=>'2 мин' ) as $val => $label ) : ?>
+                            <label style="display:inline-flex;align-items:center;margin-right:16px;margin-bottom:6px;">
+                                <input type="radio" name="chat_widget_hide_delay" value="<?php echo esc_attr( $val ); ?>" <?php checked( $hide_delay, $val ); ?> style="margin-right:5px;" />
                                 <?php echo esc_html( $label ); ?>
                             </label>
                             <?php endforeach; ?>
-                            <p class="description">Через сколько секунд после появления значок чата автоматически скроется, чтобы не мешать посетителю. «Не скрывать» — значок остаётся постоянно.</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label>Повторно показать через</label></th>
                         <td>
-                            <?php
-                            $repeat_options = array(
-                                0   => 'Не показывать повторно',
-                                30  => 'Через 30 секунд',
-                                60  => 'Через 1 минуту',
-                                120 => 'Через 2 минуты',
-                                300 => 'Через 5 минут',
-                                600 => 'Через 10 минут',
-                            );
-                            foreach ( $repeat_options as $val => $label ) :
-                            ?>
-                            <label style="display:inline-flex;align-items:center;margin-right:20px;margin-bottom:8px;cursor:pointer;">
-                                <input type="radio" name="chat_widget_repeat_delay" value="<?php echo esc_attr( $val ); ?>" <?php checked( $repeat_delay, $val ); ?> style="margin-right:6px;" />
+                            <?php foreach ( array( 0=>'Не повторять', 30=>'30 сек', 60=>'1 мин', 120=>'2 мин', 300=>'5 мин', 600=>'10 мин' ) as $val => $label ) : ?>
+                            <label style="display:inline-flex;align-items:center;margin-right:16px;margin-bottom:6px;">
+                                <input type="radio" name="chat_widget_repeat_delay" value="<?php echo esc_attr( $val ); ?>" <?php checked( $repeat_delay, $val ); ?> style="margin-right:5px;" />
                                 <?php echo esc_html( $label ); ?>
                             </label>
                             <?php endforeach; ?>
-                            <p class="description">Через сколько секунд после автоскрытия снова показать значок. Работает только если включено «Скрыть виджет через».</p>
                         </td>
                     </tr>
                 </table>
@@ -1715,61 +1563,31 @@ class WP_Ru_Max_Admin {
                                     <button type="button" class="button wp-ru-max-preview-sound" data-sound="sound3">&#9654; Прослушать</button>
                                 </label>
                             </div>
-                            <p class="description" style="margin-top:8px;">Выберите звук уведомления, который будет проигрываться при появлении виджета.</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label>Время проигрывания звука</label></th>
                         <td>
-                            <?php
-                            $sound_delay_options = array(
-                                3 => 'Через 3 секунды после появления',
-                                6 => 'Через 6 секунд после появления',
-                                9 => 'Через 9 секунд после появления',
-                            );
-                            foreach ( $sound_delay_options as $val => $label ) :
-                            ?>
+                            <?php foreach ( array( 3=>'Через 3 секунды', 6=>'Через 6 секунд', 9=>'Через 9 секунд' ) as $val => $label ) : ?>
                             <label style="display:block;margin-bottom:8px;cursor:pointer;">
                                 <input type="radio" name="chat_widget_sound_delay" value="<?php echo esc_attr( $val ); ?>" <?php checked( $sound_delay, $val ); ?> style="margin-right:6px;" />
-                                <?php echo esc_html( $label ); ?>
+                                <?php echo esc_html( $label ); ?> после появления
                             </label>
                             <?php endforeach; ?>
-                            <p class="description">Через сколько секунд после появления виджета проиграть звук уведомления.</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label>Где проигрывать звук</label></th>
                         <td>
                             <div style="display:flex;flex-direction:column;gap:8px;">
-                                <label style="cursor:pointer;">
-                                    <input type="radio" name="chat_widget_sound_pages" value="all" <?php checked( $sound_pages, 'all' ); ?> />
-                                    На всех страницах сайта
-                                </label>
-                                <label style="cursor:pointer;">
-                                    <input type="radio" name="chat_widget_sound_pages" value="home" <?php checked( $sound_pages, 'home' ); ?> />
-                                    Только на главной странице
-                                </label>
-                                <label style="cursor:pointer;">
-                                    <input type="radio" name="chat_widget_sound_pages" value="specific" <?php checked( $sound_pages, 'specific' ); ?> />
-                                    Только на выбранных страницах
-                                </label>
+                                <label style="cursor:pointer;"><input type="radio" name="chat_widget_sound_pages" value="all" <?php checked( $sound_pages, 'all' ); ?> /> На всех страницах сайта</label>
+                                <label style="cursor:pointer;"><input type="radio" name="chat_widget_sound_pages" value="home" <?php checked( $sound_pages, 'home' ); ?> /> Только на главной странице</label>
+                                <label style="cursor:pointer;"><input type="radio" name="chat_widget_sound_pages" value="specific" <?php checked( $sound_pages, 'specific' ); ?> /> Только на выбранных страницах</label>
                             </div>
                             <div id="chat_widget_sound_specific_wrap" style="margin-top:10px;<?php echo $sound_pages === 'specific' ? '' : 'display:none;'; ?>">
-                                <textarea id="chat_widget_sound_specific_pages" name="chat_widget_sound_specific_pages" rows="4" class="large-text" placeholder="/contacts&#10;/about&#10;/services/seo"><?php echo esc_textarea( $sound_specific_pages ); ?></textarea>
-                                <p class="description">Укажите пути страниц (по одному на строку), на которых нужно проигрывать звук. Например: <code>/contacts</code>, <code>/about</code>. Можно указать как полный URL, так и относительный путь — сравнение идёт по совпадению с текущим путём.</p>
+                                <textarea id="chat_widget_sound_specific_pages" name="chat_widget_sound_specific_pages" rows="4" class="large-text" placeholder="/contacts&#10;/about"><?php echo esc_textarea( $sound_specific_pages ); ?></textarea>
                             </div>
-                            <p class="description" style="margin-top:8px;">Решает проблему «звук срабатывает на каждой странице» — выберите главную или конкретные страницы (например, «Контакты»), и звук будет играть только там.</p>
-                            <script>
-                            (function(){
-                                var radios = document.getElementsByName('chat_widget_sound_pages');
-                                var wrap = document.getElementById('chat_widget_sound_specific_wrap');
-                                for (var i = 0; i < radios.length; i++) {
-                                    radios[i].addEventListener('change', function(){
-                                        wrap.style.display = (this.value === 'specific' && this.checked) ? '' : 'none';
-                                    });
-                                }
-                            })();
-                            </script>
+                            <script>(function(){var radios=document.getElementsByName('chat_widget_sound_pages');var wrap=document.getElementById('chat_widget_sound_specific_wrap');for(var i=0;i<radios.length;i++){radios[i].addEventListener('change',function(){wrap.style.display=(this.value==='specific'&&this.checked)?'':'none';});}})();</script>
                         </td>
                     </tr>
                     <tr>
@@ -1779,8 +1597,7 @@ class WP_Ru_Max_Admin {
                                 <input type="checkbox" id="chat_widget_sound_once_per_session" <?php checked( $sound_once_per_session ); ?> />
                                 <span class="wp-ru-max-switch-slider"></span>
                             </label>
-                            <span style="margin-left:10px;">Проигрывать звук только один раз за визит (не на каждой странице)</span>
-                            <p class="description">Когда включено — звук уведомления прозвучит только один раз во время посещения сайта посетителем, даже если он переходит между страницами. Это убирает раздражающее повторение звука.</p>
+                            <span style="margin-left:10px;">Проигрывать звук только один раз за визит</span>
                         </td>
                     </tr>
                 </table>
@@ -1794,15 +1611,7 @@ class WP_Ru_Max_Admin {
                         <td>
                             <div style="display:flex;flex-wrap:wrap;gap:12px;">
                                 <?php
-                                $anim_options = array(
-                                    'none'    => 'Без анимации',
-                                    'pulse'   => 'Пульсация',
-                                    'ripple'  => 'Рябь',
-                                    'bounce'  => 'Подпрыгивание',
-                                    'shake'   => 'Покачивание',
-                                    'glow'    => 'Свечение',
-                                    'rotate'  => 'Вращение',
-                                );
+                                $anim_options = array( 'none'=>'Без анимации', 'pulse'=>'Пульсация', 'ripple'=>'Рябь', 'bounce'=>'Подпрыгивание', 'shake'=>'Покачивание', 'glow'=>'Свечение', 'rotate'=>'Вращение' );
                                 foreach ( $anim_options as $val => $label ) :
                                 ?>
                                 <label style="display:flex;align-items:center;gap:6px;cursor:pointer;background:<?php echo $animation === $val ? '#e8f0fe' : '#f8f9fa'; ?>;border:2px solid <?php echo $animation === $val ? '#4a90d9' : '#ddd'; ?>;border-radius:8px;padding:8px 14px;">
@@ -1811,7 +1620,6 @@ class WP_Ru_Max_Admin {
                                 </label>
                                 <?php endforeach; ?>
                             </div>
-                            <p class="description" style="margin-top:8px;">Анимация для привлечения внимания к кнопке чата.</p>
                         </td>
                     </tr>
                 </table>
@@ -1827,88 +1635,61 @@ class WP_Ru_Max_Admin {
                                 <input type="checkbox" id="chat_widget_retention_enabled" <?php checked( $retention_enabled ); ?> />
                                 <span class="wp-ru-max-switch-slider"></span>
                             </label>
-                            <span style="margin-left:10px;">Включить попап удержания при попытке закрыть приветственное сообщение</span>
+                            <span style="margin-left:10px;">Включить попап удержания при закрытии приветственного сообщения</span>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="chat_widget_retention_title">Заголовок окна</label></th>
-                        <td>
-                            <textarea id="chat_widget_retention_title" name="chat_widget_retention_title" rows="2" class="large-text" placeholder="Специальное предложение!"><?php echo esc_textarea( $retention_title ); ?></textarea>
-                            <p class="description">Заголовок попапа удержания (поддерживаются переносы строк).</p>
-                        </td>
+                        <td><textarea id="chat_widget_retention_title" name="chat_widget_retention_title" rows="2" class="large-text"><?php echo esc_textarea( $retention_title ); ?></textarea></td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="chat_widget_retention_message">Сообщение удержания</label></th>
-                        <td>
-                            <textarea id="chat_widget_retention_message" name="chat_widget_retention_message" rows="4" class="large-text" placeholder="Уже уходите? Получите скидку 10% на первый заказ..."><?php echo esc_textarea( $retention_message ); ?></textarea>
-                            <p class="description">Текст сообщения, которое появится при попытке закрыть чат (поддерживаются переносы строк).</p>
-                        </td>
+                        <td><textarea id="chat_widget_retention_message" name="chat_widget_retention_message" rows="4" class="large-text"><?php echo esc_textarea( $retention_message ); ?></textarea></td>
                     </tr>
                     <tr>
                         <th scope="row"><label>Выравнивание текста</label></th>
                         <td>
-                            <?php foreach ( array( 'left' => 'По левому краю', 'center' => 'По центру', 'right' => 'По правому краю' ) as $val => $lbl ) : ?>
-                                <label style="margin-right:14px;cursor:pointer;">
-                                    <input type="radio" name="chat_widget_retention_text_align" value="<?php echo esc_attr( $val ); ?>" <?php checked( $retention_text_align, $val ); ?> />
-                                    <?php echo esc_html( $lbl ); ?>
-                                </label>
+                            <?php foreach ( array('left'=>'По левому краю','center'=>'По центру','right'=>'По правому краю') as $val=>$lbl ) : ?>
+                            <label style="margin-right:14px;cursor:pointer;"><input type="radio" name="chat_widget_retention_text_align" value="<?php echo esc_attr($val); ?>" <?php checked($retention_text_align,$val); ?> /> <?php echo esc_html($lbl); ?></label>
                             <?php endforeach; ?>
-                            <p class="description">Выравнивание заголовка и сообщения внутри попапа.</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="chat_widget_retention_stay_text">Текст кнопки «Остаться»</label></th>
-                        <td>
-                            <input type="text" id="chat_widget_retention_stay_text" name="chat_widget_retention_stay_text" value="<?php echo esc_attr( $retention_stay_text ); ?>" class="regular-text" placeholder="Остаться" />
-                        </td>
+                        <td><input type="text" id="chat_widget_retention_stay_text" name="chat_widget_retention_stay_text" value="<?php echo esc_attr($retention_stay_text); ?>" class="regular-text" /></td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="chat_widget_retention_leave_text">Текст кнопки «Уйти»</label></th>
-                        <td>
-                            <input type="text" id="chat_widget_retention_leave_text" name="chat_widget_retention_leave_text" value="<?php echo esc_attr( $retention_leave_text ); ?>" class="regular-text" placeholder="Все равно уйти" />
-                        </td>
+                        <td><input type="text" id="chat_widget_retention_leave_text" name="chat_widget_retention_leave_text" value="<?php echo esc_attr($retention_leave_text); ?>" class="regular-text" /></td>
                     </tr>
                     <tr>
                         <th scope="row"><label>Выравнивание кнопок</label></th>
                         <td>
-                            <?php foreach ( array( 'left' => 'По левому краю', 'center' => 'По центру', 'right' => 'По правому краю' ) as $val => $lbl ) : ?>
-                                <label style="margin-right:14px;cursor:pointer;">
-                                    <input type="radio" name="chat_widget_retention_buttons_align" value="<?php echo esc_attr( $val ); ?>" <?php checked( $retention_buttons_align, $val ); ?> />
-                                    <?php echo esc_html( $lbl ); ?>
-                                </label>
+                            <?php foreach ( array('left'=>'По левому краю','center'=>'По центру','right'=>'По правому краю') as $val=>$lbl ) : ?>
+                            <label style="margin-right:14px;cursor:pointer;"><input type="radio" name="chat_widget_retention_buttons_align" value="<?php echo esc_attr($val); ?>" <?php checked($retention_buttons_align,$val); ?> /> <?php echo esc_html($lbl); ?></label>
                             <?php endforeach; ?>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="chat_widget_retention_btn_radius">Закругление кнопок (px)</label></th>
                         <td>
-                            <input type="range" id="chat_widget_retention_btn_radius_range" min="0" max="50" value="<?php echo esc_attr( $retention_btn_radius ); ?>" style="width:200px;vertical-align:middle;" />
-                            <input type="number" id="chat_widget_retention_btn_radius" name="chat_widget_retention_btn_radius" value="<?php echo esc_attr( $retention_btn_radius ); ?>" min="0" max="50" style="width:70px;" />
-                            <p class="description">От 0 (квадратные) до 50 (овальные) пикселей.</p>
-                            <script>
-                            (function(){
-                                var r = document.getElementById('chat_widget_retention_btn_radius_range');
-                                var n = document.getElementById('chat_widget_retention_btn_radius');
-                                if (r && n) {
-                                    r.addEventListener('input', function(){ n.value = r.value; });
-                                    n.addEventListener('input', function(){ r.value = n.value; });
-                                }
-                            })();
-                            </script>
+                            <input type="range" id="chat_widget_retention_btn_radius_range" min="0" max="50" value="<?php echo esc_attr($retention_btn_radius); ?>" style="width:200px;vertical-align:middle;" />
+                            <input type="number" id="chat_widget_retention_btn_radius" name="chat_widget_retention_btn_radius" value="<?php echo esc_attr($retention_btn_radius); ?>" min="0" max="50" style="width:70px;" />
+                            <script>(function(){var r=document.getElementById('chat_widget_retention_btn_radius_range');var n=document.getElementById('chat_widget_retention_btn_radius');if(r&&n){r.addEventListener('input',function(){n.value=r.value;});n.addEventListener('input',function(){r.value=n.value;});}})()</script>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label>Цвета кнопки «Остаться»</label></th>
                         <td>
-                            <label style="margin-right:14px;">Фон: <input type="color" name="chat_widget_retention_stay_bg" value="<?php echo esc_attr( $retention_stay_bg ); ?>" /></label>
-                            <label>Текст: <input type="color" name="chat_widget_retention_stay_color" value="<?php echo esc_attr( $retention_stay_color ); ?>" /></label>
+                            <label style="margin-right:14px;">Фон: <input type="color" name="chat_widget_retention_stay_bg" value="<?php echo esc_attr($retention_stay_bg); ?>" /></label>
+                            <label>Текст: <input type="color" name="chat_widget_retention_stay_color" value="<?php echo esc_attr($retention_stay_color); ?>" /></label>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label>Цвета кнопки «Уйти»</label></th>
                         <td>
-                            <label style="margin-right:14px;">Фон: <input type="color" name="chat_widget_retention_leave_bg" value="<?php echo esc_attr( $retention_leave_bg ); ?>" /></label>
-                            <label>Текст: <input type="color" name="chat_widget_retention_leave_color" value="<?php echo esc_attr( $retention_leave_color ); ?>" /></label>
+                            <label style="margin-right:14px;">Фон: <input type="color" name="chat_widget_retention_leave_bg" value="<?php echo esc_attr($retention_leave_bg); ?>" /></label>
+                            <label>Текст: <input type="color" name="chat_widget_retention_leave_color" value="<?php echo esc_attr($retention_leave_color); ?>" /></label>
                         </td>
                     </tr>
                 </table>
@@ -1965,7 +1746,6 @@ class WP_Ru_Max_Admin {
                     }
                     ?>
                 </div>
-
                 <div class="wp-ru-max-history-actions">
                     <button type="button" class="button button-primary" id="send_global_test">Тест подключения</button>
                     <input type="text" id="global_test_chat" class="regular-text" placeholder="ID чата для теста..." />
@@ -1975,11 +1755,9 @@ class WP_Ru_Max_Admin {
             </div>
 
             <div id="history_test_result" class="wp-ru-max-notice" style="display:none;margin:10px 0;"></div>
-
             <div id="history_table_wrap">
                 <div class="wp-ru-max-loading">Загрузка...</div>
             </div>
-
             <div class="wp-ru-max-pagination">
                 <button type="button" class="button" id="prev_page" disabled>← Предыдущая</button>
                 <span id="page_info">Страница 1</span>
@@ -1987,24 +1765,20 @@ class WP_Ru_Max_Admin {
             </div>
         </div>
 
-        <script>
-        var wpRuMaxHistoryType = '<?php echo esc_js( $filter_type ); ?>';
-        </script>
+        <script>var wpRuMaxHistoryType = '<?php echo esc_js( $filter_type ); ?>';</script>
         <?php
     }
 
     private function render_tab_activation() {
-        // Каждый раз при открытии вкладки активации делаем свежую проверку
-        // ключа на сервере, чтобы отозванные ключи определялись сразу.
         $existing = WP_Ru_Max_License::get_data();
         if ( ! empty( $existing['key'] ) ) {
             WP_Ru_Max_License::force_recheck();
         }
 
-        $is_licensed = WP_Ru_Max_License::is_active();
-        $license     = WP_Ru_Max_License::get_data();
-        $license_obj = WP_Ru_Max_License::instance();
-        $attempts    = $license_obj->get_remaining_attempts();
+        $is_licensed  = WP_Ru_Max_License::is_active();
+        $license      = WP_Ru_Max_License::get_data();
+        $license_obj  = WP_Ru_Max_License::instance();
+        $attempts     = $license_obj->get_remaining_attempts();
         $is_suspended = ! $is_licensed && ! empty( $license['status'] ) && $license['status'] === 'suspended';
         ?>
         <div class="wp-ru-max-card">
@@ -2014,22 +1788,10 @@ class WP_Ru_Max_Admin {
                     <h2>Плагин активирован</h2>
                     <p>Все функции WP Ru-max доступны без ограничений.</p>
                     <table class="form-table" style="max-width:500px;">
-                        <tr>
-                            <th>Домен:</th>
-                            <td><code><?php echo esc_html( $license['domain'] ?? '—' ); ?></code></td>
-                        </tr>
-                        <tr>
-                            <th>Дата активации:</th>
-                            <td><?php echo esc_html( $license['activated_at'] ?? '—' ); ?></td>
-                        </tr>
-                        <tr>
-                            <th>Тип лицензии:</th>
-                            <td>Пожизненная</td>
-                        </tr>
-                        <tr>
-                            <th>Последняя проверка:</th>
-                            <td><?php echo esc_html( $license['last_verified'] ?? '—' ); ?></td>
-                        </tr>
+                        <tr><th>Домен:</th><td><code><?php echo esc_html( $license['domain'] ?? '—' ); ?></code></td></tr>
+                        <tr><th>Дата активации:</th><td><?php echo esc_html( $license['activated_at'] ?? '—' ); ?></td></tr>
+                        <tr><th>Тип лицензии:</th><td>Пожизненная</td></tr>
+                        <tr><th>Последняя проверка:</th><td><?php echo esc_html( $license['last_verified'] ?? '—' ); ?></td></tr>
                     </table>
                     <p style="margin-top:16px;">
                         <button type="button" class="button" id="recheck_license_btn">Проверить лицензию сейчас</button>
@@ -2038,50 +1800,37 @@ class WP_Ru_Max_Admin {
                 </div>
 
             <?php else : ?>
-
                 <h2>Активация плагина</h2>
                 <?php if ( $is_suspended ) : ?>
-                    <div class="wp-ru-max-notice notice-error" style="display:block;padding:12px 16px;border-left:4px solid #d63638;background:#fff;margin:12px 0;">
-                        <strong>Лицензия отозвана или больше недействительна.</strong><br />
-                        Ключ <code><?php echo esc_html( $license['key'] ?? '' ); ?></code> был аннулирован на сервере рукодер.рф.
-                        Все функции плагина деактивированы. Введите новый лицензионный ключ или запросите его ниже.
-                    </div>
+                <div class="wp-ru-max-notice notice-error" style="display:block;padding:12px 16px;border-left:4px solid #d63638;background:#fff;margin:12px 0;">
+                    <strong>Лицензия отозвана или больше недействительна.</strong><br />
+                    Ключ <code><?php echo esc_html( $license['key'] ?? '' ); ?></code> был аннулирован. Введите новый лицензионный ключ.
+                </div>
                 <?php endif; ?>
-                <p>Для использования всех функций WP Ru-max введите лицензионный ключ. Если у вас нет ключа — запросите его ниже.</p>
+                <p>Для использования всех функций WP Ru-max введите лицензионный ключ.</p>
 
                 <div class="wp-ru-max-activation-block">
                     <h3>Ввести лицензионный ключ</h3>
-
                     <?php if ( $attempts <= 0 ) : ?>
-                        <div class="wp-ru-max-notice notice-error" style="display:block;padding:12px 16px;border-left:4px solid #d63638;background:#fff;margin:12px 0;">
-                            Слишком много неверных попыток. Повторить можно через <?php echo WP_Ru_Max_License::BLOCK_MINUTES; ?> минут.
-                        </div>
+                    <div class="wp-ru-max-notice notice-error" style="display:block;padding:12px 16px;border-left:4px solid #d63638;background:#fff;margin:12px 0;">
+                        Слишком много неверных попыток. Повторить можно через <?php echo WP_Ru_Max_License::BLOCK_MINUTES; ?> минут.
+                    </div>
                     <?php else : ?>
-
                     <table class="form-table">
                         <tr>
                             <th scope="row"><label for="license_key">Лицензионный ключ</label></th>
                             <td>
-                                <input type="text" id="license_key" name="license_key"
-                                    class="regular-text"
-                                    placeholder="WPRM-XXXX-XXXX-XXXX-XXXX"
-                                    autocomplete="off"
+                                <input type="text" id="license_key" name="license_key" class="regular-text"
+                                    placeholder="WPRM-XXXX-XXXX-XXXX-XXXX" autocomplete="off"
                                     style="text-transform:uppercase;letter-spacing:1px;font-family:monospace;" />
-                                <p class="description">
-                                    Формат ключа: <code>WPRM-XXXX-XXXX-XXXX-XXXX</code>.
-                                    Осталось попыток: <strong><?php echo (int) $attempts; ?></strong> из <?php echo WP_Ru_Max_License::MAX_ATTEMPTS; ?>.
-                                </p>
+                                <p class="description">Осталось попыток: <strong><?php echo (int) $attempts; ?></strong> из <?php echo WP_Ru_Max_License::MAX_ATTEMPTS; ?>.</p>
                             </td>
                         </tr>
                     </table>
-
                     <div class="wp-ru-max-actions">
-                        <button type="button" class="button button-primary" id="activate_license_btn">
-                            Активировать
-                        </button>
+                        <button type="button" class="button button-primary" id="activate_license_btn">Активировать</button>
                     </div>
                     <div id="license_activate_result" class="wp-ru-max-notice" style="display:none;margin-top:12px;"></div>
-
                     <?php endif; ?>
                 </div>
 
@@ -2089,16 +1838,11 @@ class WP_Ru_Max_Admin {
 
                 <div class="wp-ru-max-activation-block">
                     <h3>Важная информация о лицензии</h3>
-                    <p>
-                        Стоимость лицензии WP Ru-max — <strong>2&nbsp;200&nbsp;₽</strong> за один домен.
-                        Лицензия <strong>бессрочная</strong>: оплачивается один раз и действует постоянно,
-                        без абонентской платы и продлений. Включает все функции плагина и обновления.
-                    </p>
+                    <p>Стоимость лицензии WP Ru-max — <strong>2&nbsp;200&nbsp;₽</strong> за один домен. Лицензия <strong>бессрочная</strong>.</p>
                     <ul style="margin-left:18px;list-style:disc;">
                         <li>Привязка к одному домену сайта</li>
                         <li>Бессрочное использование без продления</li>
                         <li>Все обновления плагина включены</li>
-                        <li>Поддержка от разработчика</li>
                     </ul>
                 </div>
 
@@ -2106,38 +1850,14 @@ class WP_Ru_Max_Admin {
 
                 <div class="wp-ru-max-activation-block">
                     <h3>Система скидок на лицензии</h3>
-                    <p>При покупке нескольких доменов действует прогрессивная скидка:</p>
                     <table class="widefat striped" style="max-width:520px;">
-                        <thead>
-                            <tr>
-                                <th>Количество доменов</th>
-                                <th>Цена</th>
-                                <th>Цена за домен</th>
-                                <th>Экономия</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th>Количество доменов</th><th>Цена</th><th>Цена за домен</th><th>Экономия</th></tr></thead>
                         <tbody>
-                            <tr>
-                                <td>1 домен</td>
-                                <td><strong>2&nbsp;200&nbsp;₽</strong></td>
-                                <td>2&nbsp;200&nbsp;₽/шт</td>
-                                <td>—</td>
-                            </tr>
-                            <tr>
-                                <td>2 домена</td>
-                                <td><strong>4&nbsp;000&nbsp;₽</strong></td>
-                                <td>2&nbsp;000&nbsp;₽/шт</td>
-                                <td>~9%</td>
-                            </tr>
-                            <tr>
-                                <td>5 доменов</td>
-                                <td><strong>7&nbsp;000&nbsp;₽</strong></td>
-                                <td>1&nbsp;400&nbsp;₽/шт</td>
-                                <td><strong>36%</strong></td>
-                            </tr>
+                            <tr><td>1 домен</td><td><strong>2&nbsp;200&nbsp;₽</strong></td><td>2&nbsp;200&nbsp;₽/шт</td><td>—</td></tr>
+                            <tr><td>2 домена</td><td><strong>4&nbsp;000&nbsp;₽</strong></td><td>2&nbsp;000&nbsp;₽/шт</td><td>~9%</td></tr>
+                            <tr><td>5 доменов</td><td><strong>7&nbsp;000&nbsp;₽</strong></td><td>1&nbsp;400&nbsp;₽/шт</td><td><strong>36%</strong></td></tr>
                         </tbody>
                     </table>
-                    <p class="description" style="margin-top:8px;">Чем больше доменов — тем выгоднее. Для покупки нескольких лицензий свяжитесь с нами.</p>
                 </div>
 
                 <hr style="margin:32px 0;" />
@@ -2145,13 +1865,10 @@ class WP_Ru_Max_Admin {
                 <div class="wp-ru-max-activation-block">
                     <h3>Запросить лицензионный ключ</h3>
                     <p>Нет ключа? Заполните форму — владелец плагина рассмотрит запрос и пришлёт ключ на ваш email.</p>
-
                     <table class="form-table">
                         <tr>
                             <th scope="row"><label for="req_name">Ваше имя *</label></th>
-                            <td>
-                                <input type="text" id="req_name" name="req_name" class="regular-text" placeholder="Иван Иванов" />
-                            </td>
+                            <td><input type="text" id="req_name" name="req_name" class="regular-text" placeholder="Иван Иванов" /></td>
                         </tr>
                         <tr>
                             <th scope="row"><label for="req_email">Ваш email *</label></th>
@@ -2162,10 +1879,7 @@ class WP_Ru_Max_Admin {
                         </tr>
                         <tr>
                             <th scope="row"><label for="req_social">Контакт для быстрой связи</label></th>
-                            <td>
-                                <input type="text" id="req_social" name="req_social" class="regular-text" placeholder="Telegram @username, MAX, WhatsApp +7..., VK ссылка" />
-                                <p class="description">Удобный мессенджер или соцсеть, чтобы быстрее обсудить покупку и выслать ключ.</p>
-                            </td>
+                            <td><input type="text" id="req_social" name="req_social" class="regular-text" placeholder="Telegram @username, MAX, WhatsApp +7..." /></td>
                         </tr>
                         <tr>
                             <th scope="row">Согласия *</th>
@@ -2177,33 +1891,25 @@ class WP_Ru_Max_Admin {
                                 <br /><br />
                                 <label class="wp-ru-max-checkbox-label">
                                     <input type="checkbox" id="consent_mailing" name="consent_mailing" value="1" />
-                                    Согласен(а) получать информационные рассылки и уведомления об акциях на указанный email. Подтверждаю, что могу отменить подписку в любое время.
+                                    Согласен(а) получать информационные рассылки.
                                 </label>
                             </td>
                         </tr>
                     </table>
-
                     <div class="wp-ru-max-actions">
-                        <button type="button" class="button button-primary" id="request_license_btn" disabled>
-                            Отправить запрос
-                        </button>
+                        <button type="button" class="button button-primary" id="request_license_btn" disabled>Отправить запрос</button>
                     </div>
                     <div id="license_request_result" class="wp-ru-max-notice" style="display:none;margin-top:12px;"></div>
                 </div>
-
             <?php endif; ?>
         </div>
 
         <script>
         (function($){
-            // Ручная перепроверка действующей лицензии
             $('#recheck_license_btn').on('click', function(){
                 var $btn = $(this).prop('disabled', true).text('Проверяем...');
-                $.post(wpRuMax.ajaxUrl, {
-                    action: 'wp_ru_max_recheck_license',
-                    nonce:  wpRuMax.nonce
-                }, function(resp){
-                    if ( resp.success ) {
+                $.post(wpRuMax.ajaxUrl, { action: 'wp_ru_max_recheck_license', nonce: wpRuMax.nonce }, function(resp){
+                    if (resp.success) {
                         showResult('#license_recheck_result', true, resp.data.message || 'Лицензия действительна.');
                         $btn.prop('disabled', false).text('Проверить лицензию сейчас');
                         setTimeout(function(){ location.reload(); }, 1200);
@@ -2217,20 +1923,12 @@ class WP_Ru_Max_Admin {
                 });
             });
 
-            // Активация по ключу
             $('#activate_license_btn').on('click', function(){
                 var key = $('#license_key').val().trim().toUpperCase();
-                if ( ! key ) {
-                    showResult('#license_activate_result', false, 'Введите лицензионный ключ.');
-                    return;
-                }
+                if (!key) { showResult('#license_activate_result', false, 'Введите лицензионный ключ.'); return; }
                 var $btn = $(this).prop('disabled', true).text('Проверяем...');
-                $.post(wpRuMax.ajaxUrl, {
-                    action: 'wp_ru_max_activate_license',
-                    nonce:  wpRuMax.nonce,
-                    license_key: key
-                }, function(resp){
-                    if ( resp.success ) {
+                $.post(wpRuMax.ajaxUrl, { action: 'wp_ru_max_activate_license', nonce: wpRuMax.nonce, license_key: key }, function(resp){
+                    if (resp.success) {
                         showResult('#license_activate_result', true, resp.data.message);
                         setTimeout(function(){ location.reload(); }, 1500);
                     } else {
@@ -2238,40 +1936,29 @@ class WP_Ru_Max_Admin {
                         $btn.prop('disabled', false).text('Активировать');
                     }
                 }).fail(function(){
-                    showResult('#license_activate_result', false, 'Ошибка сети. Попробуйте ещё раз.');
+                    showResult('#license_activate_result', false, 'Ошибка сети.');
                     $btn.prop('disabled', false).text('Активировать');
                 });
             });
 
-            // Разблокировка кнопки запроса только когда оба чекбокса отмечены
             $('#consent_personal, #consent_mailing').on('change', function(){
                 var both = $('#consent_personal').is(':checked') && $('#consent_mailing').is(':checked');
                 $('#request_license_btn').prop('disabled', !both);
             });
 
-            // Запрос ключа
             $('#request_license_btn').on('click', function(){
                 var name  = $('#req_name').val().trim();
                 var email = $('#req_email').val().trim();
-                if ( ! name ) {
-                    showResult('#license_request_result', false, 'Укажите ваше имя.');
-                    return;
-                }
-                if ( ! email || ! /\S+@\S+\.\S+/.test(email) ) {
-                    showResult('#license_request_result', false, 'Укажите корректный email.');
-                    return;
-                }
+                if (!name) { showResult('#license_request_result', false, 'Укажите ваше имя.'); return; }
+                if (!email || !/\S+@\S+\.\S+/.test(email)) { showResult('#license_request_result', false, 'Укажите корректный email.'); return; }
                 var $btn = $(this).prop('disabled', true).text('Отправляем...');
                 $.post(wpRuMax.ajaxUrl, {
-                    action:    'wp_ru_max_request_license',
-                    nonce:     wpRuMax.nonce,
-                    req_name:  name,
-                    req_email: email,
-                    req_social: $('#req_social').val().trim(),
-                    consent:   $('#consent_personal').is(':checked') ? 1 : 0,
-                    mailing:   $('#consent_mailing').is(':checked')  ? 1 : 0
+                    action: 'wp_ru_max_request_license', nonce: wpRuMax.nonce,
+                    req_name: name, req_email: email, req_social: $('#req_social').val().trim(),
+                    consent: $('#consent_personal').is(':checked') ? 1 : 0,
+                    mailing: $('#consent_mailing').is(':checked') ? 1 : 0
                 }, function(resp){
-                    if ( resp.success ) {
+                    if (resp.success) {
                         showResult('#license_request_result', true, resp.data);
                         $('#req_name, #req_email, #req_social').val('');
                         $('#consent_personal, #consent_mailing').prop('checked', false);
@@ -2281,19 +1968,14 @@ class WP_Ru_Max_Admin {
                         $btn.prop('disabled', false).text('Отправить запрос');
                     }
                 }).fail(function(){
-                    showResult('#license_request_result', false, 'Ошибка сети. Попробуйте ещё раз.');
+                    showResult('#license_request_result', false, 'Ошибка сети.');
                     $btn.prop('disabled', false).text('Отправить запрос');
                 });
             });
 
             function showResult(selector, success, msg){
-                $(selector)
-                    .removeClass('notice-success notice-error')
-                    .addClass( success ? 'notice-success' : 'notice-error' )
-                    .css({ display:'block', padding:'12px 16px', background:'#fff',
-                           borderLeft: success ? '4px solid #00a32a' : '4px solid #d63638',
-                           marginTop:'12px' })
-                    .html( msg );
+                $(selector).removeClass('notice-success notice-error').addClass(success ? 'notice-success' : 'notice-error')
+                    .css({ display:'block', padding:'12px 16px', background:'#fff', borderLeft: success ? '4px solid #00a32a' : '4px solid #d63638', marginTop:'12px' }).html(msg);
             }
         })(jQuery);
         </script>
