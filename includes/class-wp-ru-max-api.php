@@ -8,6 +8,9 @@ class WP_Ru_Max_API {
 
     private $token;
 
+    // Лимит изображения в байтах (по умолчанию 5 МБ)
+    const DEFAULT_IMAGE_SIZE_LIMIT = 5242880; // 5 * 1024 * 1024
+
     public function __construct( $token = null ) {
         if ( $token ) {
             $this->token = $token;
@@ -20,22 +23,17 @@ class WP_Ru_Max_API {
     /**
      * Рекурсивно очищает строки в массиве — удаляет невалидные UTF-8 последовательности
      * и символы управления, которые ломают json_encode.
-     * Для строк текста сообщений также обрезает до 4096 символов (лимит MAX API).
      */
     private function sanitize_utf8( $value, $truncate = false ) {
         if ( is_string( $value ) ) {
-            // Заменяем невалидные UTF-8 байты — сначала принудительно конвертируем
             $value = @mb_convert_encoding( $value, 'UTF-8', 'UTF-8' );
-            // Удаляем управляющие символы кроме \t, \n, \r
             $value = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', (string) $value );
-            // Если preg_replace вернул null (невалидный UTF-8), очищаем через iconv
             if ( null === $value ) {
                 $value = iconv( 'UTF-8', 'UTF-8//IGNORE', (string) $value );
                 if ( false === $value ) {
                     $value = '';
                 }
             }
-            // Обрезаем до 4096 символов для поля text (MAX API limit)
             if ( $truncate && mb_strlen( $value, 'UTF-8' ) > 4096 ) {
                 $value = mb_substr( $value, 0, 4090, 'UTF-8' ) . "\n...";
             }
@@ -59,14 +57,11 @@ class WP_Ru_Max_API {
                 'Authorization' => $this->token,
                 'Content-Type'  => 'application/json',
             ),
-            'timeout' => 15,
+            'timeout' => 20,
         );
 
         if ( $body ) {
             $body_clean = $this->sanitize_utf8( $body );
-            // Используем JSON_UNESCAPED_UNICODE чтобы emoji и кириллица
-            // кодировались как UTF-8 байты, а не суррогатные пары (\uD83D\uDD14).
-            // Строгие JSON-парсеры (Go, Rust) отвергают суррогатные пары — отсюда "Can't deserialize body".
             $json = json_encode( $body_clean, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 
             if ( false === $json ) {
@@ -112,8 +107,6 @@ class WP_Ru_Max_API {
 
     /**
      * Построить массив inline-клавиатуры из массива кнопок.
-     * Каждая кнопка — ['text' => '...', 'url' => '...'].
-     * Каждая кнопка размещается в отдельной строке клавиатуры.
      */
     private function build_keyboard_attachment( $buttons ) {
         if ( empty( $buttons ) || ! is_array( $buttons ) ) {
@@ -129,9 +122,9 @@ class WP_Ru_Max_API {
             }
             $rows[] = array(
                 array(
-                    'type'    => 'link',
-                    'text'    => $text,
-                    'url'     => $url,
+                    'type' => 'link',
+                    'text' => $text,
+                    'url'  => $url,
                 ),
             );
         }
@@ -150,14 +143,8 @@ class WP_Ru_Max_API {
 
     /**
      * Отправить текстовое сообщение.
-     *
-     * @param string $chat_id
-     * @param string $text
-     * @param string $format  'html' | 'markdown' | 'none'
-     * @param array  $buttons Массив кнопок: [['text'=>'...','url'=>'...'], ...]
      */
     public function send_message( $chat_id, $text, $format = 'html', $buttons = array() ) {
-        // Очищаем текст и обрезаем до лимита MAX API (4096 символов)
         $text = $this->sanitize_utf8( $text, true );
 
         $payload = array(
@@ -174,17 +161,55 @@ class WP_Ru_Max_API {
     }
 
     /**
+     * Проверяет размер изображения по URL.
+     * Возвращает размер в байтах или false если не удалось определить.
+     */
+    public function check_image_size( $image_url ) {
+        $response = wp_remote_head( $image_url, array( 'timeout' => 5 ) );
+        if ( is_wp_error( $response ) ) {
+            return false;
+        }
+        $content_length = wp_remote_retrieve_header( $response, 'content-length' );
+        if ( $content_length !== '' && is_numeric( $content_length ) ) {
+            return (int) $content_length;
+        }
+        return false;
+    }
+
+    /**
+     * Получить лимит размера изображения из настроек.
+     */
+    public function get_image_size_limit() {
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        $limit_mb = isset( $settings['image_size_limit_mb'] ) ? (int) $settings['image_size_limit_mb'] : 5;
+        if ( $limit_mb <= 0 ) {
+            $limit_mb = 5;
+        }
+        return $limit_mb * 1024 * 1024;
+    }
+
+    /**
      * Отправить сообщение с изображением.
-     *
-     * @param string $chat_id
-     * @param string $text
-     * @param string $image_url
-     * @param string $format
-     * @param array  $buttons
+     * Автоматически проверяет размер изображения и при превышении лимита
+     * отправляет только текст.
      */
     public function send_message_with_image( $chat_id, $text, $image_url, $format = 'html', $buttons = array() ) {
-        // Очищаем текст и обрезаем до лимита MAX API (4096 символов)
         $text = $this->sanitize_utf8( $text, true );
+
+        // Проверяем размер изображения
+        $size_limit = $this->get_image_size_limit();
+        $image_size = $this->check_image_size( $image_url );
+
+        if ( $image_size !== false && $image_size > $size_limit ) {
+            $size_mb = round( $image_size / 1048576, 2 );
+            $limit_mb = round( $size_limit / 1048576, 0 );
+            WP_Ru_Max_Logger::log( 'api', 'warning', "Изображение ({$size_mb} МБ) превышает лимит ({$limit_mb} МБ) — отправка без изображения.", array(
+                'url'        => $image_url,
+                'size_bytes' => $image_size,
+                'limit_bytes'=> $size_limit,
+            ) );
+            return $this->send_message( $chat_id, $text, $format, $buttons );
+        }
 
         $attachments = array(
             array(
@@ -210,10 +235,52 @@ class WP_Ru_Max_API {
 
         if ( is_wp_error( $result ) ) {
             // Фолбэк: отправка без изображения
+            WP_Ru_Max_Logger::log( 'api', 'warning', 'Ошибка отправки с изображением, повторяем без изображения: ' . $result->get_error_message() );
             return $this->send_message( $chat_id, $text, $format, $buttons );
         }
 
         return $result;
+    }
+
+    /**
+     * Отправить сообщение с автоматическим повтором при ошибке.
+     *
+     * @param string $chat_id
+     * @param string $text
+     * @param string $format
+     * @param array  $buttons
+     * @param string|false $image_url
+     * @param int    $max_retries  Количество попыток повтора (0 = без повторов)
+     * @param int    $retry_delay  Задержка между попытками в секундах
+     */
+    public function send_with_retry( $chat_id, $text, $format = 'html', $buttons = array(), $image_url = false, $max_retries = 2, $retry_delay = 30 ) {
+        $attempt = 0;
+        $last_error = null;
+
+        while ( $attempt <= $max_retries ) {
+            if ( $attempt > 0 ) {
+                WP_Ru_Max_Logger::log( 'api', 'info', "Повтор отправки (попытка {$attempt} из {$max_retries}) в канал {$chat_id}." );
+                sleep( min( $retry_delay, 10 ) ); // Максимум 10 сек синхронного ожидания
+            }
+
+            if ( $image_url ) {
+                $result = $this->send_message_with_image( $chat_id, $text, $image_url, $format, $buttons );
+            } else {
+                $result = $this->send_message( $chat_id, $text, $format, $buttons );
+            }
+
+            if ( ! is_wp_error( $result ) ) {
+                if ( $attempt > 0 ) {
+                    WP_Ru_Max_Logger::log( 'api', 'success', "Отправка удалась с попытки {$attempt}." );
+                }
+                return $result;
+            }
+
+            $last_error = $result;
+            $attempt++;
+        }
+
+        return $last_error;
     }
 
     public function test_connection( $token = null ) {
