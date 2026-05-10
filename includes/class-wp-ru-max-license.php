@@ -7,8 +7,8 @@
  * 2. Владелец создаёт ключ в разделе «Ru-max Ключи» в своей админке
  * 3. Покупатель вводит ключ во вкладке «Активация»
  * 4. Плагин отправляет ключ на рукодер.рф для проверки
- * 5. При успехе — активация сохраняется навсегда в БД WordPress
- * 6. Повторная онлайн-проверка происходит раз в 7 дней
+ * 5. При успехе — активация сохраняется в БД WordPress
+ * 6. Повторная онлайн-проверка происходит раз в 160 дней
  * 7. Брутфорс защищён: 5 попыток в час, потом блокировка
  */
 
@@ -24,8 +24,9 @@ class WP_Ru_Max_License {
     const RATE_LIMIT_KEY  = 'wp_ru_max_license_attempts';
     const MAX_ATTEMPTS    = 5;
     const BLOCK_MINUTES   = 60;
-    const RECHECK_DAYS    = 1;
-    const RECHECK_SECONDS = 3600; // фоновая перепроверка раз в час
+    const RECHECK_DAYS    = 160;
+    // 160 дней в секундах — фоновая перепроверка
+    const RECHECK_SECONDS = 13824000; // 160 * 24 * 3600
 
     // URL API проверки ключей (рукодер.рф в Punycode для надёжности)
     const VERIFY_URL      = 'https://xn--d1acnqieq.xn--p1ai/wp-json/wp-ru-max-km/v1/verify';
@@ -149,8 +150,8 @@ class WP_Ru_Max_License {
         $name    = isset( $_POST['req_name'] )   ? sanitize_text_field( wp_unslash( $_POST['req_name'] ) )   : '';
         $email   = isset( $_POST['req_email'] )  ? sanitize_email( wp_unslash( $_POST['req_email'] ) )       : '';
         $social  = isset( $_POST['req_social'] ) ? sanitize_text_field( wp_unslash( $_POST['req_social'] ) ) : '';
-        $consent = isset( $_POST['consent'] )    ? filter_var( $_POST['consent'], FILTER_VALIDATE_BOOLEAN )  : false;
-        $mailing = isset( $_POST['mailing'] )    ? filter_var( $_POST['mailing'], FILTER_VALIDATE_BOOLEAN )  : false;
+        $consent = isset( $_POST['consent'] )    ? filter_var( wp_unslash( $_POST['consent'] ), FILTER_VALIDATE_BOOLEAN )  : false;
+        $mailing = isset( $_POST['mailing'] )    ? filter_var( wp_unslash( $_POST['mailing'] ), FILTER_VALIDATE_BOOLEAN )  : false;
 
         if ( empty( $name ) ) {
             wp_send_json_error( 'Укажите ваше имя.' );
@@ -214,7 +215,7 @@ class WP_Ru_Max_License {
             'timeout'   => 15,
             'sslverify' => true,
             'headers'   => array(
-                'Content-Type' => 'application/json',
+                'Content-Type'  => 'application/json',
                 'X-WPRM-Secret' => self::API_SECRET,
             ),
             'body' => json_encode( array( 'key' => $key ) ),
@@ -246,7 +247,7 @@ class WP_Ru_Max_License {
     }
 
     /**
-     * Периодическая перепроверка активного ключа (раз в час).
+     * Периодическая перепроверка активного ключа (раз в 160 дней).
      * Вызывается из init на каждой загрузке админки.
      */
     public static function recheck_if_needed() {
@@ -288,9 +289,9 @@ class WP_Ru_Max_License {
                 $data['recheck_failed'] = 0;
                 WP_Ru_Max_Logger::log( 'license', 'error', 'Лицензия отозвана сервером — плагин деактивирован.' );
             } else {
-                // Сетевая ошибка — мягкая блокировка после 2 неудачных попыток
+                // Сетевая ошибка — мягкая блокировка после 3 неудачных попыток
                 $data['recheck_failed'] = ( $data['recheck_failed'] ?? 0 ) + 1;
-                if ( $data['recheck_failed'] >= 2 ) {
+                if ( $data['recheck_failed'] >= 3 ) {
                     $data['status'] = 'suspended';
                 }
             }
@@ -364,5 +365,19 @@ class WP_Ru_Max_License {
             return self::MAX_ATTEMPTS;
         }
         return max( 0, self::MAX_ATTEMPTS - (int) $attempts );
+    }
+
+    /**
+     * Возвращает количество дней до следующей проверки
+     */
+    public static function get_days_until_recheck() {
+        $data = self::get_data();
+        if ( empty( $data['last_verified'] ) ) {
+            return 0;
+        }
+        $last    = strtotime( $data['last_verified'] );
+        $next    = $last + self::RECHECK_SECONDS;
+        $seconds = $next - time();
+        return max( 0, (int) ceil( $seconds / DAY_IN_SECONDS ) );
     }
 }
