@@ -20,6 +20,8 @@ class WP_Ru_Max_Post_Sender {
         if ( ! empty( $settings['post_sender_enabled'] ) ) {
             add_action( 'transition_post_status', array( $this, 'on_post_status_change' ), 10, 3 );
         }
+        // Хук для отложенной отправки через WP-Cron
+        add_action( 'wp_ru_max_delayed_send', array( $this, 'do_delayed_send' ), 10, 1 );
     }
 
     public function on_post_status_change( $new_status, $old_status, $post ) {
@@ -47,7 +49,7 @@ class WP_Ru_Max_Post_Sender {
             return;
         }
 
-        // Сначала читаем новый ключ; для обратной совместимости — старый.
+        // Проверка мета: отправлять ли эту запись
         $skip = get_post_meta( $post->ID, 'wp_ru_max_skip', true );
         if ( $skip === '' || $skip === null || $skip === false ) {
             $legacy = get_post_meta( $post->ID, '_wp_ru_max_skip', true );
@@ -56,13 +58,15 @@ class WP_Ru_Max_Post_Sender {
             }
         }
 
-        // По умолчанию автоотправка ВЫКЛ. Отправляем только если значение
-        // мета приводится к строке '0' (автор явно включил автоотправку).
-        // Мягкое сравнение страхует от случаев, когда WP вернул значение
-        // другого типа (int 0, bool false, и т.п.).
         $skip_str = is_scalar( $skip ) ? trim( (string) $skip ) : '';
         if ( $skip_str !== '0' ) {
             WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — автоотправка отключена для этой статьи (по умолчанию ВЫКЛ).", array( 'post_id' => $post->ID, 'skip' => $skip ) );
+            return;
+        }
+
+        // Фильтр по категориям
+        if ( ! $this->matches_category_filter( $post->ID, $settings ) ) {
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — не подходит под фильтр категорий/тегов.", array( 'post_id' => $post->ID ) );
             return;
         }
 
@@ -72,10 +76,64 @@ class WP_Ru_Max_Post_Sender {
             return;
         }
 
+        // Отложенная отправка
+        $delay = isset( $settings['send_delay_seconds'] ) ? (int) $settings['send_delay_seconds'] : 0;
+
+        if ( $delay > 0 ) {
+            // Запись данных для отложенного запуска
+            $job_key = 'wp_ru_max_delayed_' . $post->ID . '_' . time();
+            set_transient( $job_key, array(
+                'post_id' => $post->ID,
+                'is_new'  => $is_new,
+            ), $delay + 300 );
+
+            wp_schedule_single_event( time() + $delay, 'wp_ru_max_delayed_send', array( $job_key ) );
+
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} поставлена в очередь на отправку через {$delay} сек.", array(
+                'post_id' => $post->ID,
+                'delay'   => $delay,
+                'job_key' => $job_key,
+            ) );
+            return;
+        }
+
+        // Немедленная отправка
+        $this->send_post( $post, $is_new, $settings );
+    }
+
+    /**
+     * Обработчик отложенной отправки (WP-Cron).
+     */
+    public function do_delayed_send( $job_key ) {
+        $data = get_transient( $job_key );
+        if ( ! $data || empty( $data['post_id'] ) ) {
+            return;
+        }
+        delete_transient( $job_key );
+
+        $post = get_post( $data['post_id'] );
+        if ( ! $post || $post->post_status !== 'publish' ) {
+            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Отложенная отправка: запись #{$data['post_id']} не найдена или снята с публикации." );
+            return;
+        }
+
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        $this->send_post( $post, $data['is_new'], $settings );
+    }
+
+    /**
+     * Отправляет запись во все настроенные каналы.
+     */
+    private function send_post( $post, $is_new, $settings ) {
+        $channels   = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
         $message    = $this->build_post_message( $post, $is_new, $settings );
         $buttons    = $this->get_buttons( $settings, $post );
         $api        = new WP_Ru_Max_API();
         $send_image = isset( $settings['send_post_image'] ) ? (bool) $settings['send_post_image'] : true;
+
+        // Настройки retry
+        $max_retries = isset( $settings['retry_count'] ) ? (int) $settings['retry_count'] : 2;
+        $retry_delay = isset( $settings['retry_delay_seconds'] ) ? (int) $settings['retry_delay_seconds'] : 5;
 
         foreach ( $channels as $channel ) {
             $chat_id = trim( $channel );
@@ -85,17 +143,35 @@ class WP_Ru_Max_Post_Sender {
 
             $thumbnail_url = $send_image ? get_the_post_thumbnail_url( $post->ID, 'large' ) : false;
 
-            if ( $thumbnail_url ) {
-                $result = $api->send_message_with_image( $chat_id, $message, $thumbnail_url, 'html', $buttons );
+            // Небольшая пауза между текстом и изображением устраняет race condition
+            if ( $thumbnail_url && $send_image ) {
+                // Используем send_with_retry с изображением
+                $result = $api->send_with_retry(
+                    $chat_id,
+                    $message,
+                    'html',
+                    $buttons,
+                    $thumbnail_url,
+                    $max_retries,
+                    $retry_delay
+                );
             } else {
-                $result = $api->send_message( $chat_id, $message, 'html', $buttons );
+                $result = $api->send_with_retry(
+                    $chat_id,
+                    $message,
+                    'html',
+                    $buttons,
+                    false,
+                    $max_retries,
+                    $retry_delay
+                );
             }
 
             if ( is_wp_error( $result ) ) {
                 WP_Ru_Max_Logger::log( 'post_sender', 'error', "Ошибка отправки записи #{$post->ID} в канал $chat_id: " . $result->get_error_message(), array(
-                    'post_id'  => $post->ID,
-                    'chat_id'  => $chat_id,
-                    'is_new'   => $is_new,
+                    'post_id' => $post->ID,
+                    'chat_id' => $chat_id,
+                    'is_new'  => $is_new,
                 ) );
             } else {
                 WP_Ru_Max_Logger::log( 'post_sender', 'success', "Запись #{$post->ID} успешно отправлена в канал $chat_id.", array(
@@ -108,11 +184,39 @@ class WP_Ru_Max_Post_Sender {
     }
 
     /**
+     * Проверяет, подходит ли запись под фильтр категорий/тегов.
+     * Если фильтр не настроен — пропускает все записи.
+     */
+    private function matches_category_filter( $post_id, $settings ) {
+        $filter_cats = isset( $settings['filter_categories'] ) ? array_filter( array_map( 'intval', (array) $settings['filter_categories'] ) ) : array();
+        $filter_tags = isset( $settings['filter_tags'] ) ? array_filter( array_map( 'intval', (array) $settings['filter_tags'] ) ) : array();
+
+        // Если оба фильтра пустые — отправляем все
+        if ( empty( $filter_cats ) && empty( $filter_tags ) ) {
+            return true;
+        }
+
+        // Проверяем категории
+        if ( ! empty( $filter_cats ) ) {
+            $post_cats = wp_get_post_categories( $post_id, array( 'fields' => 'ids' ) );
+            if ( array_intersect( $filter_cats, $post_cats ) ) {
+                return true;
+            }
+        }
+
+        // Проверяем теги
+        if ( ! empty( $filter_tags ) ) {
+            $post_tags = wp_get_post_tags( $post_id, array( 'fields' => 'ids' ) );
+            if ( array_intersect( $filter_tags, $post_tags ) ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Получить кнопки из настроек с заменой плейсхолдеров в URL.
-     * Поддерживает {url}, {title}, {author}, {date}, {site_name}, {meta_KEY}, {acf_KEY}.
-     *
-     * @param array $settings
-     * @param WP_Post|null $post
      */
     private function get_buttons( $settings, $post = null ) {
         $buttons = isset( $settings['post_buttons'] ) ? (array) $settings['post_buttons'] : array();
@@ -124,7 +228,6 @@ class WP_Ru_Max_Post_Sender {
             return $buttons;
         }
 
-        // Заменяем плейсхолдеры в URL кнопок
         $title     = get_the_title( $post );
         $url       = get_permalink( $post );
         $author    = get_the_author_meta( 'display_name', $post->post_author );
@@ -140,7 +243,6 @@ class WP_Ru_Max_Post_Sender {
             );
             $btn['url'] = $this->replace_field_placeholders( $btn['url'], $post );
 
-            // {encode:VALUE} → urlencode
             $btn['url'] = preg_replace_callback( '/\{encode:([^}]+)\}/', function( $m ) {
                 return urlencode( $m[1] );
             }, $btn['url'] );
@@ -154,13 +256,11 @@ class WP_Ru_Max_Post_Sender {
      * Заменяет плейсхолдеры {meta_KEY} и {acf_KEY} в строке шаблона.
      */
     private function replace_field_placeholders( $text, $post ) {
-        // {meta_FIELDNAME} → get_post_meta
         $text = preg_replace_callback( '/\{meta_([a-zA-Z0-9_\-]+)\}/', function( $m ) use ( $post ) {
             $val = get_post_meta( $post->ID, $m[1], true );
             return is_scalar( $val ) ? (string) $val : '';
         }, $text );
 
-        // {acf_FIELDNAME} → get_field (если ACF установлен)
         $text = preg_replace_callback( '/\{acf_([a-zA-Z0-9_\-]+)\}/', function( $m ) use ( $post ) {
             if ( function_exists( 'get_field' ) ) {
                 $val = get_field( $m[1], $post->ID );
@@ -177,8 +277,6 @@ class WP_Ru_Max_Post_Sender {
 
     /**
      * Построить сообщение для записи.
-     * Если задан шаблон (post_message_template) — использует его с плейсхолдерами.
-     * Иначе — стандартный формат.
      */
     private function build_post_message( $post, $is_new, $settings = array() ) {
         if ( empty( $settings ) ) {
@@ -200,7 +298,6 @@ class WP_Ru_Max_Post_Sender {
             $excerpt = mb_substr( $excerpt, 0, $excerpt_max_chars ) . '…';
         }
 
-        // Используем шаблон если задан
         $template = isset( $settings['post_message_template'] ) ? trim( $settings['post_message_template'] ) : '';
 
         if ( ! empty( $template ) ) {
@@ -213,7 +310,6 @@ class WP_Ru_Max_Post_Sender {
             return $msg;
         }
 
-        // Стандартный формат
         $show_read_more    = isset( $settings['show_read_more'] ) ? (bool) $settings['show_read_more'] : true;
         $show_action_label = isset( $settings['show_action_label'] ) ? (bool) $settings['show_action_label'] : true;
         $show_author_date  = isset( $settings['show_author_date'] ) ? (bool) $settings['show_author_date'] : true;
@@ -241,8 +337,8 @@ class WP_Ru_Max_Post_Sender {
     }
 
     public function send_post_manually( $post ) {
-        $settings = get_option( 'wp_ru_max_settings', array() );
-        $channels = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
+        $settings   = get_option( 'wp_ru_max_settings', array() );
+        $channels   = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
 
         if ( empty( $channels ) ) {
             return new WP_Error( 'no_channels', 'Нет настроенных каналов. Добавьте канал на вкладке «Отправка публикаций».' );
@@ -252,6 +348,8 @@ class WP_Ru_Max_Post_Sender {
         $buttons    = $this->get_buttons( $settings, $post );
         $api        = new WP_Ru_Max_API();
         $send_image = isset( $settings['send_post_image'] ) ? (bool) $settings['send_post_image'] : true;
+        $max_retries = isset( $settings['retry_count'] ) ? (int) $settings['retry_count'] : 2;
+        $retry_delay = isset( $settings['retry_delay_seconds'] ) ? (int) $settings['retry_delay_seconds'] : 5;
         $errors     = array();
 
         foreach ( $channels as $channel ) {
@@ -261,9 +359,7 @@ class WP_Ru_Max_Post_Sender {
             }
 
             $thumbnail_url = $send_image ? get_the_post_thumbnail_url( $post->ID, 'large' ) : false;
-            $result = $thumbnail_url
-                ? $api->send_message_with_image( $chat_id, $message, $thumbnail_url, 'html', $buttons )
-                : $api->send_message( $chat_id, $message, 'html', $buttons );
+            $result = $api->send_with_retry( $chat_id, $message, 'html', $buttons, $thumbnail_url ?: false, $max_retries, $retry_delay );
 
             if ( is_wp_error( $result ) ) {
                 $errors[] = $chat_id . ': ' . $result->get_error_message();
