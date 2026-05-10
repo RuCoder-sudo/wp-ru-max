@@ -1,4 +1,4 @@
-/* WP Ru-max Admin JavaScript */
+/* WP Ru-max Admin JavaScript — v1.0.25 */
 (function ($) {
     'use strict';
 
@@ -45,16 +45,21 @@
 
     $('#test_connection').on('click', function () {
         var $btn = $(this).prop('disabled', true).text('Проверяем...');
+        var $status = $('#bot_status');
         doAjax('wp_ru_max_test_connection', { token: $('#bot_token').val() }, function (res) {
             $btn.prop('disabled', false).text('Проверить подключение');
             if (res.success) {
                 showNotice($('#connection_result'), 'success', res.data.message);
-                var $status = $('#bot_status');
                 if ($status.length) {
-                    $status.html('<span class="wp-ru-max-status-indicator status-success">●</span> ' + res.data.message);
+                    $status.html('<span class="wp-ru-max-status-dot status-green">●</span> ' + escHtml(res.data.message || 'Подключено'));
                 }
             } else {
                 showNotice($('#connection_result'), 'error', res.data ? res.data.message || res.data : 'Ошибка подключения');
+                if ($status.length) {
+                    var errMsg = res.data ? (res.data.message || res.data) : 'Ошибка подключения';
+                    if (typeof errMsg !== 'string') { errMsg = 'Ошибка подключения'; }
+                    $status.html('<span class="wp-ru-max-status-dot status-red">●</span> ' + escHtml(errMsg));
+                }
             }
         });
     });
@@ -88,6 +93,20 @@
         return { post_buttons_json: JSON.stringify(buttons) };
     }
 
+    /* Collect category filter IDs */
+    function collectFilterCategories() {
+        var cats = [];
+        $('input[name="filter_categories[]"]:checked').each(function () { cats.push($(this).val()); });
+        return cats;
+    }
+
+    /* Collect tag filter IDs */
+    function collectFilterTags() {
+        var tags = [];
+        $('input[name="filter_tags[]"]:checked').each(function () { tags.push($(this).val()); });
+        return tags;
+    }
+
     $('#save_post_sender').on('click', function () {
         var $btn = $(this).prop('disabled', true).text('Сохранение...');
         var channels = [];
@@ -98,17 +117,26 @@
         var postTypes = [];
         $('input[name="post_types[]"]:checked').each(function () { postTypes.push($(this).val()); });
 
+        var filterCats  = collectFilterCategories();
+        var filterTags  = collectFilterTags();
+
         var data = $.extend({
-            post_sender_enabled:   $('#post_sender_enabled').is(':checked') ? '1' : '0',
-            send_new_post:         $('input[name="send_new_post"]').is(':checked') ? '1' : '0',
-            send_updated_post:     $('input[name="send_updated_post"]').is(':checked') ? '1' : '0',
-            show_read_more:        $('input[name="show_read_more"]').is(':checked') ? '1' : '0',
-            show_action_label:     $('input[name="show_action_label"]').is(':checked') ? '1' : '0',
-            show_author_date:      $('input[name="show_author_date"]').is(':checked') ? '1' : '0',
-            excerpt_max_chars:     parseInt($('#excerpt_max_chars').val(), 10) || 0,
-            post_message_template: $('#post_message_template').val(),
-            'channels[]':          channels,
-            'post_types[]':        postTypes,
+            post_sender_enabled:    $('#post_sender_enabled').is(':checked') ? '1' : '0',
+            send_new_post:          $('input[name="send_new_post"]').is(':checked') ? '1' : '0',
+            send_updated_post:      $('input[name="send_updated_post"]').is(':checked') ? '1' : '0',
+            show_read_more:         $('input[name="show_read_more"]').is(':checked') ? '1' : '0',
+            show_action_label:      $('input[name="show_action_label"]').is(':checked') ? '1' : '0',
+            show_author_date:       $('input[name="show_author_date"]').is(':checked') ? '1' : '0',
+            excerpt_max_chars:      parseInt($('#excerpt_max_chars').val(), 10) || 0,
+            post_message_template:  $('#post_message_template').val(),
+            send_delay_seconds:     parseInt($('input[name="send_delay_seconds"]:checked').val(), 10) || 0,
+            retry_count:            parseInt($('#retry_count').val(), 10) || 0,
+            retry_delay_seconds:    parseInt($('#retry_delay_seconds').val(), 10) || 5,
+            image_size_limit_mb:    parseFloat($('#image_size_limit_mb').val()) || 5,
+            'channels[]':           channels,
+            'post_types[]':         postTypes,
+            'filter_categories[]':  filterCats,
+            'filter_tags[]':        filterTags,
         }, collectPostButtons());
 
         doAjax('wp_ru_max_save_settings', data, function (res) {
@@ -188,7 +216,7 @@
         });
     });
 
-    /* Collect notification buttons as JSON — also flushes any pending button from the input fields */
+    /* Collect notification buttons as JSON */
     function collectNotifyButtons() {
         var pendingText = $('#new_notify_btn_text').val().trim();
         var pendingUrl  = $('#new_notify_btn_url').val().trim();
@@ -505,6 +533,12 @@
     /* -- Utility: escape attribute value -- */
     function escAttr(str) {
         return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    /* -- Utility: escape HTML -- */
+    function escHtml(str) {
+        if (typeof str !== 'string') { return ''; }
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
 })(jQuery);
