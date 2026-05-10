@@ -20,8 +20,7 @@ class WP_Ru_Max_Updater {
         $this->current_version = $current_version;
         $this->cache_key       = 'wp_ru_max_github_update';
 
-        // Одноразовый сброс старого кэша проверки обновлений — после исправления нормализации версий.
-        // Это убирает «фантомное» уведомление о версии вида 1.017, которое WP кэшировал ранее.
+        // Одноразовый сброс старого кэша проверки обновлений
         if ( get_option( 'wp_ru_max_updater_cache_reset_v2' ) !== '1' ) {
             delete_transient( $this->cache_key );
             delete_site_transient( 'update_plugins' );
@@ -64,10 +63,6 @@ class WP_Ru_Max_Updater {
 
     /**
      * Нормализовать версию к каноничному виду MAJOR.MINOR.PATCH.
-     *
-     * Чинит распространённую опечатку в тегах GitHub: `v1.017` → `1.0.17`.
-     * Без этого PHP version_compare('1.017','1.0.17','>') возвращает true,
-     * и WordPress бесконечно пишет «доступна свежая версия».
      */
     private function normalize_version( $version ) {
         $version = ltrim( (string) $version, 'vV' );
@@ -79,7 +74,6 @@ class WP_Ru_Max_Updater {
             if ( ! ctype_digit( $p ) ) {
                 continue;
             }
-            // Сегмент с лидирующим нулём вида "017" → распаковываем в "0" и "17".
             if ( strlen( $p ) >= 2 && $p[0] === '0' ) {
                 $expanded[] = 0;
                 $expanded[] = (int) substr( $p, 1 );
@@ -112,16 +106,16 @@ class WP_Ru_Max_Updater {
 
         if ( version_compare( $latest_version, $this->current_version, '>' ) ) {
             $transient->response[ $this->plugin_slug ] = (object) array(
-                'id'            => $this->plugin_slug,
-                'slug'          => dirname( $this->plugin_slug ),
-                'plugin'        => $this->plugin_slug,
-                'new_version'   => $latest_version,
-                'url'           => "https://github.com/{$this->github_user}/{$this->github_repo}",
-                'package'       => "https://github.com/{$this->github_user}/{$this->github_repo}/archive/refs/tags/{$release['tag_name']}.zip",
-                'tested'        => '6.7',
-                'requires_php'  => '7.4',
-                'icons'         => array(),
-                'banners'       => array(),
+                'id'           => $this->plugin_slug,
+                'slug'         => dirname( $this->plugin_slug ),
+                'plugin'       => $this->plugin_slug,
+                'new_version'  => $latest_version,
+                'url'          => "https://github.com/{$this->github_user}/{$this->github_repo}",
+                'package'      => "https://github.com/{$this->github_user}/{$this->github_repo}/archive/refs/tags/{$release['tag_name']}.zip",
+                'tested'       => '6.7',
+                'requires_php' => '7.4',
+                'icons'        => array(),
+                'banners'      => array(),
             );
         } else {
             if ( isset( $transient->no_update ) ) {
@@ -159,26 +153,26 @@ class WP_Ru_Max_Updater {
         $changelog      = ! empty( $release['body'] ) ? nl2br( esc_html( $release['body'] ) ) : 'Смотрите GitHub Releases.';
 
         return (object) array(
-            'name'              => 'WP Ru-max',
-            'slug'              => dirname( $this->plugin_slug ),
-            'version'           => $latest_version,
-            'author'            => '<a href="https://рукодер.рф/" target="_blank">RuCoder</a>',
-            'homepage'          => "https://github.com/{$this->github_user}/{$this->github_repo}",
-            'requires'          => '5.8',
-            'tested'            => '6.7',
-            'requires_php'      => '7.4',
-            'last_updated'      => $release['published_at'] ?? '',
-            'sections'          => array(
+            'name'          => 'WP Ru-max',
+            'slug'          => dirname( $this->plugin_slug ),
+            'version'       => $latest_version,
+            'author'        => '<a href="https://рукодер.рф/" target="_blank">RuCoder</a>',
+            'homepage'      => "https://github.com/{$this->github_user}/{$this->github_repo}",
+            'requires'      => '5.8',
+            'tested'        => '6.7',
+            'requires_php'  => '7.4',
+            'last_updated'  => $release['published_at'] ?? '',
+            'sections'      => array(
                 'description' => 'Интеграция WordPress с мессенджером MAX (max.ru). Автопубликация записей, уведомления с форм и чат-виджет для сайта.',
                 'changelog'   => $changelog,
             ),
-            'download_link'     => "https://github.com/{$this->github_user}/{$this->github_repo}/archive/refs/tags/{$release['tag_name']}.zip",
+            'download_link' => "https://github.com/{$this->github_user}/{$this->github_repo}/archive/refs/tags/{$release['tag_name']}.zip",
         );
     }
 
     /**
      * После установки — переименовать папку в правильное имя
-     * (GitHub архив распаковывается в папку типа wp-ru-max-1.0.11)
+     * и реактивировать плагин автоматически.
      */
     public function after_install( $response, $hook_extra, $result ) {
         if ( ! isset( $hook_extra['plugin'] ) || $hook_extra['plugin'] !== $this->plugin_slug ) {
@@ -190,6 +184,7 @@ class WP_Ru_Max_Updater {
         $wp_filesystem->move( $result['destination'], $plugin_folder );
         $result['destination'] = $plugin_folder;
 
+        // Автоматически реактивировать плагин после обновления
         activate_plugin( $this->plugin_slug );
 
         return $result;
