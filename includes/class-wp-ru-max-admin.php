@@ -32,6 +32,7 @@ class WP_Ru_Max_Admin {
         add_action( 'wp_ajax_wp_ru_max_get_skip',        array( $this, 'ajax_get_skip' ) );
         add_action( 'wp_ajax_wp_ru_max_set_skip',        array( $this, 'ajax_set_skip' ) );
         add_action( 'save_post',                         array( $this, 'persist_skip_meta_on_save' ), 10, 2 );
+        add_action( 'post_submitbox_misc_actions',       array( $this, 'render_classic_editor_panel' ) );
         add_filter( 'plugin_action_links_' . WP_RU_MAX_PLUGIN_BASENAME, array( $this, 'add_plugin_links' ) );
     }
 
@@ -379,6 +380,55 @@ class WP_Ru_Max_Admin {
         ) );
     }
 
+    public function render_classic_editor_panel( $post ) {
+        if ( ! $post || ! $post->ID ) {
+            return;
+        }
+        if ( function_exists( 'use_block_editor_for_post' ) && use_block_editor_for_post( $post ) ) {
+            return;
+        }
+
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        $token    = isset( $settings['bot_token'] ) ? $settings['bot_token'] : '';
+        $channels = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
+
+        if ( empty( $token ) || empty( $channels ) ) {
+            return;
+        }
+
+        $skip    = get_post_meta( $post->ID, self::SKIP_META_KEY, true );
+        $enabled = ( $skip !== '1' );
+        $nonce   = wp_create_nonce( 'wp_ru_max_nonce' );
+        $icon    = WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png';
+        ?>
+        <div class="misc-pub-section wp-ru-max-classic-section" style="border-top:1px solid #ddd;padding-top:8px;margin-top:4px;">
+            <img src="<?php echo esc_url( $icon ); ?>" width="16" height="16" alt="MAX" style="vertical-align:middle;margin-right:4px;">
+            <strong>Отправить в MAX</strong>
+            <div style="margin-top:6px;">
+                <input type="hidden" name="<?php echo esc_attr( self::SKIP_META_KEY ); ?>" value="1">
+                <label style="cursor:pointer;">
+                    <input type="checkbox"
+                           id="wp_ru_max_auto_send_classic"
+                           name="<?php echo esc_attr( self::SKIP_META_KEY ); ?>"
+                           value="0"
+                           <?php checked( $enabled ); ?>>
+                    Автоотправка в MAX: <span class="wp-ru-max-auto-label"><?php echo $enabled ? 'ВКЛ' : 'ВЫКЛ'; ?></span>
+                </label>
+            </div>
+            <div style="margin-top:6px;">
+                <button type="button"
+                        class="button button-secondary wp-ru-max-send-now-classic"
+                        style="width:100%;justify-content:center;"
+                        data-post-id="<?php echo intval( $post->ID ); ?>"
+                        data-nonce="<?php echo esc_attr( $nonce ); ?>">
+                    Отправить в MAX вручную
+                </button>
+                <span class="wp-ru-max-classic-result" style="display:none;margin-top:4px;font-size:12px;display:block;"></span>
+            </div>
+        </div>
+        <?php
+    }
+
     public function ajax_send_post_now() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
         if ( ! current_user_can( 'edit_posts' ) ) {
@@ -418,15 +468,60 @@ class WP_Ru_Max_Admin {
     }
 
     public function enqueue_admin_scripts( $hook ) {
-        if ( strpos( $hook, 'wp-ru-max' ) === false ) {
+        $is_plugin_page = strpos( $hook, 'wp-ru-max' ) !== false;
+        $is_post_edit   = in_array( $hook, array( 'post.php', 'post-new.php' ), true );
+
+        if ( ! $is_plugin_page && ! $is_post_edit ) {
             return;
         }
-        wp_enqueue_style( 'wp-ru-max-admin', WP_RU_MAX_PLUGIN_URL . 'assets/admin.css', array(), WP_RU_MAX_VERSION );
-        wp_enqueue_script( 'wp-ru-max-admin', WP_RU_MAX_PLUGIN_URL . 'assets/admin.js', array( 'jquery' ), WP_RU_MAX_VERSION, true );
-        wp_localize_script( 'wp-ru-max-admin', 'wpRuMax', array(
-            'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-            'nonce'   => wp_create_nonce( 'wp_ru_max_nonce' ),
-        ) );
+
+        if ( $is_plugin_page ) {
+            wp_enqueue_style( 'wp-ru-max-admin', WP_RU_MAX_PLUGIN_URL . 'assets/admin.css', array(), WP_RU_MAX_VERSION );
+            wp_enqueue_script( 'wp-ru-max-admin', WP_RU_MAX_PLUGIN_URL . 'assets/admin.js', array( 'jquery' ), WP_RU_MAX_VERSION, true );
+            wp_localize_script( 'wp-ru-max-admin', 'wpRuMax', array(
+                'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+                'nonce'   => wp_create_nonce( 'wp_ru_max_nonce' ),
+            ) );
+        }
+
+        if ( $is_post_edit ) {
+            wp_add_inline_script( 'jquery', $this->get_classic_editor_inline_js() );
+        }
+    }
+
+    private function get_classic_editor_inline_js() {
+        $ajax_url = esc_js( admin_url( 'admin-ajax.php' ) );
+        return "
+jQuery(function($){
+    $(document).on('click', '.wp-ru-max-send-now-classic', function(){
+        var btn    = $(this);
+        var result = btn.siblings('.wp-ru-max-classic-result');
+        var postId = btn.data('post-id');
+        var nonce  = btn.data('nonce');
+        btn.prop('disabled', true).text('Отправляю...');
+        result.hide();
+        $.post('" . $ajax_url . "', {
+            action:  'wp_ru_max_send_post_now',
+            post_id: postId,
+            nonce:   nonce
+        }, function(resp){
+            btn.prop('disabled', false).text('Отправить в MAX вручную');
+            if(resp.success){
+                result.css('color','#00a32a').text('✓ ' + resp.data).show();
+            } else {
+                result.css('color','#d63638').text('✗ ' + (resp.data || 'Ошибка')).show();
+            }
+        }).fail(function(){
+            btn.prop('disabled', false).text('Отправить в MAX вручную');
+            result.css('color','#d63638').text('✗ Ошибка соединения').show();
+        });
+    });
+    $(document).on('change', '#wp_ru_max_auto_send_classic', function(){
+        var lbl = $(this).closest('label');
+        lbl.find('.wp-ru-max-auto-label').text(this.checked ? 'ВКЛ' : 'ВЫКЛ');
+    });
+});
+";
     }
 
     public function add_plugin_links( $links ) {
