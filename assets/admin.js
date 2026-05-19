@@ -124,6 +124,7 @@
             post_sender_enabled:    $('#post_sender_enabled').is(':checked') ? '1' : '0',
             send_new_post:          $('input[name="send_new_post"]').is(':checked') ? '1' : '0',
             send_updated_post:      $('input[name="send_updated_post"]').is(':checked') ? '1' : '0',
+            auto_send_default:      $('input[name="auto_send_default"]').is(':checked') ? '1' : '0',
             show_read_more:         $('input[name="show_read_more"]').is(':checked') ? '1' : '0',
             show_action_label:      $('input[name="show_action_label"]').is(':checked') ? '1' : '0',
             show_author_date:       $('input[name="show_author_date"]').is(':checked') ? '1' : '0',
@@ -540,5 +541,24 @@
         if (typeof str !== 'string') { return ''; }
         return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
+
+    /* -- Collapsible categories / tags (global, called via inline onclick) -- */
+    window.wpRuMaxToggleTerms = function (btn, threshold) {
+        var $btn    = jQuery(btn);
+        var $labels = $btn.closest('td').find('.wp-ru-max-term-label');
+        var isOpen  = $btn.data('wprmOpen');
+
+        if ( isOpen ) {
+            $labels.each(function (i) {
+                if ( i >= threshold && ! jQuery(this).find('input').is(':checked') ) {
+                    jQuery(this).css('display', 'none');
+                }
+            });
+            $btn.text( $btn.data('more') ).data('wprmOpen', false);
+        } else {
+            $labels.css('display', 'inline-block');
+            $btn.text( $btn.data('less') ).data('wprmOpen', true);
+        }
+    };
 
 })(jQuery);
