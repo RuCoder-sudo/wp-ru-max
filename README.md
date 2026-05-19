@@ -158,7 +158,7 @@
 | Канал | Контакт |
 |---|---|
 | Telegram | [@RussCoder](https://t.me/RussCoder) |
-| Email | support@рукодер.рф |
+| Email | [rucoder.rf@yandex.ru](mailto:rucoder.rf@yandex.ru) |
 | Сайт | [рукодер.рф](https://рукодер.рф) |
 | GitHub Issues | [github.com/RuCoder-sudo/wp-ru-max/issues](https://github.com/RuCoder-sudo/wp-ru-max/issues) |
 
