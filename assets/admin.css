@@ -672,3 +672,27 @@
     60%  { transform: rotate(360deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* Левитация — preview */
+.preview-icon.wp-ru-max-anim-float {
+    animation: wp-ru-max-float 3.5s ease-in-out infinite;
+}
+@keyframes wp-ru-max-float {
+    0%, 100% {
+        transform: translateY(0px);
+        filter: drop-shadow(0 6px 8px rgba(0,0,0,0.28));
+    }
+    50% {
+        transform: translateY(-10px);
+        filter: drop-shadow(0 16px 14px rgba(0,0,0,0.10));
+    }
+}
+
+/* Collapsible categories / tags */
+.wp-ru-max-term-hidden {
+    display: none !important;
+}
+.wp-ru-max-terms-toggle {
+    margin-top: 2px;
+    font-size: 12px;
+}
