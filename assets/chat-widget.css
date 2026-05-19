@@ -145,6 +145,21 @@
     100% { transform: rotate(360deg); }
 }
 
+/* Левитация (плавное парение с тенью) */
+.wp-ru-max-anim-float {
+    animation: wp-ru-max-float 3.5s ease-in-out infinite !important;
+}
+@keyframes wp-ru-max-float {
+    0%, 100% {
+        transform: translateY(0px);
+        filter: drop-shadow(0 8px 10px rgba(0,0,0,0.30));
+    }
+    50% {
+        transform: translateY(-12px);
+        filter: drop-shadow(0 20px 16px rgba(0,0,0,0.12));
+    }
+}
+
 /* Responsive adjustments */
 @media (max-width: 480px) {
     #wp-ru-max-balloon {
