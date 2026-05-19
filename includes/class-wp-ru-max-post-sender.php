@@ -59,8 +59,17 @@ class WP_Ru_Max_Post_Sender {
         }
 
         $skip_str = is_scalar( $skip ) ? trim( (string) $skip ) : '';
-        if ( $skip_str !== '0' ) {
-            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — автоотправка отключена для этой статьи (по умолчанию ВЫКЛ).", array( 'post_id' => $post->ID, 'skip' => $skip ) );
+
+        if ( $skip_str === '' ) {
+            // Явное значение не задано — применяем глобальную настройку «По умолчанию»
+            $default_on = ! empty( $settings['auto_send_default'] );
+            if ( ! $default_on ) {
+                WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — автоотправка отключена для этой статьи (глобальный По умолчанию: ВЫКЛ).", array( 'post_id' => $post->ID ) );
+                return;
+            }
+            // Глобальный По умолчанию: ВКЛ — продолжаем отправку
+        } elseif ( $skip_str !== '0' ) {
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — автоотправка отключена для этой статьи (тумблер: ВЫКЛ).", array( 'post_id' => $post->ID, 'skip' => $skip ) );
             return;
         }
 
