@@ -75,7 +75,15 @@ class WP_Ru_Max_Admin {
             }
         }
         $skip_str = is_scalar( $skip ) ? trim( (string) $skip ) : '';
-        $is_on    = ( $skip_str === '0' );
+
+        if ( $skip_str === '' ) {
+            // Явное значение не задано — применяем глобальную настройку По умолчанию
+            $settings     = get_option( 'wp_ru_max_settings', array() );
+            $default_on   = ! empty( $settings['auto_send_default'] );
+            $is_on        = $default_on;
+        } else {
+            $is_on = ( $skip_str === '0' );
+        }
 
         return rest_ensure_response( array(
             'on'     => $is_on,
@@ -177,8 +185,16 @@ class WP_Ru_Max_Admin {
             }
         }
         $skip_str = is_scalar( $skip ) ? trim( (string) $skip ) : '';
+
+        if ( $skip_str === '' ) {
+            $settings   = get_option( 'wp_ru_max_settings', array() );
+            $is_on      = ! empty( $settings['auto_send_default'] );
+        } else {
+            $is_on = ( $skip_str === '0' );
+        }
+
         wp_send_json_success( array(
-            'on'     => ( $skip_str === '0' ),
+            'on'     => $is_on,
             'stored' => $skip_str,
         ) );
     }
@@ -371,12 +387,14 @@ class WP_Ru_Max_Admin {
             $gutenberg_js_ver,
             true
         );
+        $auto_send_default = ! empty( $settings['auto_send_default'] );
         wp_localize_script( 'wp-ru-max-gutenberg', 'wpRuMaxGutenberg', array(
-            'ajaxUrl'  => admin_url( 'admin-ajax.php' ),
-            'nonce'    => wp_create_nonce( 'wp_ru_max_nonce' ),
-            'iconUrl'  => WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png',
-            'restUrl'  => esc_url_raw( rest_url( 'wp-ru-max/v1/skip/' ) ),
-            'restNonce'=> wp_create_nonce( 'wp_rest' ),
+            'ajaxUrl'         => admin_url( 'admin-ajax.php' ),
+            'nonce'           => wp_create_nonce( 'wp_ru_max_nonce' ),
+            'iconUrl'         => WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png',
+            'restUrl'         => esc_url_raw( rest_url( 'wp-ru-max/v1/skip/' ) ),
+            'restNonce'       => wp_create_nonce( 'wp_rest' ),
+            'autoSendDefault' => $auto_send_default,
         ) );
     }
 
@@ -397,7 +415,12 @@ class WP_Ru_Max_Admin {
         }
 
         $skip    = get_post_meta( $post->ID, self::SKIP_META_KEY, true );
-        $enabled = ( $skip !== '1' );
+        $skip_is_set = ( $skip !== '' && $skip !== null && $skip !== false );
+        if ( $skip_is_set ) {
+            $enabled = ( $skip !== '1' );
+        } else {
+            $enabled = ! empty( $settings['auto_send_default'] );
+        }
         $nonce   = wp_create_nonce( 'wp_ru_max_nonce' );
         $icon    = WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png';
         ?>
@@ -606,6 +629,7 @@ jQuery(function($){
                 case 'post_sender_enabled':
                 case 'send_new_post':
                 case 'send_updated_post':
+                case 'auto_send_default':
                 case 'show_read_more':
                 case 'show_action_label':
                 case 'show_author_date':
@@ -635,7 +659,7 @@ jQuery(function($){
         } else {
             $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages' );
             $allowed_textarea = array( 'notify_template', 'post_message_template', 'chat_widget_retention_message', 'chat_widget_sound_specific_pages' );
-            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session' );
+            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session' );
             $allowed_int      = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay', 'send_delay_seconds', 'retry_count', 'retry_delay_seconds' );
             $allowed_float    = array( 'image_size_limit_mb' );
             $allowed_color    = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
@@ -1003,6 +1027,19 @@ jQuery(function($){
                         </td>
                     </tr>
                     <tr>
+                        <th scope="row">Автоотправка по умолчанию</th>
+                        <td>
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+                                <label class="wp-ru-max-toggle">
+                                    <input type="checkbox" name="auto_send_default" value="1" <?php checked( ! empty( $settings['auto_send_default'] ) ); ?> />
+                                    <span class="wp-ru-max-toggle-slider"></span>
+                                </label>
+                                <strong>ВКЛ для всех новых записей</strong>
+                            </div>
+                            <p class="description">Если включено — тумблер «Автоотправка в MAX» будет по умолчанию <strong>ВКЛ</strong> для каждой новой записи, которую ещё не редактировали вручную. Если выключено — по умолчанию <strong>ВЫКЛ</strong>.</p>
+                        </td>
+                    </tr>
+                    <tr>
                         <th scope="row">Ссылка "Читать полностью"</th>
                         <td>
                             <label>
@@ -1072,16 +1109,37 @@ jQuery(function($){
                         <th scope="row">Категории</th>
                         <td>
                             <?php
-                            $all_cats = get_categories( array( 'hide_empty' => false, 'number' => 200 ) );
+                            $all_cats        = get_categories( array( 'hide_empty' => false, 'number' => 200 ) );
+                            $cats_threshold  = 8;
                             if ( ! empty( $all_cats ) ) {
-                                foreach ( $all_cats as $cat ) :
+                                $cats_total     = count( $all_cats );
+                                $cats_collapsed = $cats_total > $cats_threshold;
+                                $checked_cats   = array_filter( $all_cats, function( $c ) use ( $filter_categories ) {
+                                    return in_array( (string) $c->term_id, array_map( 'strval', $filter_categories ), true );
+                                } );
+                                foreach ( $all_cats as $i => $cat ) :
+                                    $is_checked  = in_array( (string) $cat->term_id, array_map( 'strval', $filter_categories ), true );
+                                    $hidden      = $cats_collapsed && $i >= $cats_threshold && ! $is_checked;
+                                    $item_style  = $hidden
+                                        ? 'display:none;margin-right:16px;margin-bottom:6px;'
+                                        : 'display:inline-block;margin-right:16px;margin-bottom:6px;';
                                 ?>
-                                <label style="display:inline-block;margin-right:16px;margin-bottom:6px;">
+                                <label class="wp-ru-max-term-label" style="<?php echo $item_style; ?>">
                                     <input type="checkbox" name="filter_categories[]" value="<?php echo esc_attr( $cat->term_id ); ?>"
-                                        <?php checked( in_array( (string) $cat->term_id, array_map( 'strval', $filter_categories ), true ) ); ?> />
+                                        <?php checked( $is_checked ); ?> />
                                     <?php echo esc_html( $cat->name ); ?>
                                 </label>
                                 <?php endforeach;
+                                if ( $cats_collapsed ) : ?>
+                                <div style="margin-top:6px;">
+                                    <button type="button" class="button button-small"
+                                            onclick="wpRuMaxToggleTerms(this, 8)"
+                                            data-more="<?php echo esc_attr( sprintf( '▼ Показать все %d категории', $cats_total ) ); ?>"
+                                            data-less="▲ Свернуть">
+                                        <?php echo esc_html( sprintf( '▼ Показать все %d категории', $cats_total ) ); ?>
+                                    </button>
+                                </div>
+                                <?php endif;
                             } else {
                                 echo '<p class="description">Категории не найдены.</p>';
                             }
@@ -1093,16 +1151,34 @@ jQuery(function($){
                         <th scope="row">Теги</th>
                         <td>
                             <?php
-                            $all_tags = get_tags( array( 'hide_empty' => false, 'number' => 200 ) );
+                            $all_tags       = get_tags( array( 'hide_empty' => false, 'number' => 200 ) );
+                            $tags_threshold = 8;
                             if ( ! empty( $all_tags ) ) {
-                                foreach ( $all_tags as $tag ) :
+                                $tags_total     = count( $all_tags );
+                                $tags_collapsed = $tags_total > $tags_threshold;
+                                foreach ( $all_tags as $i => $tag ) :
+                                    $is_checked  = in_array( (string) $tag->term_id, array_map( 'strval', $filter_tags ), true );
+                                    $hidden      = $tags_collapsed && $i >= $tags_threshold && ! $is_checked;
+                                    $item_style  = $hidden
+                                        ? 'display:none;margin-right:16px;margin-bottom:6px;'
+                                        : 'display:inline-block;margin-right:16px;margin-bottom:6px;';
                                 ?>
-                                <label style="display:inline-block;margin-right:16px;margin-bottom:6px;">
+                                <label class="wp-ru-max-term-label" style="<?php echo $item_style; ?>">
                                     <input type="checkbox" name="filter_tags[]" value="<?php echo esc_attr( $tag->term_id ); ?>"
-                                        <?php checked( in_array( (string) $tag->term_id, array_map( 'strval', $filter_tags ), true ) ); ?> />
+                                        <?php checked( $is_checked ); ?> />
                                     <?php echo esc_html( $tag->name ); ?>
                                 </label>
                                 <?php endforeach;
+                                if ( $tags_collapsed ) : ?>
+                                <div style="margin-top:6px;">
+                                    <button type="button" class="button button-small"
+                                            onclick="wpRuMaxToggleTerms(this, 8)"
+                                            data-more="<?php echo esc_attr( sprintf( '▼ Показать все %d тега', $tags_total ) ); ?>"
+                                            data-less="▲ Свернуть">
+                                        <?php echo esc_html( sprintf( '▼ Показать все %d тега', $tags_total ) ); ?>
+                                    </button>
+                                </div>
+                                <?php endif;
                             } else {
                                 echo '<p class="description">Теги не найдены.</p>';
                             }
@@ -1706,7 +1782,7 @@ jQuery(function($){
                         <td>
                             <div style="display:flex;flex-wrap:wrap;gap:12px;">
                                 <?php
-                                $anim_options = array( 'none'=>'Без анимации', 'pulse'=>'Пульсация', 'ripple'=>'Рябь', 'bounce'=>'Подпрыгивание', 'shake'=>'Покачивание', 'glow'=>'Свечение', 'rotate'=>'Вращение' );
+                                $anim_options = array( 'none'=>'Без анимации', 'pulse'=>'Пульсация', 'ripple'=>'Рябь', 'bounce'=>'Подпрыгивание', 'shake'=>'Покачивание', 'glow'=>'Свечение', 'rotate'=>'Вращение', 'float'=>'Левитация' );
                                 foreach ( $anim_options as $val => $label ) :
                                 ?>
                                 <label style="display:flex;align-items:center;gap:6px;cursor:pointer;background:<?php echo $animation === $val ? '#e8f0fe' : '#f8f9fa'; ?>;border:2px solid <?php echo $animation === $val ? '#4a90d9' : '#ddd'; ?>;border-radius:8px;padding:8px 14px;">
