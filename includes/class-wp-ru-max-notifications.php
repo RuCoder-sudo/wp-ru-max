@@ -114,6 +114,21 @@ class WP_Ru_Max_Notifications {
         } ) );
     }
 
+    /**
+     * Экранирует email-адреса в тексте, заменяя @ на [at],
+     * чтобы MAX не превращал их в кликабельные ссылки mailto:.
+     * Поддерживает уведомления Jetpack Contact Form и любые другие.
+     */
+    private function escape_emails_for_max( $text ) {
+        return preg_replace_callback(
+            '/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/',
+            function ( $m ) {
+                return str_replace( '@', '[at]', $m[0] );
+            },
+            $text
+        );
+    }
+
     public function intercept_email( $args ) {
         $settings = get_option( 'wp_ru_max_settings', array() );
 
@@ -178,6 +193,10 @@ class WP_Ru_Max_Notifications {
 
         // Конвертируем HTML-письмо в чистый текст
         $clean_message = $this->html_to_text( $message );
+
+        // Экранируем email-адреса: MAX автоматически делает их кликабельными ссылками
+        // (актуально для уведомлений Jetpack Contact Form и любых других форм)
+        $clean_message = $this->escape_emails_for_max( $clean_message );
 
         $text = str_replace(
             array( '{email_subject}', '{email_message}' ),
