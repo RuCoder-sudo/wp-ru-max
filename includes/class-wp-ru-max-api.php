@@ -77,6 +77,7 @@ class WP_Ru_Max_API {
             WP_Ru_Max_Logger::log( 'api', 'error', 'HTTP Error: ' . $response->get_error_message(), array(
                 'endpoint' => $endpoint,
                 'method'   => $method,
+                'token'    => $this->mask_token(),
             ) );
             return $response;
         }
@@ -101,8 +102,33 @@ class WP_Ru_Max_API {
         return $data;
     }
 
+    /**
+     * Возвращает замаскированную версию токена для безопасного логирования.
+     * Пример: "001.ABCDEFGHIJ...UVWXYZ" → "001.ABC***XYZ"
+     */
+    private function mask_token() {
+        if ( empty( $this->token ) ) {
+            return '(не задан)';
+        }
+        $len = mb_strlen( $this->token );
+        if ( $len <= 10 ) {
+            return str_repeat( '*', $len );
+        }
+        return mb_substr( $this->token, 0, 6 ) . '***' . mb_substr( $this->token, -4 );
+    }
+
     public function get_me() {
-        return $this->request( 'GET', '/me' );
+        // Кэшируем ответ на 5 минут для оптимизации производительности
+        $cache_key = 'wp_ru_max_me_' . md5( $this->token );
+        $cached    = get_transient( $cache_key );
+        if ( false !== $cached ) {
+            return $cached;
+        }
+        $result = $this->request( 'GET', '/me' );
+        if ( ! is_wp_error( $result ) ) {
+            set_transient( $cache_key, $result, 5 * MINUTE_IN_SECONDS );
+        }
+        return $result;
     }
 
     /**
