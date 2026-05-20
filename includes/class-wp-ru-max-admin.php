@@ -31,6 +31,7 @@ class WP_Ru_Max_Admin {
         add_action( 'wp_ajax_wp_ru_max_send_post_now',   array( $this, 'ajax_send_post_now' ) );
         add_action( 'wp_ajax_wp_ru_max_get_skip',        array( $this, 'ajax_get_skip' ) );
         add_action( 'wp_ajax_wp_ru_max_set_skip',        array( $this, 'ajax_set_skip' ) );
+        add_action( 'wp_ajax_wp_ru_max_send_push',       array( $this, 'ajax_send_push' ) );
         add_action( 'save_post',                         array( $this, 'persist_skip_meta_on_save' ), 10, 2 );
         add_action( 'post_submitbox_misc_actions',       array( $this, 'render_classic_editor_panel' ) );
         add_filter( 'plugin_action_links_' . WP_RU_MAX_PLUGIN_BASENAME, array( $this, 'add_plugin_links' ) );
@@ -640,6 +641,8 @@ jQuery(function($){
                 case 'enable_post_sender_log':
                 case 'delete_on_uninstall':
                 case 'chat_widget_enabled':
+                case 'notify_plugin_updates':
+                case 'notify_site_errors':
                     $settings[ $field ] = filter_var( $value, FILTER_VALIDATE_BOOLEAN );
                     break;
                 case 'post_types':
@@ -659,7 +662,7 @@ jQuery(function($){
         } else {
             $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages' );
             $allowed_textarea = array( 'notify_template', 'post_message_template', 'chat_widget_retention_message', 'chat_widget_sound_specific_pages' );
-            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session' );
+            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors' );
             $allowed_int      = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay', 'send_delay_seconds', 'retry_count', 'retry_delay_seconds' );
             $allowed_float    = array( 'image_size_limit_mb' );
             $allowed_color    = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
@@ -802,6 +805,45 @@ jQuery(function($){
         }
     }
 
+    public function ajax_send_push() {
+        check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
+        }
+
+        // Rate limiting: не более 10 push-отправок в минуту
+        $rate_key = 'wp_ru_max_push_rate_' . get_current_user_id();
+        $rate     = (int) get_transient( $rate_key );
+        if ( $rate >= 10 ) {
+            wp_send_json_error( 'Слишком много отправок. Подождите немного.' );
+        }
+        set_transient( $rate_key, $rate + 1, 60 );
+
+        $chat_id = isset( $_POST['chat_id'] ) ? sanitize_text_field( wp_unslash( $_POST['chat_id'] ) )     : '';
+        $message = isset( $_POST['message'] ) ? sanitize_textarea_field( wp_unslash( $_POST['message'] ) ) : '';
+
+        if ( empty( $chat_id ) ) {
+            wp_send_json_error( 'Укажите канал или Chat ID.' );
+        }
+        if ( empty( $message ) ) {
+            wp_send_json_error( 'Введите текст сообщения.' );
+        }
+
+        $api    = new WP_Ru_Max_API();
+        $result = $api->send_message( $chat_id, $message, 'html' );
+
+        if ( is_wp_error( $result ) ) {
+            WP_Ru_Max_Logger::log( 'push', 'error',
+                'Push НЕУДАЧНО → ' . $chat_id . ': ' . $result->get_error_message() );
+            wp_send_json_error( $result->get_error_message() );
+        } else {
+            WP_Ru_Max_Logger::log( 'push', 'success',
+                'Push отправлен → ' . $chat_id,
+                array( 'msg_length' => mb_strlen( $message ) ) );
+            wp_send_json_success( 'Push-уведомление успешно отправлено в ' . esc_html( $chat_id ) . '!' );
+        }
+    }
+
     public function ajax_get_logs() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -851,6 +893,7 @@ jQuery(function($){
                     'chat'         => 'Чат',
                     'history'      => 'История',
                     'activation'   => WP_Ru_Max_License::is_active() ? 'Активирован' : 'Активация',
+                    'updates'      => 'Обновления',
                 );
                 foreach ( $tabs as $tab_key => $tab_label ) {
                     $class = ( $active_tab === $tab_key ) ? 'nav-tab nav-tab-active' : 'nav-tab';
@@ -889,9 +932,87 @@ jQuery(function($){
                     case 'activation':
                         $this->render_tab_activation();
                         break;
+                    case 'updates':
+                        $this->render_tab_updates();
+                        break;
                 }
                 ?>
             </div>
+        </div>
+        <?php
+    }
+
+    private function render_tab_updates() {
+        ?>
+        <div class="wp-ru-max-card">
+            <h2>Обновления</h2>
+            <p>История изменений и планы развития плагина WP Ru-max.</p>
+        </div>
+
+        <div class="wp-ru-max-card">
+            <h3>В ближайших обновлениях</h3>
+            <p style="color:#666;font-style:italic;margin-bottom:16px;">Запланировано к реализации — список для себя, чтобы не забыть что добавим в следующих версиях.</p>
+
+            <ul style="margin-left:20px;list-style:disc;line-height:2;">
+                <li>
+                    <strong>Передача событий в Яндекс.Метрику</strong><br>
+                    <span style="color:#555;">Передача событий в Яндекс.Метрику позволит анализировать поведение пользователей на сайте и улучшать его функциональность.</span>
+                </li>
+                <li style="margin-top:10px;">
+                    <strong>CRM + автоматизация</strong><br>
+                    <span style="color:#555;">Интеграция с CRM-системами (amoCRM, Bitrix24) и автоматизация отдела продаж позволит упростить работу с клиентами и повысить эффективность продаж.</span>
+                </li>
+                <li style="margin-top:10px;">
+                    <strong>Кнопка «Поделиться в MAX»</strong><br>
+                    <span style="color:#555;">Кнопка «Поделиться в MAX» позволит пользователям делиться контентом на сайте в MAX.</span>
+                </li>
+                <li style="margin-top:10px;">
+                    <strong>Хэштеги и упоминания</strong><br>
+                    <span style="color:#555;">Хэштеги и упоминания в посте позволят уведомлять менеджеров о важных событиях или комментариях.</span>
+                </li>
+                <li style="margin-top:10px;">
+                    <strong>MAX-авторизация (OAuth)</strong><br>
+                    <span style="color:#555;">Вход на сайт через MAX OAuth. Пользователь авторизуется через MAX, и его данные (имя, email, фото) автоматически подтягиваются в профиль WordPress.</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="wp-ru-max-card">
+            <h3>История версий</h3>
+
+            <h4 style="margin-bottom:4px;">v1.0.30</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li>Блок «Отправка push-уведомлений в MAX» перенесён под «Канал(ы)».</li>
+                <li>В «Личных уведомлениях» новый раздел «Правила отправки» — уведомления обновлений плагинов/ядра WP и уведомления критических ошибок сайта.</li>
+                <li>При обновлении плагинов WordPress — отправка сообщения в MAX со списком обновлённых плагинов.</li>
+                <li>При фатальной PHP-ошибке — уведомление в MAX (не чаще 1 раза в 5 минут).</li>
+            </ul>
+
+            <h4 style="margin-bottom:4px;">v1.0.29</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li>Раздел «Отправка push-уведомлений в MAX» во вкладке «Отправка публикаций».</li>
+                <li>Поддержка WP Mail SMTP, FluentSMTP, Postman SMTP — перехват писем на приоритете 5.</li>
+                <li>Безопасность: токен бота маскируется в логах.</li>
+                <li>Rate-limiting для push-отправок — не более 10 раз в минуту.</li>
+                <li>Кэш ответа API /me через transient на 5 минут.</li>
+                <li>Совместимость с WordPress 7.0.</li>
+            </ul>
+
+            <h4 style="margin-bottom:4px;">v1.0.28</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li>Настройка «Автоотправка по умолчанию» теперь отображается как тумблер (в стиле Gutenberg).</li>
+                <li>Новая анимация «Левитация» для кнопки чат-виджета — плавное парение с динамической тенью.</li>
+            </ul>
+
+            <h4 style="margin-bottom:4px;">v1.0.27</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li>Поддержка Jetpack Contact Form — экранирование email-адресов.</li>
+                <li>Глобальная настройка «Автоотправка по умолчанию».</li>
+                <li>Тумблер в редакторе отражает глобальный «По умолчанию».</li>
+                <li>Сворачиваемые списки категорий и тегов (>8 элементов).</li>
+            </ul>
+
+            <p style="margin-top:8px;"><a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=history' ) ); ?>">→ Открыть журнал событий</a></p>
         </div>
         <?php
     }
@@ -1008,6 +1129,31 @@ jQuery(function($){
                         </td>
                     </tr>
                 </table>
+            </div>
+
+            <div class="wp-ru-max-card">
+                <h3>Отправка push-уведомлений в MAX</h3>
+                <p>Отправьте произвольное сообщение напрямую от бота в выбранный канал/группу MAX.</p>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="push_chat_id">Канал / Chat ID <span style="color:#d63638;">*</span></label></th>
+                        <td>
+                            <input type="text" id="push_chat_id" class="regular-text" placeholder="@channel_name или -100123456789" />
+                            <p class="description">Имя канала или числовой ID группы из списка «Канал(ы)» выше.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="push_message">Сообщение</label></th>
+                        <td>
+                            <textarea id="push_message" rows="5" class="large-text" placeholder="Текст push-уведомления..."></textarea>
+                            <p class="description">Поддерживается HTML: <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;a href="..."&gt;</code>.</p>
+                        </td>
+                    </tr>
+                </table>
+                <div class="wp-ru-max-actions" style="margin-top:12px;">
+                    <button type="button" class="button button-primary" id="send_push_btn">Отправить push</button>
+                </div>
+                <div id="push_result" class="wp-ru-max-notice" style="display:none;margin-top:10px;"></div>
             </div>
 
             <div class="wp-ru-max-card">
@@ -1364,6 +1510,28 @@ jQuery(function($){
                             <label><input type="radio" name="notify_format" value="none" <?php checked( ( $settings['notify_format'] ?? 'html' ), 'none' ); ?> /> Нет</label>&nbsp;&nbsp;
                             <label><input type="radio" name="notify_format" value="html" <?php checked( ( $settings['notify_format'] ?? 'html' ), 'html' ); ?> /> HTML стиль</label>&nbsp;&nbsp;
                             <label><input type="radio" name="notify_format" value="markdown" <?php checked( ( $settings['notify_format'] ?? 'html' ), 'markdown' ); ?> /> Markdown</label>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="wp-ru-max-card">
+                <h3>Правила отправки</h3>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">Отправлять, когда</th>
+                        <td>
+                            <label style="display:block;margin-bottom:10px;">
+                                <input type="checkbox" name="notify_plugin_updates" value="1" <?php checked( ! empty( $settings['notify_plugin_updates'] ) ); ?> />
+                                <strong>Уведомления обновления плагинов</strong>
+                                <span class="description"> — уведомление в MAX при обновлении плагинов и ядра WordPress</span>
+                            </label>
+                            <label style="display:block;">
+                                <input type="checkbox" name="notify_site_errors" value="1" <?php checked( ! empty( $settings['notify_site_errors'] ) ); ?> />
+                                <strong>Уведомление ошибок сайта</strong>
+                                <span class="description"> — уведомление в MAX при критических PHP-ошибках (fatal error)</span>
+                            </label>
+                            <p class="description" style="margin-top:10px;">Если ничего не включено — модуль работает как прежде: перехватывает все письма и доставляет их в MAX.</p>
                         </td>
                     </tr>
                 </table>
