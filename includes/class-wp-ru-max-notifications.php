@@ -18,7 +18,21 @@ class WP_Ru_Max_Notifications {
     private function __construct() {
         $settings = get_option( 'wp_ru_max_settings', array() );
         if ( ! empty( $settings['notifications_enabled'] ) ) {
-            add_filter( 'wp_mail', array( $this, 'intercept_email' ), 10, 1 );
+            // Перехватываем письма через стандартный фильтр wp_mail.
+            // Совместимо с WP Mail SMTP, FluentSMTP, Postman SMTP и другими плагинами-почтовиками:
+            // они заменяют транспорт через phpmailer_init/PHPMailer, но фильтр wp_mail
+            // всегда срабатывает до отправки.
+            add_filter( 'wp_mail', array( $this, 'intercept_email' ), 5, 1 );
+
+            // Уведомления об обновлении плагинов и ядра WordPress
+            if ( ! empty( $settings['notify_plugin_updates'] ) ) {
+                add_action( 'upgrader_process_complete', array( $this, 'notify_plugin_update' ), 10, 2 );
+            }
+
+            // Уведомления о критических ошибках PHP
+            if ( ! empty( $settings['notify_site_errors'] ) ) {
+                add_action( 'shutdown', array( $this, 'notify_site_error' ) );
+            }
         }
     }
 
@@ -233,5 +247,109 @@ class WP_Ru_Max_Notifications {
         $message = "<b>Тестовое уведомление WP Ru-max</b>\n\nЛичные уведомления настроены и работают корректно!\n\nСайт: " . get_bloginfo( 'url' );
         $api     = new WP_Ru_Max_API();
         return $api->send_message( $chat_id, $message, 'html' );
+    }
+
+    /**
+     * Отправляет уведомление в MAX при обновлении плагинов или ядра WordPress.
+     * Вызывается хуком upgrader_process_complete.
+     */
+    public function notify_plugin_update( $upgrader, $hook_extra ) {
+        if ( empty( $hook_extra['action'] ) || $hook_extra['action'] !== 'update' ) {
+            return;
+        }
+
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        $chat_ids = isset( $settings['notify_chat_ids'] )
+            ? array_filter( array_map( 'trim', (array) $settings['notify_chat_ids'] ) )
+            : array();
+
+        if ( empty( $chat_ids ) ) {
+            return;
+        }
+
+        $type = isset( $hook_extra['type'] ) ? $hook_extra['type'] : '';
+        $site = get_bloginfo( 'name' );
+
+        if ( $type === 'core' ) {
+            global $wp_version;
+            $ver  = isset( $wp_version ) ? $wp_version : '—';
+            $text = "<b>WordPress обновлён</b>\n\nСайт: {$site}\nВерсия WordPress: {$ver}";
+
+        } elseif ( $type === 'plugin' ) {
+            $slugs = isset( $hook_extra['plugins'] ) ? (array) $hook_extra['plugins'] : array();
+            if ( empty( $slugs ) ) {
+                return;
+            }
+            if ( ! function_exists( 'get_plugin_data' ) ) {
+                require_once ABSPATH . 'wp-admin/includes/plugin.php';
+            }
+            $names = array();
+            foreach ( $slugs as $slug ) {
+                $path = WP_PLUGIN_DIR . '/' . $slug;
+                $data = file_exists( $path ) ? get_plugin_data( $path, false, false ) : array();
+                $names[] = ! empty( $data['Name'] ) ? $data['Name'] : $slug;
+            }
+            $text = "<b>Плагины обновлены</b>\n\nСайт: {$site}\nПлагины:\n— " . implode( "\n— ", $names );
+
+        } else {
+            return;
+        }
+
+        $api = new WP_Ru_Max_API();
+        foreach ( $chat_ids as $chat_id ) {
+            $result = $api->send_message( $chat_id, $text, 'html' );
+            if ( is_wp_error( $result ) ) {
+                WP_Ru_Max_Logger::log( 'notifications', 'error',
+                    'Ошибка уведомления об обновлении → ' . $chat_id . ': ' . $result->get_error_message() );
+            } else {
+                WP_Ru_Max_Logger::log( 'notifications', 'success',
+                    'Уведомление об обновлении отправлено → ' . $chat_id );
+            }
+        }
+    }
+
+    /**
+     * Отправляет уведомление в MAX при критической PHP-ошибке.
+     * Вызывается хуком shutdown.
+     */
+    public function notify_site_error() {
+        $error = error_get_last();
+        if ( ! $error ) {
+            return;
+        }
+
+        $fatal_types = array( E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR );
+        if ( ! in_array( $error['type'], $fatal_types, true ) ) {
+            return;
+        }
+
+        // Не чаще 1 раза в 5 минут, чтобы не спамить при повторяющихся ошибках
+        $lock = 'wp_ru_max_error_notified';
+        if ( get_transient( $lock ) ) {
+            return;
+        }
+        set_transient( $lock, 1, 5 * MINUTE_IN_SECONDS );
+
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        $chat_ids = isset( $settings['notify_chat_ids'] )
+            ? array_filter( array_map( 'trim', (array) $settings['notify_chat_ids'] ) )
+            : array();
+
+        if ( empty( $chat_ids ) ) {
+            return;
+        }
+
+        $site = get_bloginfo( 'name' );
+        $msg  = mb_substr( $error['message'], 0, 300, 'UTF-8' );
+        $file = basename( $error['file'] );
+        $text = "<b>Критическая ошибка сайта!</b>\n\nСайт: {$site}\nОшибка: {$msg}\nФайл: {$file}, строка {$error['line']}";
+
+        $api = new WP_Ru_Max_API();
+        foreach ( $chat_ids as $chat_id ) {
+            $api->send_message( $chat_id, $text, 'html' );
+        }
+
+        WP_Ru_Max_Logger::log( 'notifications', 'error',
+            "Критическая ошибка — уведомление отправлено. {$msg}" );
     }
 }
