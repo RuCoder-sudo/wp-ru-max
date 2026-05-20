@@ -198,6 +198,26 @@
         $('#notify_chat_ids_list').append('<div class="wp-ru-max-channel-row"><input type="text" name="notify_chat_ids[]" class="regular-text" placeholder="987654321 | My Personal ID" /><button type="button" class="button wp-ru-max-remove-channel">X</button></div>');
     });
 
+    /* -- Push Notification -- */
+    $('#send_push_btn').on('click', function () {
+        var chatId   = $('#push_chat_id').val().trim();
+        var message  = $('#push_message').val().trim();
+        var imageUrl = $('#push_image_url').val().trim();
+
+        if (!chatId) { alert('Укажите канал или Chat ID!'); return; }
+        if (!message && !imageUrl) { alert('Введите текст сообщения или URL изображения!'); return; }
+
+        var $btn = $(this).prop('disabled', true).text('Отправка...');
+        doAjax('wp_ru_max_send_push', {
+            chat_id:   chatId,
+            message:   message,
+            image_url: imageUrl,
+        }, function (res) {
+            $btn.prop('disabled', false).text('Отправить push');
+            showNotice($('#push_result'), res.success ? 'success' : 'error', res.success ? res.data : res.data);
+        });
+    });
+
     /* -- Notifications Tab -- */
     $('#notifications_enabled').on('change', function () {
         $('#notifications_settings').toggle(this.checked);
@@ -249,11 +269,13 @@
         });
 
         var data = $.extend({
-            notifications_enabled: $('#notifications_enabled').is(':checked') ? '1' : '0',
-            notify_from_email:     $('#notify_from_email').val(),
-            'notify_chat_ids[]':   chatIds,
-            notify_template:       $('#notify_template').val(),
-            notify_format:         $('input[name="notify_format"]:checked').val(),
+            notifications_enabled:  $('#notifications_enabled').is(':checked') ? '1' : '0',
+            notify_from_email:      $('#notify_from_email').val(),
+            'notify_chat_ids[]':    chatIds,
+            notify_template:        $('#notify_template').val(),
+            notify_format:          $('input[name="notify_format"]:checked').val(),
+            notify_plugin_updates:  $('input[name="notify_plugin_updates"]').is(':checked') ? '1' : '0',
+            notify_site_errors:     $('input[name="notify_site_errors"]').is(':checked') ? '1' : '0',
         }, collectNotifyButtons());
 
         doAjax('wp_ru_max_save_settings', data, function (res) {
