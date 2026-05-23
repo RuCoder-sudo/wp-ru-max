@@ -643,7 +643,13 @@ jQuery(function($){
                 case 'chat_widget_enabled':
                 case 'notify_plugin_updates':
                 case 'notify_site_errors':
+                case 'share_button_enabled':
+                case 'max_oauth_enabled':
                     $settings[ $field ] = filter_var( $value, FILTER_VALIDATE_BOOLEAN );
+                    break;
+                case 'max_oauth_client_id':
+                case 'max_oauth_client_secret':
+                    $settings[ $field ] = sanitize_text_field( $value );
                     break;
                 case 'post_types':
                 case 'channels':
@@ -660,9 +666,9 @@ jQuery(function($){
                     break;
             }
         } else {
-            $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages' );
+            $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages', 'max_oauth_bot_username' );
             $allowed_textarea = array( 'notify_template', 'post_message_template', 'chat_widget_retention_message', 'chat_widget_sound_specific_pages' );
-            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors' );
+            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled' );
             $allowed_int      = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay', 'send_delay_seconds', 'retry_count', 'retry_delay_seconds' );
             $allowed_float    = array( 'image_size_limit_mb' );
             $allowed_color    = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
@@ -963,22 +969,24 @@ jQuery(function($){
                     <span style="color:#555;">Интеграция с CRM-системами (amoCRM, Bitrix24) и автоматизация отдела продаж позволит упростить работу с клиентами и повысить эффективность продаж.</span>
                 </li>
                 <li style="margin-top:10px;">
-                    <strong>Кнопка «Поделиться в MAX»</strong><br>
-                    <span style="color:#555;">Кнопка «Поделиться в MAX» позволит пользователям делиться контентом на сайте в MAX.</span>
-                </li>
-                <li style="margin-top:10px;">
                     <strong>Хэштеги и упоминания</strong><br>
                     <span style="color:#555;">Хэштеги и упоминания в посте позволят уведомлять менеджеров о важных событиях или комментариях.</span>
-                </li>
-                <li style="margin-top:10px;">
-                    <strong>MAX-авторизация (OAuth)</strong><br>
-                    <span style="color:#555;">Вход на сайт через MAX OAuth. Пользователь авторизуется через MAX, и его данные (имя, email, фото) автоматически подтягиваются в профиль WordPress.</span>
                 </li>
             </ul>
         </div>
 
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
+
+            <h4 style="margin-bottom:4px;">v1.0.31</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li>Добавлено: кнопка «Поделиться в MAX» — при включении добавляет синюю кнопку в конце каждой статьи/страницы. На мобильных — нативный диалог «Поделиться» ОС, на ПК — попап с копированием ссылки.</li>
+                <li>Добавлено: MAX-авторизация через Mini App — переработана с нуля. MAX не поддерживает стандартный OAuth 2.0; реализована авторизация через HMAC-SHA256 + initData (Bot Token, без Client ID/Secret). Кнопка «Войти через MAX» ведёт на страницу бота; при открытии сайта из MAX вход происходит автоматически.</li>
+                <li>Исправлено: инструкция Шаг 6 переписана под Mini App-подход — убран Redirect URI, добавлено поле Username бота.</li>
+                <li>Исправлено: порядок карточек в «Дополнительных настройках» — Изображения → Файлы → Поделиться → Авторизация → Журналы → Отладка → Очистка.</li>
+                <li>Исправлено: обратный вызов авторизации перенесён на хук init/priority 20 (был priority 1 — слишком рано).</li>
+                <li>Исправлено: WooCommerce-хуки подключаются через class_exists() вместо plugins_loaded (уже отработал к моменту создания класса).</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.30</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -1609,6 +1617,60 @@ jQuery(function($){
         </div>
 
         <div class="wp-ru-max-card">
+            <h3>Кнопка «Поделиться в MAX»</h3>
+            <p>Добавляет кнопку «Поделиться в MAX» в конец каждой статьи на сайте — посетители смогут поделиться материалом в мессенджере MAX одним кликом.</p>
+            <table class="form-table">
+                <tr>
+                    <th scope="row">Показывать кнопку</th>
+                    <td>
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <label class="wp-ru-max-toggle">
+                                <input type="checkbox" id="share_button_enabled" <?php checked( ! empty( $settings['share_button_enabled'] ) ); ?> />
+                                <span class="wp-ru-max-toggle-slider"></span>
+                            </label>
+                            <span><?php echo ! empty( $settings['share_button_enabled'] ) ? '<strong>Включено</strong>' : 'Выключено'; ?></span>
+                        </div>
+                        <p class="description" style="margin-top:8px;">Кнопка появится в конце каждой записи и страницы (одиночный просмотр). На мобильных открывается нативный диалог «Поделиться» — пользователь выбирает MAX из списка приложений. На ПК — ссылка на статью копируется в буфер обмена.</p>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="wp-ru-max-card">
+            <h3>MAX-авторизация (Mini App)</h3>
+            <p>Позволяет посетителям входить на сайт через мессенджер MAX. Кнопка «Войти через MAX» появится на странице входа, регистрации и при оформлении заказа WooCommerce.</p>
+            <p style="background:#f0f6ff;border-left:4px solid #0077ff;padding:10px 14px;border-radius:0 6px 6px 0;font-size:13px;margin:0 0 12px;">
+                <strong>Как работает:</strong> MAX использует систему Mini App — <strong>не</strong> стандартный OAuth. Пользователь нажимает «Войти через MAX», переходит к боту в мессенджере, открывает мини-приложение (ваш сайт) — и вход происходит автоматически. Подпись данных проверяется через <strong>Bot Token</strong> (уже задан в главных настройках).
+            </p>
+            <table class="form-table">
+                <tr>
+                    <th scope="row">Включить авторизацию через MAX</th>
+                    <td>
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <label class="wp-ru-max-toggle">
+                                <input type="checkbox" id="max_oauth_enabled" <?php checked( ! empty( $settings['max_oauth_enabled'] ) ); ?> />
+                                <span class="wp-ru-max-toggle-slider"></span>
+                            </label>
+                            <span><?php echo ! empty( $settings['max_oauth_enabled'] ) ? '<strong>Включено</strong>' : 'Выключено'; ?></span>
+                        </div>
+                    </td>
+                </tr>
+                <tr id="max_oauth_bot_row" style="<?php echo empty( $settings['max_oauth_enabled'] ) ? 'display:none;' : ''; ?>">
+                    <th scope="row"><label for="max_oauth_bot_username">Username бота</label></th>
+                    <td>
+                        <input type="text" id="max_oauth_bot_username" class="regular-text" autocomplete="off"
+                            value="<?php echo esc_attr( $settings['max_oauth_bot_username'] ?? '' ); ?>"
+                            placeholder="@your_bot или your_bot" />
+                        <p class="description">Username вашего MAX-бота (с @ или без). Кнопка «Войти через MAX» ведёт на <code>https://max.ru/USERNAME</code>.</p>
+                        <p class="description" style="margin-top:6px;color:#6b7280;">
+                            Также необходимо настроить <strong>Mini App</strong> в MAX Partner Platform: Чат-боты → ваш бот → «Мини-приложение» → укажите URL вашего сайта (<code><?php echo esc_html( home_url() ); ?></code>).
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="wp-ru-max-card">
             <h3>Журналы</h3>
             <table class="form-table">
                 <tr>
@@ -1667,6 +1729,14 @@ jQuery(function($){
             </div>
             <div id="advanced_result" class="wp-ru-max-notice" style="display:none;"></div>
         </div>
+
+        <script>
+        (function($){
+            $('#max_oauth_enabled').on('change', function(){
+                $('#max_oauth_bot_row').toggle(this.checked);
+            });
+        })(jQuery);
+        </script>
         <?php
     }
 
@@ -1714,6 +1784,43 @@ jQuery(function($){
                 <li>Для <strong>публичного канала</strong>: используйте никнейм в формате <code>@channel_name</code>.</li>
                 <li>Для <strong>группы или приватного чата</strong>: числовой ID (например, <code>-100123456789</code>).</li>
             </ul>
+        </div>
+        <div class="wp-ru-max-card">
+            <h3>Шаг 6 (необязательно): Настройка MAX-авторизации (Mini App)</h3>
+            <p>Если вы хотите, чтобы посетители сайта могли входить через аккаунт мессенджера MAX — выполните следующие шаги. MAX использует систему Mini App, а не стандартный OAuth — Client ID и Secret <strong>не нужны</strong>.</p>
+            <ol>
+                <li>
+                    Перейдите на <a href="https://max.ru/partner" target="_blank" rel="noopener"><strong>платформу MAX для партнёров</strong></a> и войдите в аккаунт.
+                </li>
+                <li>
+                    Откройте раздел <strong>«Чат-боты»</strong>, выберите вашего бота, перейдите на вкладку <strong>«Мини-приложение»</strong>.
+                </li>
+                <li>
+                    В поле <strong>URL мини-приложения</strong> введите адрес вашего сайта:
+                    <br><br>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <code style="display:inline-block;background:#f3f4f6;padding:7px 12px;border-radius:6px;font-size:13px;word-break:break-all;border:1px solid #dde3ed;">https://ваш-сайт.ru</code>
+                    </div>
+                    <br>
+                    <em>Именно здесь MAX будет открывать ваш сайт как мини-приложение. Авторизация не требует никаких redirect URI — всё работает через подпись Bot Token.</em>
+                </li>
+                <li>
+                    Скопируйте <strong>Username бота</strong> (например, <code>@your_bot</code>) — он виден в настройках бота в MAX Partner Platform.
+                </li>
+                <li>
+                    Перейдите на вкладку <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=advanced' ) ); ?>"><strong>«Дополнительные настройки»</strong></a> → раздел <strong>«MAX-авторизация (Mini App)»</strong>.
+                </li>
+                <li>
+                    Включите тумблер <strong>«Включить авторизацию через MAX»</strong>, введите <strong>Username бота</strong>, нажмите <strong>«Сохранить»</strong>.<br>
+                    <em>Bot Token уже задан в главных настройках — дополнительно вводить его не нужно.</em>
+                </li>
+                <li>
+                    Готово! На странице входа, регистрации и оформления заказа WooCommerce появится кнопка <strong>«Войти через MAX»</strong>. Пользователь нажимает кнопку → открывает ваш сайт в MAX → вход происходит автоматически.
+                </li>
+            </ol>
+            <p style="margin-top:12px;padding:10px 14px;background:#f0fff4;border-left:4px solid #00a854;border-radius:0 6px 6px 0;">
+                <strong>Как работает авторизация:</strong> MAX передаёт подписанные данные пользователя (имя, ID, аватар) прямо в мини-приложение. Плагин проверяет подпись через HMAC-SHA256 с Bot Token — подделать данные невозможно. Пользователь может войти только открыв сайт из MAX.
+            </p>
         </div>
         <div class="wp-ru-max-card">
             <h3>Полезные ссылки</h3>
