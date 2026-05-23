@@ -32,6 +32,8 @@ class WP_Ru_Max {
         WP_Ru_Max_Notifications::instance();
         WP_Ru_Max_Chat_Widget::instance();
         WP_Ru_Max_Logger::instance();
+        WP_Ru_Max_Share::instance();
+        WP_Ru_Max_OAuth::instance();
     }
 
     public function load_textdomain() {
