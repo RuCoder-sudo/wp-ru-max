@@ -308,6 +308,9 @@
             enable_bot_api_log:     $('#enable_bot_api_log').is(':checked') ? '1' : '0',
             enable_post_sender_log: $('#enable_post_sender_log').is(':checked') ? '1' : '0',
             delete_on_uninstall:    $('#delete_on_uninstall').is(':checked') ? '1' : '0',
+            share_button_enabled:   $('#share_button_enabled').is(':checked') ? '1' : '0',
+            max_oauth_enabled:      $('#max_oauth_enabled').is(':checked') ? '1' : '0',
+            max_oauth_bot_username: $('#max_oauth_bot_username').val(),
         }, function (res) {
             $btn.prop('disabled', false).text('Сохранить');
             showNotice($('#advanced_result'), res.success ? 'success' : 'error', res.success ? 'Сохранено!' : res.data);
