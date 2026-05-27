@@ -86,7 +86,21 @@
 
 ## Совместимость
 
-`WordPress 5.8 – 6.7` · `PHP 7.4 – 8.3` · `WooCommerce` · `Contact Form 7` · `Elementor Forms` · `Gravity Forms` · `Ninja Forms` · любые формы через `wp_mail()` · **WordPress Multisite**
+Никаких сторонних SaaS-сервисов и API-шлюзов. Только ваш WordPress и официальный API MAX.
+
+| Компонент | Версия / Статус |
+|---|---|
+| WordPress | 5.8 – 6.7 |
+| PHP | 7.4 – 8.3 |
+| WooCommerce (новые заказы, смена статуса) | ✓ Да |
+| Contact Form 7 | ✓ Да |
+| Elementor Forms (включая Pro) | ✓ Да |
+| Gravity Forms | ✓ Да |
+| Ninja Forms | ✓ Да |
+| Любые формы через `wp_mail()` | ✓ Да |
+| Кастомные типы записей (CPT) | ✓ Да |
+| WordPress Multisite (сеть сайтов) | ✓ Да |
+| Поддомены и субдомены | ✓ Да |
 
 ---
 
