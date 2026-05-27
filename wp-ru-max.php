@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       WP Ru-max
  * Plugin URI:        https://рукодер.рф/wp-ru-max/
- * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Jetpack / Elementor и настраиваемый чат-виджет с анимацией и звуком.
- * Version:           1.0.31
+ * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Jetpack / Elementor и настраиваемый чат-виджет с анимацией и звуком. Поддерживает WordPress Multisite (мультисайт) и поддомены.
+ * Version:           1.0.32
  * Author:            Сергей Солошенко (RuCoder)
  * Author URI:        https://рукодер.рф/
  * License:           GPL v2 or later
@@ -11,8 +11,9 @@
  * Text Domain:       wp-ru-max
  * Domain Path:       /languages
  * Requires at least: 5.8
- * Tested up to:      7.0
+ * Tested up to:      6.7
  * Requires PHP:      7.4
+ * Network:           true
  *
  * -----------------------------------------------------------------------
  * Разработчик:        Сергей Солошенко | РуКодер
@@ -29,10 +30,18 @@
  * Installation:
  * 1. Загрузите папку `wp-ru-max` в директорию `/wp-content/plugins/`
  * 2. Активируйте плагин через меню «Плагины» в WordPress
+ *    (или «Сеть → Плагины» для сетевой активации на всех сайтах)
  * 3. Перейдите в «Ru-max → Активация»
  * 4. Введите лицензионный ключ или запросите его на вкладке «Активация»
  * 5. После активации настройте токен бота MAX на вкладке «Главная»
  * 6. Проверьте подключение кнопкой «Проверить подключение»
+ *
+ * Multisite / Поддомены:
+ * - Плагин поддерживает WordPress Multisite (сеть сайтов)
+ * - Может быть активирован сетевым администратором для всей сети
+ * - Каждый подсайт имеет свои независимые настройки
+ * - Сетевая лицензия автоматически распространяется на все подсайты сети
+ * - Для поддоменов (sub.domain.ru) достаточно лицензии на корневой домен
  *
  * FAQ:
  * Q: Где взять токен бота MAX?
@@ -52,6 +61,11 @@
  * Q: Что делает чат-виджет?
  * A: Добавляет плавающую кнопку MAX на сайт с приветственным сообщением,
  *    анимацией, звуковым уведомлением и настраиваемой задержкой появления.
+ *
+ * Q: Как работает лицензия в Multisite?
+ * A: Сетевой администратор может ввести одну лицензию в сетевых настройках
+ *    (Сеть → Плагины → WP Ru-max), и она автоматически распространится
+ *    на все подсайты сети. Либо каждый подсайт может иметь свою лицензию.
  * -----------------------------------------------------------------------
  */
 
@@ -59,7 +73,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'WP_RU_MAX_VERSION', '1.0.31' );
+define( 'WP_RU_MAX_VERSION', '1.0.32' );
 define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
 define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -86,5 +100,12 @@ wp_ru_max();
 
 new WP_Ru_Max_Updater( WP_RU_MAX_PLUGIN_FILE, WP_RU_MAX_VERSION );
 
+// Хуки активации/деактивации
 register_activation_hook( __FILE__, array( 'WP_Ru_Max', 'activate' ) );
 register_deactivation_hook( __FILE__, array( 'WP_Ru_Max', 'deactivate' ) );
+
+// Загружаем сетевой класс для Multisite
+if ( function_exists( 'is_multisite' ) && is_multisite() ) {
+    require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-network-admin.php';
+    WP_Ru_Max_Network_Admin::instance();
+}
