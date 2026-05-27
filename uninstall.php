@@ -4,10 +4,7 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
     exit;
 }
 
-$settings = get_option( 'wp_ru_max_settings', array() );
+// Загружаем основной класс для использования метода uninstall()
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-wp-ru-max.php';
 
-if ( ! empty( $settings['delete_on_uninstall'] ) ) {
-    global $wpdb;
-    $wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}ru_max_history" );
-    delete_option( 'wp_ru_max_settings' );
-}
+WP_Ru_Max::uninstall();
