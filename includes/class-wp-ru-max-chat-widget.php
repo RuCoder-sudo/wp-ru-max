@@ -27,13 +27,13 @@ class WP_Ru_Max_Chat_Widget {
         }
         wp_enqueue_style(
             'wp-ru-max-chat',
-            WP_RU_MAX_PLUGIN_URL . 'assets/chat-widget.css',
+            WP_RU_MAX_PLUGIN_URL . 'assets/css/chat-widget.css',
             array(),
             WP_RU_MAX_VERSION
         );
         wp_enqueue_script(
             'wp-ru-max-chat',
-            WP_RU_MAX_PLUGIN_URL . 'assets/chat-widget.js',
+            WP_RU_MAX_PLUGIN_URL . 'assets/js/chat-widget.js',
             array(),
             WP_RU_MAX_VERSION,
             true
