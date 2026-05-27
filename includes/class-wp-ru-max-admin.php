@@ -376,14 +376,14 @@ class WP_Ru_Max_Admin {
             return;
         }
 
-        $gutenberg_js_path = WP_RU_MAX_PLUGIN_DIR . 'assets/gutenberg-panel.js';
+        $gutenberg_js_path = WP_RU_MAX_PLUGIN_DIR . 'assets/js/gutenberg-panel.js';
         $gutenberg_js_ver  = file_exists( $gutenberg_js_path )
             ? (string) filemtime( $gutenberg_js_path )
             : WP_RU_MAX_VERSION;
 
         wp_enqueue_script(
             'wp-ru-max-gutenberg',
-            WP_RU_MAX_PLUGIN_URL . 'assets/gutenberg-panel.js',
+            WP_RU_MAX_PLUGIN_URL . 'assets/js/gutenberg-panel.js',
             array( 'jquery', 'wp-plugins', 'wp-edit-post', 'wp-element', 'wp-components', 'wp-data' ),
             $gutenberg_js_ver,
             true
@@ -500,8 +500,8 @@ class WP_Ru_Max_Admin {
         }
 
         if ( $is_plugin_page ) {
-            wp_enqueue_style( 'wp-ru-max-admin', WP_RU_MAX_PLUGIN_URL . 'assets/admin.css', array(), WP_RU_MAX_VERSION );
-            wp_enqueue_script( 'wp-ru-max-admin', WP_RU_MAX_PLUGIN_URL . 'assets/admin.js', array( 'jquery' ), WP_RU_MAX_VERSION, true );
+            wp_enqueue_style( 'wp-ru-max-admin', WP_RU_MAX_PLUGIN_URL . 'assets/css/admin.css', array(), WP_RU_MAX_VERSION );
+            wp_enqueue_script( 'wp-ru-max-admin', WP_RU_MAX_PLUGIN_URL . 'assets/js/admin.js', array( 'jquery' ), WP_RU_MAX_VERSION, true );
             wp_localize_script( 'wp-ru-max-admin', 'wpRuMax', array(
                 'ajaxUrl' => admin_url( 'admin-ajax.php' ),
                 'nonce'   => wp_create_nonce( 'wp_ru_max_nonce' ),
@@ -645,6 +645,7 @@ jQuery(function($){
                 case 'notify_site_errors':
                 case 'share_button_enabled':
                 case 'max_oauth_enabled':
+                case 'multisite_enabled':
                     $settings[ $field ] = filter_var( $value, FILTER_VALIDATE_BOOLEAN );
                     break;
                 case 'max_oauth_client_id':
@@ -668,7 +669,7 @@ jQuery(function($){
         } else {
             $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages', 'max_oauth_bot_username' );
             $allowed_textarea = array( 'notify_template', 'post_message_template', 'chat_widget_retention_message', 'chat_widget_sound_specific_pages' );
-            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled' );
+            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled', 'multisite_enabled' );
             $allowed_int      = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay', 'send_delay_seconds', 'retry_count', 'retry_delay_seconds' );
             $allowed_float    = array( 'image_size_limit_mb' );
             $allowed_color    = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
@@ -977,6 +978,17 @@ jQuery(function($){
 
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
+
+            <h4 style="margin-bottom:4px;">v1.0.32</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li>Добавлено: поддержка WordPress Multisite (сеть сайтов) — плагин корректно работает на всех подсайтах сети.</li>
+                <li>Добавлено: тумблер «Включить поддержку сети и поддоменов» во вкладке «Дополнительные настройки» — позволяет полностью управлять этой функцией.</li>
+                <li>Добавлено: сетевая лицензия — страница «Сеть → Ru-max (Сеть)» для суперадминистратора. Одна лицензия покрывает все подсайты.</li>
+                <li>Добавлено: поддержка поддоменов — лицензия на корневой домен (example.com) автоматически распространяется на sub.example.com и другие поддомены.</li>
+                <li>Добавлено: при добавлении нового подсайта в сеть таблица истории создаётся автоматически.</li>
+                <li>Добавлено: совместимость с PHP 7.4+ — полифил str_ends_with() для PHP &lt; 8.0.</li>
+                <li>Заголовок плагина: Network: true — поддержка активации для всей сети через «Сеть → Плагины».</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.31</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -1611,6 +1623,29 @@ jQuery(function($){
                             <span class="wp-ru-max-toggle-slider"></span>
                         </label>
                         <p class="description">Выключите, чтобы загрузить файлы/изображения вместо передачи URL.</p>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="wp-ru-max-card">
+            <h3>Multisite и поддомены</h3>
+            <p>Поддержка WordPress Multisite (сеть сайтов) и автоматическое распространение лицензии на поддомены и субдомены.</p>
+            <table class="form-table">
+                <tr>
+                    <th scope="row">Включить поддержку сети и поддоменов</th>
+                    <td>
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <label class="wp-ru-max-toggle">
+                                <input type="checkbox" id="multisite_enabled" <?php checked( ! empty( $settings['multisite_enabled'] ) ); ?> />
+                                <span class="wp-ru-max-toggle-slider"></span>
+                            </label>
+                            <span><?php echo ! empty( $settings['multisite_enabled'] ) ? '<strong>Включено</strong>' : 'Выключено'; ?></span>
+                        </div>
+                        <p class="description" style="margin-top:8px;">
+                            При включении: лицензия на корневой домен (<code><?php echo esc_html( WP_Ru_Max_License::get_network_domain() ); ?></code>) автоматически распространяется на все поддомены и субдомены, а также на все подсайты WordPress Multisite-сети.<br>
+                            При выключении: каждый сайт проверяет только свою лицензию независимо.
+                        </p>
                     </td>
                 </tr>
             </table>
