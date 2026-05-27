@@ -291,6 +291,13 @@
             <div class="row"><span class="name">WordPress Multisite (сеть сайтов)</span> <span class="val">✓ Да</span></div>
             <div class="row"><span class="name">Поддомены и субдомены</span> <span class="val">✓ Да</span></div>
         </div>
+
+        <div class="reveal" style="max-width:700px; margin:28px auto 0; padding:20px 24px; background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:10px;">
+            <p style="margin:0 0 8px; font-weight:700; font-size:.95rem;">Важно: плагин работает только со стандартом WordPress</p>
+            <p style="margin:0; color:var(--text-muted); line-height:1.7; font-size:.9rem;">
+                Уведомления перехватываются через стандартную функцию <code>wp_mail()</code>. Если сторонний плагин или форма использует собственный механизм отправки в обход <code>wp_mail()</code> — такие письма перехватить невозможно. Это ограничение самого стороннего плагина, нарушающего стандарты WordPress, а не нашего плагина.
+            </p>
+        </div>
     </div>
 </section>
 
@@ -461,7 +468,12 @@ git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
             </details>
             <details class="reveal">
                 <summary>Поддерживаются ли Contact Form 7, Elementor, Gravity Forms?</summary>
-                <p>Да. Плагин работает с любыми формами, отправляющими уведомления через стандартный <code>wp_mail()</code> WordPress: CF7, Elementor Forms, Gravity Forms, Ninja Forms и другими.</p>
+                <p><strong>Да, и любые другие формы — при одном условии:</strong> они должны использовать стандартную функцию WordPress <code>wp_mail()</code> для отправки уведомлений.</p>
+                <p>Плагин перехватывает все письма на уровне WordPress-ядра. Если форма или плагин отправляет уведомления через <code>wp_mail()</code> — перехват сработает автоматически, без дополнительных настроек.</p>
+                <p style="margin:12px 0 0; padding:12px 16px; background:color-mix(in srgb,var(--accent) 8%,transparent); border-left:3px solid var(--accent); border-radius:0 6px 6px 0; font-size:.9rem;">
+                    <strong>Работает:</strong> Contact Form 7, Elementor Forms, Gravity Forms, Ninja Forms, WooCommerce, Jetpack CRM, любые плагины на базе <code>wp_mail()</code>.<br>
+                    <strong>Не работает:</strong> плагины, использующие собственные механизмы отправки почты в обход <code>wp_mail()</code> (нестандартный хук вместо стандартного). Это ограничение таких плагинов, а не нашего.
+                </p>
             </details>
             <details class="reveal">
                 <summary>Лицензия действительно бессрочная?</summary>
@@ -478,6 +490,34 @@ git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
             <details class="reveal">
                 <summary>Как использовать на WordPress Multisite?</summary>
                 <p>Активируйте плагин на уровне сети через «Сеть → Плагины». Перейдите в «Сеть → Ru-max (Сеть)» и введите лицензионный ключ — он покроет все подсайты. Или активируйте плагин на каждом подсайте отдельно. Настройки (токен бота, каналы, уведомления) у каждого подсайта свои.</p>
+            </details>
+            <details class="reveal">
+                <summary>Почему мой плагин форм не отправляет уведомления в MAX?</summary>
+                <p>Наш плагин работает только со стандартом WordPress — функцией <code>wp_mail()</code>. Если ваш плагин форм или рассылок использует собственный механизм отправки (нестандартный хук вместо <code>wp_mail()</code>), перехватить такие письма невозможно.</p>
+                <p>Пример: плагин <strong>WP Adverts</strong> вместо стандартного <code>wp_mail()</code> использует собственный идентификатор <code>adverts_email</code> — это нарушение стандартов WordPress. Такие письма не проходят через ядро WordPress и не могут быть перехвачены.</p>
+                <p style="margin:10px 0 0; padding:10px 14px; background:color-mix(in srgb,var(--accent) 6%,transparent); border-left:3px solid var(--accent); border-radius:0 6px 6px 0; font-size:.9rem;">
+                    Чтобы проверить совместимость вашего плагина — напишите нам в Telegram <a href="https://t.me/RussCoder">@RussCoder</a>.
+                </p>
+            </details>
+            <details class="reveal">
+                <summary>Можно ли получать уведомления только с определённых форм, а не со всех?</summary>
+                <p>Да. В разделе <strong>Ru-max → Уведомления</strong> можно включить фильтрацию: выбрать конкретные темы писем или ключевые слова. Уведомления, не совпадающие с фильтром, в MAX не пересылаются.</p>
+            </details>
+            <details class="reveal">
+                <summary>Можно ли использовать несколько ботов или каналов MAX?</summary>
+                <p>Один токен бота — на весь плагин. При этом в разных модулях можно указывать разные каналы и чаты: автопубликация идёт в канал редакции, уведомления заказов — в личный чат с менеджером, тестовые сообщения — в отдельный служебный чат.</p>
+            </details>
+            <details class="reveal">
+                <summary>Можно ли настроить формат уведомлений?</summary>
+                <p>Да. В разделе <strong>Ru-max → Уведомления</strong> есть шаблон сообщения с переменными <code>{email_subject}</code> и <code>{email_message}</code>. Для автопубликации доступны <code>{title}</code>, <code>{excerpt}</code>, <code>{url}</code>, <code>{meta_ПОЛЕ}</code>, <code>{acf_ПОЛЕ}</code>.</p>
+            </details>
+            <details class="reveal">
+                <summary>Что произойдёт, если токен бота станет недействительным?</summary>
+                <p>Плагин запишет ошибку в лог (раздел <strong>Ru-max → Логи</strong>) и покажет предупреждение в админке. Остальные функции плагина продолжат работу. Нужно обновить токен на вкладке <strong>Ru-max → Главная</strong>.</p>
+            </details>
+            <details class="reveal">
+                <summary>Видны ли сообщения другим пользователям канала?</summary>
+                <p>Автопубликация в канал — да, это публичные сообщения. Личные уведомления (заказы, заявки с форм) отправляются в приватный чат с ботом, который видит только владелец бота. Никто посторонний данных не получит.</p>
             </details>
             <details class="reveal">
                 <summary>Как работают обновления?</summary>
