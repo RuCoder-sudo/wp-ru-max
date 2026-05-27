@@ -47,7 +47,7 @@
             <div>
                 <div class="eyebrow">
                     <span class="dot"></span>
-                    <span>Версия 1.0.21 — стабильная</span>
+                    <span>Версия 1.0.32 — Multisite + поддомены</span>
                 </div>
                 <h1>
                     WordPress &times; MAX —<br>
@@ -169,6 +169,14 @@
                 <h3>Лицензирование</h3>
                 <p>Привязка к домену через REST API сайта рукодер.рф. Часовая фоновая перепроверка ключа и кнопка «Проверить лицензию сейчас».</p>
             </div>
+            <div class="card reveal">
+                <h3>Multisite и поддомены</h3>
+                <p>Поддержка WordPress Multisite — одна лицензия покрывает все подсайты сети. Лицензия на example.com автоматически распространяется на shop.example.com, blog.example.com и любые другие поддомены.</p>
+            </div>
+            <div class="card reveal">
+                <h3>MAX-авторизация</h3>
+                <p>Кнопка «Войти через MAX» на странице входа, регистрации и WooCommerce. Авторизация через HMAC-SHA256 + initData — без OAuth, только Bot Token.</p>
+            </div>
         </div>
     </div>
 </section>
@@ -271,8 +279,8 @@
         </div>
 
         <div class="compat reveal">
-            <div class="row"><span class="name">WordPress</span> <span class="val">5.8 – 6.7</span></div>
-            <div class="row"><span class="name">PHP</span>       <span class="val">7.4 — 8.3</span></div>
+            <div class="row"><span class="name">WordPress</span> <span class="val">5.8 – 7.0</span></div>
+            <div class="row"><span class="name">PHP</span>       <span class="val">7.4 — 8.5</span></div>
             <div class="row"><span class="name">WooCommerce (новые заказы, смена статуса)</span> <span class="val">✓ Да</span></div>
             <div class="row"><span class="name">Contact Form 7</span>  <span class="val">✓ Да</span></div>
             <div class="row"><span class="name">Elementor Forms (включая Pro)</span> <span class="val">✓ Да</span></div>
@@ -280,6 +288,8 @@
             <div class="row"><span class="name">Ninja Forms</span>     <span class="val">✓ Да</span></div>
             <div class="row"><span class="name">Любые формы через <code>wp_mail()</code></span> <span class="val">✓ Да</span></div>
             <div class="row"><span class="name">Кастомные типы записей (CPT)</span> <span class="val">✓ Да</span></div>
+            <div class="row"><span class="name">WordPress Multisite (сеть сайтов)</span> <span class="val">✓ Да</span></div>
+            <div class="row"><span class="name">Поддомены и субдомены</span> <span class="val">✓ Да</span></div>
         </div>
     </div>
 </section>
@@ -409,6 +419,14 @@ git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
             <details class="reveal">
                 <summary>Что будет, если ключ отозвать?</summary>
                 <p>Плагин ходит на сервер рукодер.рф и сверяет статус ключа: при открытии вкладки «Активация» — мгновенно, в фоне — раз в час. Если ключ отозван, статус сразу переключается на <code>suspended</code> и платные функции отключаются.</p>
+            </details>
+            <details class="reveal">
+                <summary>Работает ли плагин на нескольких доменах/поддоменах?</summary>
+                <p>Да. В «Дополнительных настройках» включите тумблер «Включить поддержку сети и поддоменов». После активации лицензии на главном сайте (<code>example.com</code>) все поддомены (<code>shop.example.com</code>, <code>blog.example.com</code> и т.д.) автоматически получают активированный плагин. <strong>Важно:</strong> лицензия распространяется только на поддомены того же домена — чужие домены не покрываются.</p>
+            </details>
+            <details class="reveal">
+                <summary>Как использовать на WordPress Multisite?</summary>
+                <p>Активируйте плагин на уровне сети через «Сеть → Плагины». Перейдите в «Сеть → Ru-max (Сеть)» и введите лицензионный ключ — он покроет все подсайты. Или активируйте плагин на каждом подсайте отдельно. Настройки (токен бота, каналы, уведомления) у каждого подсайта свои.</p>
             </details>
             <details class="reveal">
                 <summary>Как работают обновления?</summary>
@@ -675,7 +693,7 @@ git clone https://github.com/RuCoder-sudo/wp-ru-max.git \
             </div>
             <div class="inn">ИНН: 772076225347</div>
             <div>Разработка сайтов с <span class="heart">❤</span> | Все права защищены</div>
-            <div class="rights">WP Ru-max v1.0.21 · GPLv2 · сделано в России</div>
+            <div class="rights">WP Ru-max v1.0.32 · GPLv2 · сделано в России</div>
         </div>
     </div>
 </footer>
