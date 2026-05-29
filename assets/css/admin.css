@@ -501,14 +501,21 @@
 
 /* ===== LICENSE / ACTIVATION STYLES ===== */
 
-/* Alert tab highlight */
+/* Alert tab highlight — pulse when plugin not activated */
 .wp-ru-max-tab-activation-alert {
     color: #d63638 !important;
     border-bottom-color: #d63638 !important;
     font-weight: 600;
+    animation: wp-ru-max-tab-pulse 2.8s ease-in-out infinite;
 }
 .wp-ru-max-tab-activation-alert:hover {
     color: #b42121 !important;
+    animation: none;
+    background: #fff0f0 !important;
+}
+@keyframes wp-ru-max-tab-pulse {
+    0%, 100% { background: #f1f5f9; color: #d63638 !important; }
+    50%       { background: #fff0f0; color: #a31515 !important; box-shadow: 0 0 0 2px rgba(214,54,56,0.2); }
 }
 
 /* License banner on main tab */
