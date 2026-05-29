@@ -17,6 +17,7 @@ class WP_Ru_Max_Admin {
 
     private function __construct() {
         add_action( 'admin_menu',                        array( $this, 'add_menu' ) );
+        add_action( 'admin_menu',                        array( $this, 'register_submenu_items' ), 999 );
         add_action( 'admin_head',                        array( $this, 'admin_icon_css' ) );
         add_action( 'admin_enqueue_scripts',             array( $this, 'enqueue_admin_scripts' ) );
         add_action( 'enqueue_block_editor_assets',       array( $this, 'enqueue_gutenberg_panel' ) );
@@ -491,6 +492,22 @@ class WP_Ru_Max_Admin {
         );
     }
 
+    public function register_submenu_items() {
+        global $submenu;
+        $is_licensed = WP_Ru_Max_License::is_active();
+        $submenu['wp-ru-max'] = array(
+            array( 'Главная',                   'manage_options', 'admin.php?page=wp-ru-max&tab=main' ),
+            array( 'Отправка публикаций',       'manage_options', 'admin.php?page=wp-ru-max&tab=post_sender' ),
+            array( 'Личные уведомления',        'manage_options', 'admin.php?page=wp-ru-max&tab=notifications' ),
+            array( 'Дополнительные настройки',  'manage_options', 'admin.php?page=wp-ru-max&tab=advanced' ),
+            array( 'Инструкция',                'manage_options', 'admin.php?page=wp-ru-max&tab=instructions' ),
+            array( 'Чат',                       'manage_options', 'admin.php?page=wp-ru-max&tab=chat' ),
+            array( 'История',                   'manage_options', 'admin.php?page=wp-ru-max&tab=history' ),
+            array( $is_licensed ? 'Активирован ✓' : '⚠ Активация', 'manage_options', 'admin.php?page=wp-ru-max&tab=activation' ),
+            array( 'Обновления',                'manage_options', 'admin.php?page=wp-ru-max&tab=updates' ),
+        );
+    }
+
     public function enqueue_admin_scripts( $hook ) {
         $is_plugin_page = strpos( $hook, 'wp-ru-max' ) !== false;
         $is_post_edit   = in_array( $hook, array( 'post.php', 'post-new.php' ), true );
@@ -954,6 +971,28 @@ jQuery(function($){
         <div class="wp-ru-max-card">
             <h2>Обновления</h2>
             <p>История изменений и планы развития плагина WP Ru-max.</p>
+        </div>
+
+        <div class="wp-ru-max-card wp-ru-max-promo-block" style="background:linear-gradient(135deg,#f0f4ff 0%,#e8f5e9 100%);border-left:4px solid #6366f1;">
+            <div style="display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap;">
+                <div style="font-size:42px;line-height:1;">🍪</div>
+                <div style="flex:1;min-width:200px;">
+                    <h3 style="margin:0 0 6px;color:#1e293b;font-size:16px;border:none;padding:0;">CookieRus — Баннер по законом России о cookie</h3>
+                    <p style="margin:0 0 10px;color:#374151;font-size:13px;">Полнофункциональный менеджер согласия с cookie для WordPress с приоритетом на требования <strong>152-ФЗ</strong>. Плагин выводит информационный баннер с кнопками «Принять всё», «Отклонить» и «Настроить», поддерживает 5 категорий cookies (от «Необходимых» до «Рекламы»), ведёт детальный лог согласий пользователей с IP и страной, а также позволяет выгрузить историю в CSV для юриста или администратора. Встроен генератор политики cookie под российское законодательство.</p>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+                        <span style="background:#e0e7ff;color:#3730a3;padding:3px 10px;border-radius:20px;font-size:12px;">Панель управления</span>
+                        <span style="background:#e0e7ff;color:#3730a3;padding:3px 10px;border-radius:20px;font-size:12px;">Настройки баннера</span>
+                        <span style="background:#e0e7ff;color:#3730a3;padding:3px 10px;border-radius:20px;font-size:12px;">Менеджер логов</span>
+                        <span style="background:#e0e7ff;color:#3730a3;padding:3px 10px;border-radius:20px;font-size:12px;">Генератор политики</span>
+                        <span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:20px;font-size:12px;">Полный гайд по регистрации в РКН</span>
+                    </div>
+                    <a href="https://github.com/RuCoder-sudo/cookierus" target="_blank" rel="noopener"
+                       class="button button-primary"
+                       style="background:#6366f1;border-color:#4f46e5;text-decoration:none;">
+                        ⬇ Скачать бесплатно на GitHub
+                    </a>
+                </div>
+            </div>
         </div>
 
         <div class="wp-ru-max-card">
@@ -2313,6 +2352,69 @@ jQuery(function($){
                     </div>
                     <div id="license_activate_result" class="wp-ru-max-notice" style="display:none;margin-top:12px;"></div>
                     <?php endif; ?>
+                    <div style="margin-top:20px;padding:14px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;">
+                        <h4 style="margin:0 0 8px;font-size:13px;color:#374151;">Согласие пользователя</h4>
+                        <p style="margin:0 0 8px;font-size:13px;color:#374151;">Используя плагин WP Ru-max и активируя лицензию, пользователь подтверждает, что ознакомлен с указанными ниже страницами и даёт согласие на обработку его <strong>email, имени, фамилии и домена</strong>:</p>
+                        <ul style="margin:0 0 0 18px;font-size:13px;list-style:disc;">
+                            <li><a href="https://github.com/RuCoder-sudo/wp-ru-max/wiki/Политика-плагина" target="_blank" rel="noopener">Политика плагина</a></li>
+                            <li><a href="https://github.com/RuCoder-sudo/wp-ru-max/wiki/Возврат-и-отзыв-лицензии" target="_blank" rel="noopener">Возврат и отзыв лицензии</a></li>
+                            <li><a href="https://github.com/RuCoder-sudo/wp-ru-max/wiki/Пользовательское-соглашение" target="_blank" rel="noopener">Пользовательское соглашение</a></li>
+                            <li><a href="https://github.com/RuCoder-sudo/wp-ru-max/wiki/Политика-конфиденциальности" target="_blank" rel="noopener">Политика конфиденциальности</a></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <hr style="margin:32px 0;" />
+
+                <div class="wp-ru-max-activation-block">
+                    <h3>Запросить лицензионный ключ</h3>
+                    <p>Нет ключа? Заполните форму — владелец плагина рассмотрит запрос и пришлёт ключ на ваш email.</p>
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row"><label for="req_name">Ваше имя *</label></th>
+                            <td><input type="text" id="req_name" name="req_name" class="regular-text" placeholder="Иван Иванов" /></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="req_email">Ваш email *</label></th>
+                            <td>
+                                <input type="email" id="req_email" name="req_email" class="regular-text" placeholder="your@email.ru" />
+                                <p class="description">На этот адрес придёт лицензионный ключ.</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="req_site">Ссылка на ваш сайт *</label></th>
+                            <td>
+                                <input type="url" id="req_site" name="req_site" class="regular-text" placeholder="https://example.ru" />
+                                <p class="description">Вставьте ссылку на ваш сайт для получения лицензионного ключа.</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="req_social">Контакт для быстрой связи</label></th>
+                            <td><input type="text" id="req_social" name="req_social" class="regular-text" placeholder="Telegram @username, MAX, WhatsApp +7..." /></td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Согласия *</th>
+                            <td>
+                                <label class="wp-ru-max-checkbox-label" style="display:flex;align-items:flex-start;gap:8px;background:#fff8e1;border:1px solid #f0c040;border-radius:6px;padding:10px 14px;margin-bottom:10px;">
+                                    <input type="checkbox" id="bot_info_confirmed" name="bot_info_confirmed" value="1" checked style="margin-top:3px;flex-shrink:0;" />
+                                    <span>Ознакомлен и проинформирован, что создать бота в мессенджере MAX и получить токен бота могут только <strong>ИП или ООО</strong>. Физические лица не могут получить токен бота.</span>
+                                </label>
+                                <label class="wp-ru-max-checkbox-label">
+                                    <input type="checkbox" id="consent_personal" name="consent_personal" value="1" />
+                                    Даю своё согласие на <a href="https://рукодер.рф/privacy-policy/" target="_blank" rel="noopener">обработку персональных данных</a>.
+                                </label>
+                                <br /><br />
+                                <label class="wp-ru-max-checkbox-label">
+                                    <input type="checkbox" id="consent_mailing" name="consent_mailing" value="1" />
+                                    Согласен(а) получать информационные рассылки.
+                                </label>
+                            </td>
+                        </tr>
+                    </table>
+                    <div class="wp-ru-max-actions">
+                        <button type="button" class="button button-primary" id="request_license_btn" disabled>Отправить запрос</button>
+                    </div>
+                    <div id="license_request_result" class="wp-ru-max-notice" style="display:none;margin-top:12px;"></div>
                 </div>
 
                 <hr style="margin:32px 0;" />
@@ -2339,48 +2441,6 @@ jQuery(function($){
                             <tr><td>5 доменов</td><td><strong>7&nbsp;000&nbsp;₽</strong></td><td>1&nbsp;400&nbsp;₽/шт</td><td><strong>36%</strong></td></tr>
                         </tbody>
                     </table>
-                </div>
-
-                <hr style="margin:32px 0;" />
-
-                <div class="wp-ru-max-activation-block">
-                    <h3>Запросить лицензионный ключ</h3>
-                    <p>Нет ключа? Заполните форму — владелец плагина рассмотрит запрос и пришлёт ключ на ваш email.</p>
-                    <table class="form-table">
-                        <tr>
-                            <th scope="row"><label for="req_name">Ваше имя *</label></th>
-                            <td><input type="text" id="req_name" name="req_name" class="regular-text" placeholder="Иван Иванов" /></td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="req_email">Ваш email *</label></th>
-                            <td>
-                                <input type="email" id="req_email" name="req_email" class="regular-text" placeholder="your@email.ru" />
-                                <p class="description">На этот адрес придёт лицензионный ключ.</p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="req_social">Контакт для быстрой связи</label></th>
-                            <td><input type="text" id="req_social" name="req_social" class="regular-text" placeholder="Telegram @username, MAX, WhatsApp +7..." /></td>
-                        </tr>
-                        <tr>
-                            <th scope="row">Согласия *</th>
-                            <td>
-                                <label class="wp-ru-max-checkbox-label">
-                                    <input type="checkbox" id="consent_personal" name="consent_personal" value="1" />
-                                    Даю своё согласие на <a href="https://рукодер.рф/privacy-policy/" target="_blank" rel="noopener">обработку персональных данных</a>.
-                                </label>
-                                <br /><br />
-                                <label class="wp-ru-max-checkbox-label">
-                                    <input type="checkbox" id="consent_mailing" name="consent_mailing" value="1" />
-                                    Согласен(а) получать информационные рассылки.
-                                </label>
-                            </td>
-                        </tr>
-                    </table>
-                    <div class="wp-ru-max-actions">
-                        <button type="button" class="button button-primary" id="request_license_btn" disabled>Отправить запрос</button>
-                    </div>
-                    <div id="license_request_result" class="wp-ru-max-notice" style="display:none;margin-top:12px;"></div>
                 </div>
             <?php endif; ?>
         </div>
@@ -2422,26 +2482,35 @@ jQuery(function($){
                 });
             });
 
-            $('#consent_personal, #consent_mailing').on('change', function(){
-                var both = $('#consent_personal').is(':checked') && $('#consent_mailing').is(':checked');
-                $('#request_license_btn').prop('disabled', !both);
-            });
+            function updateRequestBtn(){
+                var ok = $('#consent_personal').is(':checked') &&
+                         $('#consent_mailing').is(':checked') &&
+                         $('#bot_info_confirmed').is(':checked');
+                $('#request_license_btn').prop('disabled', !ok);
+            }
+            $('#consent_personal, #consent_mailing, #bot_info_confirmed').on('change', updateRequestBtn);
+            updateRequestBtn();
 
             $('#request_license_btn').on('click', function(){
                 var name  = $('#req_name').val().trim();
                 var email = $('#req_email').val().trim();
-                if (!name) { showResult('#license_request_result', false, 'Укажите ваше имя.'); return; }
+                var site  = $('#req_site').val().trim();
+                if (!name)  { showResult('#license_request_result', false, 'Укажите ваше имя.'); return; }
                 if (!email || !/\S+@\S+\.\S+/.test(email)) { showResult('#license_request_result', false, 'Укажите корректный email.'); return; }
+                if (!site)  { showResult('#license_request_result', false, 'Укажите ссылку на ваш сайт.'); return; }
+                if (!$('#bot_info_confirmed').is(':checked')) { showResult('#license_request_result', false, 'Подтвердите информацию о боте MAX.'); return; }
                 var $btn = $(this).prop('disabled', true).text('Отправляем...');
                 $.post(wpRuMax.ajaxUrl, {
                     action: 'wp_ru_max_request_license', nonce: wpRuMax.nonce,
-                    req_name: name, req_email: email, req_social: $('#req_social').val().trim(),
+                    req_name: name, req_email: email, req_site: site,
+                    req_social: $('#req_social').val().trim(),
                     consent: $('#consent_personal').is(':checked') ? 1 : 0,
-                    mailing: $('#consent_mailing').is(':checked') ? 1 : 0
+                    mailing: $('#consent_mailing').is(':checked') ? 1 : 0,
+                    bot_info_confirmed: $('#bot_info_confirmed').is(':checked') ? 1 : 0
                 }, function(resp){
                     if (resp.success) {
                         showResult('#license_request_result', true, resp.data);
-                        $('#req_name, #req_email, #req_social').val('');
+                        $('#req_name, #req_email, #req_site, #req_social').val('');
                         $('#consent_personal, #consent_mailing').prop('checked', false);
                         $btn.prop('disabled', true).text('Отправить запрос');
                     } else {
