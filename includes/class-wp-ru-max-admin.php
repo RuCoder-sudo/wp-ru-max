@@ -663,6 +663,7 @@ jQuery(function($){
                 case 'share_button_enabled':
                 case 'max_oauth_enabled':
                 case 'multisite_enabled':
+                case 'woo_filter_enabled':
                     $settings[ $field ] = filter_var( $value, FILTER_VALIDATE_BOOLEAN );
                     break;
                 case 'max_oauth_client_id':
@@ -686,11 +687,11 @@ jQuery(function($){
         } else {
             $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages', 'max_oauth_bot_username' );
             $allowed_textarea = array( 'notify_template', 'post_message_template', 'chat_widget_retention_message', 'chat_widget_sound_specific_pages' );
-            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled', 'multisite_enabled' );
+            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled', 'multisite_enabled', 'woo_filter_enabled' );
             $allowed_int      = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay', 'send_delay_seconds', 'retry_count', 'retry_delay_seconds' );
             $allowed_float    = array( 'image_size_limit_mb' );
             $allowed_color    = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
-            $allowed_array    = array( 'post_types', 'channels', 'notify_chat_ids', 'filter_categories', 'filter_tags' );
+            $allowed_array    = array( 'post_types', 'channels', 'notify_chat_ids', 'filter_categories', 'filter_tags', 'woo_notify_statuses' );
 
             foreach ( $allowed_text as $key ) {
                 if ( isset( $_POST[ $key ] ) ) {
@@ -1017,6 +1018,13 @@ jQuery(function($){
 
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
+
+            <h4 style="margin-bottom:4px;">v1.0.34</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li>Добавлено: WooCommerce — фильтр уведомлений по статусам заказа (ожидает оплаты, в обработке, выполнен и др.).</li>
+                <li>Добавлено: защита от дублей WooCommerce — одно и то же уведомление о заказе больше не приходит 2–3 раза подряд.</li>
+                <li>Добавлено: настройки WooCommerce-фильтра в разделе «Личные уведомления» → «WooCommerce — фильтр заказов».</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.33</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -1603,6 +1611,49 @@ jQuery(function($){
                                 <span class="description"> — уведомление в MAX при критических PHP-ошибках (fatal error)</span>
                             </label>
                             <p class="description" style="margin-top:10px;">Если ничего не включено — модуль работает как прежде: перехватывает все письма и доставляет их в MAX.</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="wp-ru-max-card">
+                <h3>WooCommerce — фильтр заказов</h3>
+                <p>Настройте, о каких заказах WooCommerce получать уведомления. Включённая защита от дублей гарантирует, что одно и то же уведомление о заказе придёт только один раз.</p>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">Включить фильтр WooCommerce</th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="woo_filter_enabled" id="woo_filter_enabled" value="1" <?php checked( ! empty( $settings['woo_filter_enabled'] ) ); ?> />
+                                <strong>Фильтр по статусам + защита от дублей</strong>
+                            </label>
+                            <p class="description">Без этой опции приходят <em>все</em> письма WooCommerce, включая дубли (новый заказ + смена статуса = 2+ одинаковых уведомления).</p>
+                        </td>
+                    </tr>
+                    <tr id="woo_statuses_row" style="<?php echo empty( $settings['woo_filter_enabled'] ) ? 'display:none;' : ''; ?>">
+                        <th scope="row">Статусы для уведомлений</th>
+                        <td>
+                            <?php
+                            $woo_statuses = array(
+                                'pending'    => 'Ожидает оплаты',
+                                'processing' => 'В обработке (оплачен)',
+                                'on-hold'    => 'На удержании',
+                                'completed'  => 'Выполнен',
+                                'cancelled'  => 'Отменён',
+                                'refunded'   => 'Возврат средств',
+                                'failed'     => 'Ошибка оплаты',
+                            );
+                            $selected_statuses = isset( $settings['woo_notify_statuses'] )
+                                ? (array) $settings['woo_notify_statuses']
+                                : array( 'processing', 'completed' );
+                            foreach ( $woo_statuses as $slug => $label ) :
+                            ?>
+                            <label style="display:block;margin-bottom:6px;">
+                                <input type="checkbox" name="woo_notify_statuses[]" value="<?php echo esc_attr( $slug ); ?>" <?php checked( in_array( $slug, $selected_statuses, true ) ); ?> />
+                                <?php echo esc_html( $label ); ?> <code style="font-size:11px;color:#666;"><?php echo esc_html( $slug ); ?></code>
+                            </label>
+                            <?php endforeach; ?>
+                            <p class="description" style="margin-top:8px;">Если ни один статус не выбран — уведомления WooCommerce не отправляются совсем.</p>
                         </td>
                     </tr>
                 </table>
