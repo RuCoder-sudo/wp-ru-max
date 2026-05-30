@@ -224,6 +224,11 @@
         doAjax('wp_ru_max_save_settings', { field: 'notifications_enabled', value: this.checked ? '1' : '0' }, function () {});
     });
 
+    /* WooCommerce filter toggle */
+    $('#woo_filter_enabled').on('change', function () {
+        $('#woo_statuses_row').toggle(this.checked);
+    });
+
     $('#test_notification').on('click', function () {
         var chatId = $('#notify_test_chat').val().trim();
         if (!chatId) {
@@ -268,14 +273,21 @@
             if (v) chatIds.push(v);
         });
 
+        var wooStatuses = [];
+        $('input[name="woo_notify_statuses[]"]:checked').each(function () {
+            wooStatuses.push($(this).val());
+        });
+
         var data = $.extend({
-            notifications_enabled:  $('#notifications_enabled').is(':checked') ? '1' : '0',
-            notify_from_email:      $('#notify_from_email').val(),
-            'notify_chat_ids[]':    chatIds,
-            notify_template:        $('#notify_template').val(),
-            notify_format:          $('input[name="notify_format"]:checked').val(),
-            notify_plugin_updates:  $('input[name="notify_plugin_updates"]').is(':checked') ? '1' : '0',
-            notify_site_errors:     $('input[name="notify_site_errors"]').is(':checked') ? '1' : '0',
+            notifications_enabled:      $('#notifications_enabled').is(':checked') ? '1' : '0',
+            notify_from_email:          $('#notify_from_email').val(),
+            'notify_chat_ids[]':        chatIds,
+            notify_template:            $('#notify_template').val(),
+            notify_format:              $('input[name="notify_format"]:checked').val(),
+            notify_plugin_updates:      $('input[name="notify_plugin_updates"]').is(':checked') ? '1' : '0',
+            notify_site_errors:         $('input[name="notify_site_errors"]').is(':checked') ? '1' : '0',
+            woo_filter_enabled:         $('input[name="woo_filter_enabled"]').is(':checked') ? '1' : '0',
+            'woo_notify_statuses[]':    wooStatuses,
         }, collectNotifyButtons());
 
         doAjax('wp_ru_max_save_settings', data, function (res) {
