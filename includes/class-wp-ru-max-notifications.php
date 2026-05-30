@@ -8,6 +8,12 @@ class WP_Ru_Max_Notifications {
 
     private static $instance = null;
 
+    /**
+     * Данные текущего WooCommerce-письма, заполняемые хуком woocommerce_email_before_send_mail.
+     * Сбрасываются после каждого вызова intercept_email.
+     */
+    private static $current_woo_order = null;
+
     public static function instance() {
         if ( null === self::$instance ) {
             self::$instance = new self();
@@ -24,6 +30,10 @@ class WP_Ru_Max_Notifications {
             // всегда срабатывает до отправки.
             add_filter( 'wp_mail', array( $this, 'intercept_email' ), 5, 1 );
 
+            // WooCommerce: перехватываем данные заказа ДО отправки письма,
+            // чтобы знать order_id и статус внутри wp_mail фильтра.
+            add_action( 'woocommerce_email_before_send_mail', array( $this, 'capture_woo_order_info' ), 1, 1 );
+
             // Уведомления об обновлении плагинов и ядра WordPress
             if ( ! empty( $settings['notify_plugin_updates'] ) ) {
                 add_action( 'upgrader_process_complete', array( $this, 'notify_plugin_update' ), 10, 2 );
@@ -34,6 +44,41 @@ class WP_Ru_Max_Notifications {
                 add_action( 'shutdown', array( $this, 'notify_site_error' ) );
             }
         }
+    }
+
+    /**
+     * Перехватывает данные WooCommerce-письма перед его отправкой.
+     * Вызывается хуком woocommerce_email_before_send_mail.
+     *
+     * @param WC_Email $email Объект WooCommerce письма.
+     */
+    public function capture_woo_order_info( $email ) {
+        if ( ! isset( $email->object ) ) {
+            return;
+        }
+
+        // Поддержка WC_Order и любых его наследников
+        if ( ! ( $email->object instanceof WC_Abstract_Order ) &&
+             ! ( $email->object instanceof WC_Order ) ) {
+            // fallback: проверяем через интерфейс
+            if ( ! method_exists( $email->object, 'get_id' ) || ! method_exists( $email->object, 'get_status' ) ) {
+                return;
+            }
+        }
+
+        $order_id = (int) $email->object->get_id();
+        if ( ! $order_id ) {
+            return;
+        }
+
+        $status   = (string) $email->object->get_status();
+        $email_id = isset( $email->id ) ? (string) $email->id : '';
+
+        self::$current_woo_order = array(
+            'order_id' => $order_id,
+            'status'   => $status,
+            'email_id' => $email_id,
+        );
     }
 
     /**
@@ -143,10 +188,29 @@ class WP_Ru_Max_Notifications {
         );
     }
 
+    /**
+     * Проверяет и регистрирует дедупликацию WooCommerce-уведомления.
+     * Возвращает true, если уведомление нужно отправить.
+     * Возвращает false, если это дубль и отправку нужно пропустить.
+     *
+     * @param int    $order_id  ID заказа.
+     * @param string $status    Статус заказа (без префикса 'wc-').
+     * @param int    $ttl       Время жизни защиты от дублей в секундах.
+     */
+    private function woo_dedup_check( $order_id, $status, $ttl = 60 ) {
+        $key = 'wp_ru_max_woo_dedup_' . $order_id . '_' . $status;
+        if ( get_transient( $key ) ) {
+            return false;
+        }
+        set_transient( $key, 1, $ttl );
+        return true;
+    }
+
     public function intercept_email( $args ) {
         $settings = get_option( 'wp_ru_max_settings', array() );
 
         if ( empty( $settings['notifications_enabled'] ) ) {
+            self::$current_woo_order = null;
             return $args;
         }
 
@@ -161,6 +225,40 @@ class WP_Ru_Max_Notifications {
 
         // Нормализуем получателя письма
         $to_str = is_array( $to ) ? implode( ', ', $to ) : (string) $to;
+
+        // ── WooCommerce: фильтр по статусу и защита от дублей ────────────────
+        $woo_info = self::$current_woo_order;
+        self::$current_woo_order = null; // сбрасываем сразу
+
+        if ( ! empty( $settings['woo_filter_enabled'] ) && ! empty( $woo_info ) ) {
+            $order_id = $woo_info['order_id'];
+            // WooCommerce хранит статус с префиксом 'wc-' в БД, но get_status() возвращает без 'wc-'
+            $status   = ltrim( $woo_info['status'], 'wc-' );
+
+            // Фильтр по статусам
+            $allowed_statuses = isset( $settings['woo_notify_statuses'] ) ? (array) $settings['woo_notify_statuses'] : array();
+            if ( ! empty( $allowed_statuses ) ) {
+                $allowed_clean = array_map( function( $s ) { return ltrim( $s, 'wc-' ); }, $allowed_statuses );
+                if ( ! in_array( $status, $allowed_clean, true ) ) {
+                    WP_Ru_Max_Logger::log( 'notifications', 'info',
+                        "WooCommerce заказ #{$order_id} (статус: {$status}) пропущен — статус не входит в список уведомлений.",
+                        array( 'order_id' => $order_id, 'status' => $status, 'allowed' => $allowed_clean )
+                    );
+                    return $args;
+                }
+            }
+
+            // Защита от дублей: одно уведомление по одному заказу+статус за 60 секунд
+            $dedup_ttl = isset( $settings['woo_dedup_ttl'] ) ? max( 10, intval( $settings['woo_dedup_ttl'] ) ) : 60;
+            if ( ! $this->woo_dedup_check( $order_id, $status, $dedup_ttl ) ) {
+                WP_Ru_Max_Logger::log( 'notifications', 'info',
+                    "WooCommerce заказ #{$order_id} (статус: {$status}) — дубль уведомления пропущен (защита от спама).",
+                    array( 'order_id' => $order_id, 'status' => $status )
+                );
+                return $args;
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────────
 
         // Если нет chat_ids — логируем и выходим
         $chat_ids_clean = array_filter( array_map( 'trim', $chat_ids ) );
