@@ -1019,6 +1019,13 @@ jQuery(function($){
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
 
+            <h4 style="margin-bottom:4px;">v1.0.36</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li>Добавлено: поддержка bbPress форумов — плагин корректно обрабатывает топики (тип записи «topic») без панели миниатюры.</li>
+                <li>Добавлено: автоматический поиск изображений по трём источникам: миниатюра → первый &lt;img&gt; из контента → прикреплённый файл.</li>
+                <li>Добавлено: источник найденного изображения фиксируется в журнале для удобной диагностики.</li>
+            </ul>
+
             <h4 style="margin-bottom:4px;">v1.0.35</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
                 <li>Исправлено (критично): загрузка изображений — метод запроса к MAX Upload API исправлен с GET на POST /uploads?type=image. Ошибка «Path /uploads is not recognized» устранена.</li>
