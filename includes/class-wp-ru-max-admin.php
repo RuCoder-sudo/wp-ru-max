@@ -1019,6 +1019,14 @@ jQuery(function($){
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
 
+            <h4 style="margin-bottom:4px;">v1.0.35</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li>Исправлено (критично): загрузка изображений — метод запроса к MAX Upload API исправлен с GET на POST /uploads?type=image. Ошибка «Path /uploads is not recognized» устранена.</li>
+                <li>Добавлено: прямой multipart-POST файла на /uploads?type=image (Метод A) — основной способ загрузки изображений.</li>
+                <li>Добавлено: 4 уровня отказоустойчивости: Метод A → Метод B → URL → только текст.</li>
+                <li>Добавлено: детальное логирование всех этапов загрузки изображений с HTTP-кодами и телом ответа MAX API.</li>
+            </ul>
+
             <h4 style="margin-bottom:4px;">v1.0.34</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
                 <li>Добавлено: WooCommerce — фильтр уведомлений по статусам заказа (ожидает оплаты, в обработке, выполнен и др.).</li>
