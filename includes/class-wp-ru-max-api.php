@@ -8,7 +8,6 @@ class WP_Ru_Max_API {
 
     private $token;
 
-    // Лимит изображения в байтах (по умолчанию 5 МБ)
     const DEFAULT_IMAGE_SIZE_LIMIT = 5242880; // 5 * 1024 * 1024
 
     public function __construct( $token = null ) {
@@ -45,6 +44,9 @@ class WP_Ru_Max_API {
         return $value;
     }
 
+    /**
+     * Универсальный метод для JSON-запросов к MAX API.
+     */
     private function request( $method, $endpoint, $body = null ) {
         if ( empty( $this->token ) ) {
             return new WP_Error( 'no_token', 'Токен бота не задан.' );
@@ -89,13 +91,20 @@ class WP_Ru_Max_API {
         $settings = get_option( 'wp_ru_max_settings', array() );
         if ( ! empty( $settings['enable_bot_api_log'] ) ) {
             WP_Ru_Max_Logger::log( 'api', $http_code === 200 ? 'success' : 'error', "[$method $endpoint] HTTP $http_code", array(
-                'request'  => $body,
-                'response' => $data,
+                'request'      => $body,
+                'response_raw' => $body_raw,
+                'response'     => $data,
             ) );
         }
 
         if ( $http_code !== 200 ) {
             $error_msg = isset( $data['message'] ) ? $data['message'] : "HTTP $http_code";
+            WP_Ru_Max_Logger::log( 'api', 'error', "[$method $endpoint] Ошибка HTTP $http_code: $error_msg", array(
+                'endpoint'     => $endpoint,
+                'http_code'    => $http_code,
+                'response_raw' => $body_raw,
+                'response'     => $data,
+            ) );
             return new WP_Error( 'api_error', $error_msg, array( 'http_code' => $http_code, 'body' => $data ) );
         }
 
@@ -103,8 +112,64 @@ class WP_Ru_Max_API {
     }
 
     /**
+     * Загружает файл через multipart/form-data напрямую на MAX API endpoint.
+     * Возвращает распарсенный массив ответа или WP_Error.
+     */
+    private function request_multipart( $endpoint, $file_data, $filename, $content_type ) {
+        if ( empty( $this->token ) ) {
+            return new WP_Error( 'no_token', 'Токен бота не задан.' );
+        }
+
+        $url      = WP_RU_MAX_API_BASE . $endpoint;
+        $boundary = '----WPRuMaxBoundary' . md5( microtime() );
+
+        $multipart  = "--{$boundary}\r\n";
+        $multipart .= "Content-Disposition: form-data; name=\"file\"; filename=\"{$filename}\"\r\n";
+        $multipart .= "Content-Type: {$content_type}\r\n\r\n";
+        $multipart .= $file_data . "\r\n";
+        $multipart .= "--{$boundary}--\r\n";
+
+        $response = wp_remote_post( $url, array(
+            'timeout'   => 60,
+            'sslverify' => false,
+            'headers'   => array(
+                'Authorization' => $this->token,
+                'Content-Type'  => 'multipart/form-data; boundary=' . $boundary,
+            ),
+            'body' => $multipart,
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            WP_Ru_Max_Logger::log( 'api', 'error', "[MULTIPART POST $endpoint] HTTP Error: " . $response->get_error_message(), array(
+                'endpoint' => $endpoint,
+                'filename' => $filename,
+                'token'    => $this->mask_token(),
+            ) );
+            return $response;
+        }
+
+        $http_code = wp_remote_retrieve_response_code( $response );
+        $body_raw  = wp_remote_retrieve_body( $response );
+        $data      = json_decode( $body_raw, true );
+
+        WP_Ru_Max_Logger::log( 'api', $http_code === 200 ? 'success' : 'error', "[MULTIPART POST $endpoint] HTTP $http_code", array(
+            'filename'     => $filename,
+            'content_type' => $content_type,
+            'http_code'    => $http_code,
+            'response_raw' => $body_raw,
+            'response'     => $data,
+        ) );
+
+        if ( $http_code !== 200 ) {
+            $error_msg = isset( $data['message'] ) ? $data['message'] : "HTTP $http_code: $body_raw";
+            return new WP_Error( 'multipart_error', $error_msg, array( 'http_code' => $http_code, 'body' => $data ) );
+        }
+
+        return $data;
+    }
+
+    /**
      * Возвращает замаскированную версию токена для безопасного логирования.
-     * Пример: "001.ABCDEFGHIJ...UVWXYZ" → "001.ABC***XYZ"
      */
     private function mask_token() {
         if ( empty( $this->token ) ) {
@@ -118,7 +183,6 @@ class WP_Ru_Max_API {
     }
 
     public function get_me() {
-        // Кэшируем ответ на 5 минут для оптимизации производительности
         $cache_key = 'wp_ru_max_me_' . md5( $this->token );
         $cached    = get_transient( $cache_key );
         if ( false !== $cached ) {
@@ -218,39 +282,41 @@ class WP_Ru_Max_API {
      * Скачивает изображение с WordPress и загружает его в MAX Upload API.
      * Возвращает token строкой или WP_Error при неудаче.
      *
-     * MAX API (platform-api.max.ru) перестал принимать изображения по URL —
-     * требуется бинарная загрузка через /uploads.
+     * Метод A (основной): прямой POST multipart/form-data на /uploads?type=image
+     * Метод B (запасной): POST /uploads?type=image → получить URL → загрузить туда
      */
     public function upload_image_binary( $image_url ) {
-        // 1. Получить URL для загрузки от MAX API
-        $upload_info = $this->request( 'GET', '/uploads?type=image' );
-        if ( is_wp_error( $upload_info ) ) {
-            return new WP_Error( 'upload_url_failed', 'Не удалось получить URL загрузки от MAX API: ' . $upload_info->get_error_message() );
-        }
+        WP_Ru_Max_Logger::log( 'api', 'info', 'Начало загрузки изображения в MAX.', array(
+            'image_url' => $image_url,
+        ) );
 
-        $upload_url = isset( $upload_info['url'] ) ? $upload_info['url'] : null;
-        if ( ! $upload_url ) {
-            return new WP_Error( 'no_upload_url', 'MAX API не вернул upload URL. Ответ: ' . wp_json_encode( $upload_info ) );
-        }
-
-        // 2. Скачать изображение с сайта WordPress
+        // Шаг 1: Скачать изображение с сайта WordPress
         $image_response = wp_remote_get( $image_url, array(
             'timeout'   => 30,
             'sslverify' => false,
         ) );
 
         if ( is_wp_error( $image_response ) ) {
-            return new WP_Error( 'download_failed', 'Не удалось скачать изображение: ' . $image_response->get_error_message() );
+            $err = 'Не удалось скачать изображение: ' . $image_response->get_error_message();
+            WP_Ru_Max_Logger::log( 'api', 'error', $err, array( 'image_url' => $image_url ) );
+            return new WP_Error( 'download_failed', $err );
         }
 
         $image_code = wp_remote_retrieve_response_code( $image_response );
         $image_body = wp_remote_retrieve_body( $image_response );
 
         if ( $image_code !== 200 || empty( $image_body ) ) {
-            return new WP_Error( 'download_failed', "Ошибка скачивания изображения (HTTP {$image_code})." );
+            $err = "Ошибка скачивания изображения (HTTP {$image_code}). URL: {$image_url}";
+            WP_Ru_Max_Logger::log( 'api', 'error', $err );
+            return new WP_Error( 'download_failed', $err );
         }
 
-        // 3. Определить тип файла
+        WP_Ru_Max_Logger::log( 'api', 'info', 'Изображение скачано успешно.', array(
+            'size_bytes' => strlen( $image_body ),
+            'http_code'  => $image_code,
+        ) );
+
+        // Определить тип файла
         $content_type = wp_remote_retrieve_header( $image_response, 'content-type' );
         $content_type = $content_type ? strtok( $content_type, ';' ) : '';
         if ( ! $content_type || strpos( $content_type, 'image/' ) === false ) {
@@ -259,51 +325,121 @@ class WP_Ru_Max_API {
             $content_type = isset( $ext_map[ $ext ] ) ? $ext_map[ $ext ] : 'image/jpeg';
         }
 
-        // 4. Загрузить как multipart/form-data на URL от MAX
-        $boundary = '----WPRuMaxBoundary' . md5( microtime() );
-        $filename  = basename( parse_url( $image_url, PHP_URL_PATH ) ) ?: 'image.jpg';
+        $filename = basename( parse_url( $image_url, PHP_URL_PATH ) ) ?: 'image.jpg';
+        // Убедиться что имя файла без лишних параметров
+        $filename = preg_replace( '/[^a-zA-Z0-9._-]/', '_', $filename );
+        if ( empty( $filename ) ) {
+            $filename = 'image.jpg';
+        }
 
-        $multipart  = "--{$boundary}\r\n";
-        $multipart .= "Content-Disposition: form-data; name=\"file\"; filename=\"{$filename}\"\r\n";
-        $multipart .= "Content-Type: {$content_type}\r\n\r\n";
-        $multipart .= $image_body . "\r\n";
-        $multipart .= "--{$boundary}--\r\n";
-
-        $upload_response = wp_remote_post( $upload_url, array(
-            'timeout'   => 60,
-            'sslverify' => false,
-            'headers'   => array(
-                'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
-            ),
-            'body' => $multipart,
+        WP_Ru_Max_Logger::log( 'api', 'info', 'Метаданные изображения определены.', array(
+            'filename'     => $filename,
+            'content_type' => $content_type,
         ) );
 
-        if ( is_wp_error( $upload_response ) ) {
-            return new WP_Error( 'upload_post_failed', 'Ошибка отправки файла на MAX: ' . $upload_response->get_error_message() );
+        // ===== МЕТОД A: Прямой POST multipart на /uploads?type=image =====
+        WP_Ru_Max_Logger::log( 'api', 'info', 'Метод A: прямой POST multipart на /uploads?type=image.' );
+
+        $result_a = $this->request_multipart( '/uploads?type=image', $image_body, $filename, $content_type );
+
+        if ( ! is_wp_error( $result_a ) ) {
+            $token = isset( $result_a['token'] ) ? $result_a['token']
+                   : ( isset( $result_a['fileId'] ) ? $result_a['fileId'] : null );
+
+            if ( $token ) {
+                WP_Ru_Max_Logger::log( 'api', 'success', 'Метод A: изображение загружено успешно.', array(
+                    'token' => substr( (string) $token, 0, 20 ) . '...',
+                ) );
+                return (string) $token;
+            }
+
+            WP_Ru_Max_Logger::log( 'api', 'warning', 'Метод A: ответ получен, но token не найден.', array(
+                'response' => $result_a,
+            ) );
+        } else {
+            WP_Ru_Max_Logger::log( 'api', 'warning', 'Метод A не удался: ' . $result_a->get_error_message() );
         }
 
-        $upload_code = wp_remote_retrieve_response_code( $upload_response );
-        $upload_data = json_decode( wp_remote_retrieve_body( $upload_response ), true );
+        // ===== МЕТОД B: POST /uploads?type=image → получить URL → загрузить туда =====
+        WP_Ru_Max_Logger::log( 'api', 'info', 'Метод B: POST /uploads?type=image для получения upload URL.' );
 
-        if ( $upload_code !== 200 ) {
-            return new WP_Error( 'upload_http_error', "MAX upload вернул HTTP {$upload_code}: " . wp_remote_retrieve_body( $upload_response ) );
+        $upload_info = $this->request( 'POST', '/uploads?type=image' );
+
+        if ( is_wp_error( $upload_info ) ) {
+            WP_Ru_Max_Logger::log( 'api', 'warning', 'Метод B: не удалось получить upload URL: ' . $upload_info->get_error_message() );
+        } else {
+            $upload_url = isset( $upload_info['url'] ) ? $upload_info['url'] : null;
+
+            WP_Ru_Max_Logger::log( 'api', 'info', 'Метод B: ответ от /uploads.', array(
+                'upload_info' => $upload_info,
+                'upload_url'  => $upload_url,
+            ) );
+
+            if ( $upload_url ) {
+                $boundary = '----WPRuMaxBoundary' . md5( microtime() );
+
+                $multipart  = "--{$boundary}\r\n";
+                $multipart .= "Content-Disposition: form-data; name=\"file\"; filename=\"{$filename}\"\r\n";
+                $multipart .= "Content-Type: {$content_type}\r\n\r\n";
+                $multipart .= $image_body . "\r\n";
+                $multipart .= "--{$boundary}--\r\n";
+
+                $upload_response = wp_remote_post( $upload_url, array(
+                    'timeout'   => 60,
+                    'sslverify' => false,
+                    'headers'   => array(
+                        'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
+                    ),
+                    'body' => $multipart,
+                ) );
+
+                if ( is_wp_error( $upload_response ) ) {
+                    WP_Ru_Max_Logger::log( 'api', 'warning', 'Метод B: ошибка загрузки на upload URL: ' . $upload_response->get_error_message() );
+                } else {
+                    $upload_code = wp_remote_retrieve_response_code( $upload_response );
+                    $upload_raw  = wp_remote_retrieve_body( $upload_response );
+                    $upload_data = json_decode( $upload_raw, true );
+
+                    WP_Ru_Max_Logger::log( 'api', $upload_code === 200 ? 'info' : 'warning', "Метод B: загрузка на URL завершена (HTTP {$upload_code}).", array(
+                        'http_code'    => $upload_code,
+                        'response_raw' => $upload_raw,
+                        'response'     => $upload_data,
+                    ) );
+
+                    if ( $upload_code === 200 ) {
+                        $token = isset( $upload_data['token'] ) ? $upload_data['token']
+                               : ( isset( $upload_data['fileId'] ) ? $upload_data['fileId'] : null );
+
+                        if ( $token ) {
+                            WP_Ru_Max_Logger::log( 'api', 'success', 'Метод B: изображение загружено успешно.', array(
+                                'token' => substr( (string) $token, 0, 20 ) . '...',
+                            ) );
+                            return (string) $token;
+                        }
+
+                        WP_Ru_Max_Logger::log( 'api', 'warning', 'Метод B: загрузка прошла, но token не найден.', array(
+                            'response' => $upload_data,
+                        ) );
+                    }
+                }
+            } else {
+                WP_Ru_Max_Logger::log( 'api', 'warning', 'Метод B: upload URL отсутствует в ответе.', array(
+                    'response' => $upload_info,
+                ) );
+            }
         }
 
-        // Token может быть в token или fileId — зависит от версии API
-        $token = isset( $upload_data['token'] ) ? $upload_data['token']
-               : ( isset( $upload_data['fileId'] ) ? $upload_data['fileId'] : null );
-
-        if ( ! $token ) {
-            return new WP_Error( 'no_token', 'MAX API не вернул token. Ответ: ' . wp_json_encode( $upload_data ) );
-        }
-
-        return (string) $token;
+        $final_err = 'Все методы загрузки изображения не сработали. Проверьте журнал для деталей.';
+        WP_Ru_Max_Logger::log( 'api', 'error', $final_err );
+        return new WP_Error( 'upload_all_failed', $final_err );
     }
 
     /**
      * Отправить сообщение с изображением.
-     * Сначала пробует бинарную загрузку через MAX Upload API (основной способ),
-     * при неудаче — старый способ по URL (запасной).
+     * Порядок попыток:
+     *   1. Бинарная загрузка (upload_image_binary) — token → attachment
+     *   2. Передача по URL напрямую в attachment
+     *   3. Отправка только текста (без изображения)
      */
     public function send_message_with_image( $chat_id, $text, $image_url, $format = 'html', $buttons = array() ) {
         $text = $this->sanitize_utf8( $text, true );
@@ -333,16 +469,42 @@ class WP_Ru_Max_API {
                     'payload' => array( 'token' => $token ),
                 ),
             );
-        } else {
-            // Попытка 2: старый способ — по URL (запасной вариант)
-            WP_Ru_Max_Logger::log( 'api', 'warning', 'Бинарная загрузка не удалась (' . $token->get_error_message() . '), пробуем по URL.' );
-            $attachments = array(
-                array(
-                    'type'    => 'image',
-                    'payload' => array( 'url' => $image_url ),
-                ),
+
+            $keyboard = $this->build_keyboard_attachment( $buttons );
+            if ( $keyboard ) {
+                $attachments[] = $keyboard;
+            }
+
+            $payload = array(
+                'text'        => $text,
+                'format'      => $format,
+                'attachments' => $attachments,
             );
+
+            $result = $this->request( 'POST', '/messages?chat_id=' . urlencode( $chat_id ), $payload );
+
+            if ( ! is_wp_error( $result ) ) {
+                WP_Ru_Max_Logger::log( 'api', 'success', 'Сообщение с изображением (бинарный токен) отправлено успешно.' );
+                return $result;
+            }
+
+            WP_Ru_Max_Logger::log( 'api', 'warning', 'Отправка с токеном изображения не удалась: ' . $result->get_error_message() . ' — пробуем по URL.' );
+        } else {
+            WP_Ru_Max_Logger::log( 'api', 'warning', 'Бинарная загрузка не удалась (' . $token->get_error_message() . '), пробуем по URL.' );
         }
+
+        // Попытка 2: старый способ — по URL (запасной вариант)
+        WP_Ru_Max_Logger::log( 'api', 'info', 'Попытка отправки изображения по URL.', array(
+            'image_url' => $image_url,
+            'chat_id'   => $chat_id,
+        ) );
+
+        $attachments = array(
+            array(
+                'type'    => 'image',
+                'payload' => array( 'url' => $image_url ),
+            ),
+        );
 
         $keyboard = $this->build_keyboard_attachment( $buttons );
         if ( $keyboard ) {
@@ -357,33 +519,30 @@ class WP_Ru_Max_API {
 
         $result = $this->request( 'POST', '/messages?chat_id=' . urlencode( $chat_id ), $payload );
 
-        if ( is_wp_error( $result ) ) {
-            WP_Ru_Max_Logger::log( 'api', 'warning', 'Ошибка отправки с изображением, повторяем без изображения: ' . $result->get_error_message() );
-            return $this->send_message( $chat_id, $text, $format, $buttons );
+        if ( ! is_wp_error( $result ) ) {
+            WP_Ru_Max_Logger::log( 'api', 'success', 'Сообщение с изображением (по URL) отправлено успешно.' );
+            return $result;
         }
 
-        return $result;
+        WP_Ru_Max_Logger::log( 'api', 'warning', 'Отправка изображения по URL не удалась: ' . $result->get_error_message() . ' — отправляем только текст.', array(
+            'image_url' => $image_url,
+        ) );
+
+        // Попытка 3: только текст
+        return $this->send_message( $chat_id, $text, $format, $buttons );
     }
 
     /**
      * Отправить сообщение с автоматическим повтором при ошибке.
-     *
-     * @param string $chat_id
-     * @param string $text
-     * @param string $format
-     * @param array  $buttons
-     * @param string|false $image_url
-     * @param int    $max_retries  Количество попыток повтора (0 = без повторов)
-     * @param int    $retry_delay  Задержка между попытками в секундах
      */
     public function send_with_retry( $chat_id, $text, $format = 'html', $buttons = array(), $image_url = false, $max_retries = 2, $retry_delay = 30 ) {
-        $attempt = 0;
+        $attempt    = 0;
         $last_error = null;
 
         while ( $attempt <= $max_retries ) {
             if ( $attempt > 0 ) {
                 WP_Ru_Max_Logger::log( 'api', 'info', "Повтор отправки (попытка {$attempt} из {$max_retries}) в канал {$chat_id}." );
-                sleep( min( $retry_delay, 10 ) ); // Максимум 10 сек синхронного ожидания
+                sleep( min( $retry_delay, 10 ) );
             }
 
             if ( $image_url ) {
