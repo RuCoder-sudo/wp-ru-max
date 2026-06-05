@@ -150,9 +150,8 @@ class WP_Ru_Max_Post_Sender {
                 continue;
             }
 
-            $thumbnail_url = $send_image ? get_the_post_thumbnail_url( $post->ID, 'large' ) : false;
+            $thumbnail_url = $send_image ? $this->get_post_image_url( $post ) : false;
 
-            // Небольшая пауза между текстом и изображением устраняет race condition
             if ( $thumbnail_url && $send_image ) {
                 // Используем send_with_retry с изображением
                 $result = $api->send_with_retry(
@@ -367,7 +366,7 @@ class WP_Ru_Max_Post_Sender {
                 continue;
             }
 
-            $thumbnail_url = $send_image ? get_the_post_thumbnail_url( $post->ID, 'large' ) : false;
+            $thumbnail_url = $send_image ? $this->get_post_image_url( $post ) : false;
             $result = $api->send_with_retry( $chat_id, $message, 'html', $buttons, $thumbnail_url ?: false, $max_retries, $retry_delay );
 
             if ( is_wp_error( $result ) ) {
@@ -389,5 +388,51 @@ class WP_Ru_Max_Post_Sender {
         $message = "<b>Тестовое сообщение WP Ru-max</b>\n\nОтправка публикаций настроена и работает корректно!\n\nСайт: " . get_bloginfo( 'url' );
         $api     = new WP_Ru_Max_API();
         return $api->send_message( $chat_id, $message, 'html' );
+    }
+
+    /**
+     * Получить URL изображения для записи.
+     *
+     * Порядок поиска:
+     *   1. Миниатюра записи (Featured Image)
+     *   2. Первый <img> из тела записи
+     *   3. Первое прикреплённое изображение (медиабиблиотека)
+     *
+     * Возвращает URL строкой или false если ничего не найдено.
+     */
+    private function get_post_image_url( $post ) {
+        // 1. Миниатюра записи
+        $url = get_the_post_thumbnail_url( $post->ID, 'large' );
+        if ( $url ) {
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Изображение для записи #{$post->ID}: миниатюра.", array( 'url' => $url ) );
+            return $url;
+        }
+
+        // 2. Первый <img> из тела записи
+        if ( ! empty( $post->post_content ) ) {
+            preg_match( '/<img[^>]+src=["\']([^"\']+)["\'][^>]*>/i', $post->post_content, $matches );
+            if ( ! empty( $matches[1] ) ) {
+                $url = $matches[1];
+                // Пропускаем иконки и служебные изображения (меньше 50px обычно emoji/иконки)
+                if ( strpos( $url, 'data:' ) === false && strpos( $url, 'emoji' ) === false ) {
+                    WP_Ru_Max_Logger::log( 'post_sender', 'info', "Изображение для записи #{$post->ID}: первый <img> из контента.", array( 'url' => $url ) );
+                    return $url;
+                }
+            }
+        }
+
+        // 3. Первое прикреплённое изображение
+        $attachments = get_attached_media( 'image', $post->ID );
+        if ( ! empty( $attachments ) ) {
+            $first      = reset( $attachments );
+            $attach_url = wp_get_attachment_url( $first->ID );
+            if ( $attach_url ) {
+                WP_Ru_Max_Logger::log( 'post_sender', 'info', "Изображение для записи #{$post->ID}: прикреплённый файл.", array( 'url' => $attach_url ) );
+                return $attach_url;
+            }
+        }
+
+        WP_Ru_Max_Logger::log( 'post_sender', 'info', "Изображение для записи #{$post->ID} не найдено — отправка без картинки." );
+        return false;
     }
 }
