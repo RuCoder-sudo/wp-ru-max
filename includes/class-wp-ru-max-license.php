@@ -14,14 +14,8 @@ class WP_Ru_Max_License {
     const BLOCK_MINUTES      = 60;
     const RECHECK_DAYS       = 160;
     const RECHECK_SECONDS    = 13824000; // 160 * 24 * 3600
-
-    // URL API проверки ключей (рукодер.рф в Punycode для надёжности)
     const VERIFY_URL  = 'https://xn--d1acnqieq.xn--p1ai/wp-json/wp-ru-max-km/v1/verify';
-
-    // Секрет API — должен совпадать с WPRM_KM_DEFAULT_SECRET в Key Manager
     const API_SECRET  = 'd0563fa8f8fce6879cdf697eed0460a82fa7977897fd364ec911c93ed8bb25b3';
-
-    // Email владельца для получения запросов на ключ
     const OWNER_EMAIL = 'rucoder.rf@yandex.ru';
 
     public static function instance() {
@@ -47,15 +41,6 @@ class WP_Ru_Max_License {
         }
     }
 
-    // ─── Проверка статуса ────────────────────────────────────────────────────
-
-    /**
-     * Проверяет, активирован ли плагин.
-     *
-     * Порядок проверки:
-     * 1. Сетевая лицензия (network-wide) — покрывает все подсайты сети
-     * 2. Лицензия текущего подсайта (per-site)
-     */
     public static function is_active() {
         // 1. Лицензия текущего сайта — всегда проверяется первой
         $data = get_option( self::OPTION_KEY, array() );
@@ -63,7 +48,6 @@ class WP_Ru_Max_License {
             return true;
         }
 
-        // 2. Проверяем сетевую лицензию (только в Multisite)
         if ( is_multisite() ) {
             $net_data = get_site_option( self::NETWORK_OPTION_KEY, array() );
             if ( ! empty( $net_data['status'] ) && $net_data['status'] === 'active' ) {
@@ -72,9 +56,7 @@ class WP_Ru_Max_License {
                     // Полная сетевая лицензия (Сеть → Ru-max) — покрывает ВСЕ подсайты
                     return true;
                 }
-                // scope='subdomain': активирован тумблер на главном сайте.
-                // Покрывает ТОЛЬКО поддомены того же домена — example.com крывает sub.example.com.
-                // Чужие домены (evil.com при лицензии example.com) НЕ покрываются.
+
                 if ( ! empty( $net_data['domain'] ) && self::domain_matches( $net_data['domain'] ) ) {
                     return true;
                 }
@@ -84,11 +66,6 @@ class WP_Ru_Max_License {
         return false;
     }
 
-    /**
-     * Проверяет, включён ли тумблер поддержки Multisite/поддоменов.
-     * Используется только при СОХРАНЕНИИ лицензии (распространить ли её на сеть).
-     * На поддоменах тумблер НЕ требуется — проверка происходит автоматически.
-     */
     public static function is_multisite_feature_enabled() {
         $settings = get_option( 'wp_ru_max_settings', array() );
         return ! empty( $settings['multisite_enabled'] );
@@ -105,23 +82,14 @@ class WP_Ru_Max_License {
         return ! empty( $data['status'] ) && $data['status'] === 'active';
     }
 
-    /**
-     * Возвращает данные лицензии текущего сайта.
-     */
     public static function get_data() {
         return get_option( self::OPTION_KEY, array() );
     }
 
-    /**
-     * Возвращает данные сетевой лицензии.
-     */
     public static function get_network_data() {
         return get_site_option( self::NETWORK_OPTION_KEY, array() );
     }
 
-    /**
-     * Показывает уведомление в обычной админке, если плагин не активирован.
-     */
     public function show_activation_notice() {
         if ( self::is_active() ) {
             return;
@@ -142,9 +110,6 @@ class WP_Ru_Max_License {
         <?php
     }
 
-    /**
-     * Показывает уведомление в сетевой админке, если сетевая лицензия не активирована.
-     */
     public function show_network_activation_notice() {
         if ( self::is_network_active() ) {
             return;
@@ -166,11 +131,7 @@ class WP_Ru_Max_License {
         <?php
     }
 
-    // ─── AJAX: лицензия подсайта ─────────────────────────────────────────────
 
-    /**
-     * AJAX: активация плагина по ключу (для текущего подсайта).
-     */
     public function ajax_activate_license() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -222,9 +183,6 @@ class WP_Ru_Max_License {
         ) );
     }
 
-    /**
-     * AJAX: запрос лицензионного ключа (форма).
-     */
     public function ajax_request_license() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -277,9 +235,7 @@ class WP_Ru_Max_License {
         }
     }
 
-    /**
-     * AJAX: сброс лицензии текущего сайта.
-     */
+
     public function ajax_deactivate_license() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -289,9 +245,7 @@ class WP_Ru_Max_License {
         wp_send_json_success( 'Лицензия сброшена.' );
     }
 
-    /**
-     * AJAX: ручная перепроверка лицензии текущего сайта.
-     */
+
     public function ajax_recheck_license() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -304,12 +258,6 @@ class WP_Ru_Max_License {
         wp_send_json_error( 'Лицензия отозвана или недействительна. Плагин деактивирован.' );
     }
 
-    // ─── AJAX: сетевая лицензия (Multisite) ──────────────────────────────────
-
-    /**
-     * AJAX: активация сетевой лицензии (для всей Multisite-сети).
-     * Требует прав super admin.
-     */
     public function ajax_activate_network_license() {
         check_ajax_referer( 'wp_ru_max_network_nonce', 'nonce' );
         if ( ! is_super_admin() ) {
@@ -341,9 +289,7 @@ class WP_Ru_Max_License {
         ) );
     }
 
-    /**
-     * AJAX: сброс сетевой лицензии.
-     */
+
     public function ajax_deactivate_network_license() {
         check_ajax_referer( 'wp_ru_max_network_nonce', 'nonce' );
         if ( ! is_super_admin() ) {
@@ -353,9 +299,6 @@ class WP_Ru_Max_License {
         wp_send_json_success( 'Сетевая лицензия сброшена.' );
     }
 
-    /**
-     * AJAX: перепроверка сетевой лицензии.
-     */
     public function ajax_recheck_network_license() {
         check_ajax_referer( 'wp_ru_max_network_nonce', 'nonce' );
         if ( ! is_super_admin() ) {
@@ -368,11 +311,6 @@ class WP_Ru_Max_License {
         wp_send_json_error( 'Сетевая лицензия отозвана или недействительна.' );
     }
 
-    // ─── Проверка ключа через API ─────────────────────────────────────────────
-
-    /**
-     * Проверяет ключ через REST API рукодер.рф.
-     */
     private function verify_key( $key ) {
         $response = wp_remote_post( self::VERIFY_URL, array(
             'timeout'   => 15,
@@ -406,11 +344,6 @@ class WP_Ru_Max_License {
         return new WP_Error( 'invalid_key', 'Неверный лицензионный ключ. Проверьте правильность ввода.' );
     }
 
-    // ─── Периодические проверки ───────────────────────────────────────────────
-
-    /**
-     * Проверяет, нужно ли обновить лицензию (вызывается на каждой загрузке).
-     */
     public static function recheck_if_needed() {
         // Проверяем сетевую лицензию (только если тумблер включён)
         if ( self::is_multisite_feature_enabled() && is_multisite() && self::is_network_active() ) {
@@ -422,7 +355,6 @@ class WP_Ru_Max_License {
             return; // Сетевая лицензия покрывает текущий сайт
         }
 
-        // Проверяем лицензию текущего сайта
         if ( ! self::is_active() ) {
             return;
         }
@@ -434,9 +366,6 @@ class WP_Ru_Max_License {
         self::do_recheck( $data );
     }
 
-    /**
-     * Принудительная перепроверка лицензии сайта.
-     */
     public static function force_recheck() {
         $data = self::get_data();
         if ( empty( $data['key'] ) ) {
@@ -445,9 +374,6 @@ class WP_Ru_Max_License {
         return self::do_recheck( $data );
     }
 
-    /**
-     * Принудительная перепроверка сетевой лицензии.
-     */
     public static function force_recheck_network() {
         $data = self::get_network_data();
         if ( empty( $data['key'] ) ) {
@@ -456,9 +382,7 @@ class WP_Ru_Max_License {
         return self::do_recheck_network( $data );
     }
 
-    /**
-     * Внутренняя реализация перепроверки лицензии сайта.
-     */
+
     private static function do_recheck( $data ) {
         $instance = self::instance();
         $result   = $instance->verify_key( $data['key'] ?? '' );
@@ -484,9 +408,6 @@ class WP_Ru_Max_License {
         return $data;
     }
 
-    /**
-     * Внутренняя реализация перепроверки сетевой лицензии.
-     */
     private static function do_recheck_network( $data ) {
         $instance = self::instance();
         $result   = $instance->verify_key( $data['key'] ?? '' );
@@ -511,19 +432,11 @@ class WP_Ru_Max_License {
         return $data;
     }
 
-    // ─── Вспомогательные методы ───────────────────────────────────────────────
-
-    /**
-     * Возвращает домен текущего сайта (без www).
-     */
     public static function get_current_domain() {
         $host = parse_url( get_site_url(), PHP_URL_HOST );
         return $host ? strtolower( $host ) : '';
     }
 
-    /**
-     * Возвращает главный домен сети (для Multisite).
-     */
     public static function get_network_domain() {
         if ( is_multisite() ) {
             $network = get_network();
@@ -532,14 +445,6 @@ class WP_Ru_Max_License {
         return self::get_current_domain();
     }
 
-    /**
-     * Проверяет, покрывает ли лицензия с доменом $licensed_domain текущий домен.
-     * Лицензия на корневой домен (example.com) покрывает поддомены (sub.example.com).
-     *
-     * @param string $licensed_domain Домен, на который выдана лицензия.
-     * @param string $current_domain  Текущий домен сайта (по умолчанию — текущий).
-     * @return bool
-     */
     public static function domain_matches( $licensed_domain, $current_domain = '' ) {
         if ( empty( $licensed_domain ) ) {
             return false;
@@ -569,9 +474,6 @@ class WP_Ru_Max_License {
         return false;
     }
 
-    /**
-     * Проверяет ограничение по количеству попыток активации.
-     */
     private function check_rate_limit() {
         $transient_key = self::RATE_LIMIT_KEY . '_' . $this->get_site_id();
         $attempts      = get_transient( $transient_key );
@@ -584,9 +486,6 @@ class WP_Ru_Max_License {
         return true;
     }
 
-    /**
-     * Увеличивает счётчик неверных попыток.
-     */
     private function increment_attempts() {
         $transient_key = self::RATE_LIMIT_KEY . '_' . $this->get_site_id();
         $attempts      = get_transient( $transient_key );
@@ -597,16 +496,11 @@ class WP_Ru_Max_License {
         }
     }
 
-    /**
-     * Уникальный ID сайта для rate limiting.
-     */
+
     private function get_site_id() {
         return md5( get_site_url() );
     }
 
-    /**
-     * Возвращает оставшееся количество попыток.
-     */
     public function get_remaining_attempts() {
         $transient_key = self::RATE_LIMIT_KEY . '_' . $this->get_site_id();
         $attempts      = get_transient( $transient_key );
@@ -616,9 +510,7 @@ class WP_Ru_Max_License {
         return max( 0, self::MAX_ATTEMPTS - (int) $attempts );
     }
 
-    /**
-     * Возвращает количество дней до следующей проверки.
-     */
+
     public static function get_days_until_recheck() {
         $data = self::get_data();
         if ( empty( $data['last_verified'] ) ) {
