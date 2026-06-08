@@ -1,4 +1,5 @@
 <?php
+
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
@@ -13,7 +14,8 @@ class WP_Ru_Max_License {
     const MAX_ATTEMPTS       = 5;
     const BLOCK_MINUTES      = 60;
     const RECHECK_DAYS       = 160;
-    const RECHECK_SECONDS    = 13824000; // 160 * 24 * 3600
+    const RECHECK_SECONDS    = 13824000;
+
     const VERIFY_URL  = 'https://xn--d1acnqieq.xn--p1ai/wp-json/wp-ru-max-km/v1/verify';
     const API_SECRET  = 'd0563fa8f8fce6879cdf697eed0460a82fa7977897fd364ec911c93ed8bb25b3';
     const OWNER_EMAIL = 'rucoder.rf@yandex.ru';
@@ -32,7 +34,6 @@ class WP_Ru_Max_License {
         add_action( 'wp_ajax_wp_ru_max_recheck_license',          array( $this, 'ajax_recheck_license' ) );
         add_action( 'admin_notices',                               array( $this, 'show_activation_notice' ) );
 
-        // Multisite: сетевые AJAX-обработчики (network admin)
         if ( is_multisite() ) {
             add_action( 'wp_ajax_wp_ru_max_activate_network_license',   array( $this, 'ajax_activate_network_license' ) );
             add_action( 'wp_ajax_wp_ru_max_deactivate_network_license', array( $this, 'ajax_deactivate_network_license' ) );
@@ -42,7 +43,6 @@ class WP_Ru_Max_License {
     }
 
     public static function is_active() {
-        // 1. Лицензия текущего сайта — всегда проверяется первой
         $data = get_option( self::OPTION_KEY, array() );
         if ( ! empty( $data['status'] ) && $data['status'] === 'active' ) {
             return true;
@@ -53,10 +53,8 @@ class WP_Ru_Max_License {
             if ( ! empty( $net_data['status'] ) && $net_data['status'] === 'active' ) {
                 $scope = $net_data['scope'] ?? 'network';
                 if ( $scope === 'network' ) {
-                    // Полная сетевая лицензия (Сеть → Ru-max) — покрывает ВСЕ подсайты
                     return true;
                 }
-
                 if ( ! empty( $net_data['domain'] ) && self::domain_matches( $net_data['domain'] ) ) {
                     return true;
                 }
@@ -71,9 +69,6 @@ class WP_Ru_Max_License {
         return ! empty( $settings['multisite_enabled'] );
     }
 
-    /**
-     * Проверяет, активна ли сетевая лицензия (для всей Multisite-сети).
-     */
     public static function is_network_active() {
         if ( ! is_multisite() ) {
             return false;
@@ -131,7 +126,6 @@ class WP_Ru_Max_License {
         <?php
     }
 
-
     public function ajax_activate_license() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -164,8 +158,6 @@ class WP_Ru_Max_License {
         );
         update_option( self::OPTION_KEY, $lic_data );
 
-        // Если тумблер включён и это Multisite — автоматически сохраняем лицензию как общую для сети.
-        // Это позволяет поддоменам и подсайтам пользоваться лицензией БЕЗ отдельной активации.
         if ( is_multisite() && self::is_multisite_feature_enabled() ) {
             update_site_option( self::NETWORK_OPTION_KEY, array_merge( $lic_data, array( 'scope' => 'subdomain' ) ) );
         }
@@ -235,7 +227,6 @@ class WP_Ru_Max_License {
         }
     }
 
-
     public function ajax_deactivate_license() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -244,7 +235,6 @@ class WP_Ru_Max_License {
         delete_option( self::OPTION_KEY );
         wp_send_json_success( 'Лицензия сброшена.' );
     }
-
 
     public function ajax_recheck_license() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
@@ -288,7 +278,6 @@ class WP_Ru_Max_License {
             'message' => 'Сетевая лицензия активирована! Все подсайты сети теперь имеют доступ ко всем функциям.',
         ) );
     }
-
 
     public function ajax_deactivate_network_license() {
         check_ajax_referer( 'wp_ru_max_network_nonce', 'nonce' );
@@ -345,14 +334,13 @@ class WP_Ru_Max_License {
     }
 
     public static function recheck_if_needed() {
-        // Проверяем сетевую лицензию (только если тумблер включён)
         if ( self::is_multisite_feature_enabled() && is_multisite() && self::is_network_active() ) {
             $data = self::get_network_data();
             $last = strtotime( $data['last_verified'] ?? '2000-01-01' );
             if ( ( time() - $last ) >= self::RECHECK_SECONDS ) {
                 self::do_recheck_network( $data );
             }
-            return; // Сетевая лицензия покрывает текущий сайт
+            return;
         }
 
         if ( ! self::is_active() ) {
@@ -381,7 +369,6 @@ class WP_Ru_Max_License {
         }
         return self::do_recheck_network( $data );
     }
-
 
     private static function do_recheck( $data ) {
         $instance = self::instance();
@@ -455,17 +442,14 @@ class WP_Ru_Max_License {
         $licensed_domain = strtolower( trim( $licensed_domain ) );
         $current_domain  = strtolower( trim( $current_domain ) );
 
-        // Точное совпадение
         if ( $licensed_domain === $current_domain ) {
             return true;
         }
 
-        // Поддомен: current = sub.example.com, licensed = example.com
         if ( str_ends_with( $current_domain, '.' . $licensed_domain ) ) {
             return true;
         }
 
-        // Поддомен: current = www.example.com, licensed = example.com
         $without_www = preg_replace( '/^www\./', '', $current_domain );
         if ( $without_www === $licensed_domain ) {
             return true;
@@ -496,7 +480,6 @@ class WP_Ru_Max_License {
         }
     }
 
-
     private function get_site_id() {
         return md5( get_site_url() );
     }
@@ -510,7 +493,6 @@ class WP_Ru_Max_License {
         return max( 0, self::MAX_ATTEMPTS - (int) $attempts );
     }
 
-
     public static function get_days_until_recheck() {
         $data = self::get_data();
         if ( empty( $data['last_verified'] ) ) {
@@ -523,7 +505,6 @@ class WP_Ru_Max_License {
     }
 }
 
-// PHP < 8.0 compatibility (str_ends_with is native in PHP 8.0+, polyfill for 7.4)
 if ( ! function_exists( 'str_ends_with' ) ) {
     function str_ends_with( string $haystack, string $needle ): bool {
         if ( $needle === '' ) return true;
