@@ -150,6 +150,7 @@ class WP_Ru_Max_Chat_Widget {
         'showDelay'            => $show_delay * 1000,
         'sound'                => $sound,
         'soundDelay'           => $sound_delay * 1000,
+        'soundsUrl'            => WP_RU_MAX_PLUGIN_URL . 'assets/sounds/',
         'soundPages'           => $sound_pages,
         'soundSpecificPages'   => $specific_pages_list,
         'soundOncePerSession'  => (bool) $sound_once_per_session,
