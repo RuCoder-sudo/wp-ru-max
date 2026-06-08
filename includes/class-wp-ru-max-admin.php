@@ -520,8 +520,9 @@ class WP_Ru_Max_Admin {
             wp_enqueue_style( 'wp-ru-max-admin', WP_RU_MAX_PLUGIN_URL . 'assets/css/admin.css', array(), WP_RU_MAX_VERSION );
             wp_enqueue_script( 'wp-ru-max-admin', WP_RU_MAX_PLUGIN_URL . 'assets/js/admin.js', array( 'jquery' ), WP_RU_MAX_VERSION, true );
             wp_localize_script( 'wp-ru-max-admin', 'wpRuMax', array(
-                'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-                'nonce'   => wp_create_nonce( 'wp_ru_max_nonce' ),
+                'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
+                'nonce'     => wp_create_nonce( 'wp_ru_max_nonce' ),
+                'soundsUrl' => WP_RU_MAX_PLUGIN_URL . 'assets/sounds/',
             ) );
         }
 
@@ -1018,6 +1019,13 @@ jQuery(function($){
 
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
+
+            <h4 style="margin-bottom:4px;">v1.0.37</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li>Добавлено: регулировка высоты значка над низом экрана (0–300 px) — теперь значок не перекрывается нижним меню темы.</li>
+                <li>Добавлено: три новых звука уведомления (Вариант 4–6) — mp3-файлы с прослушиванием прямо в настройках.</li>
+                <li>Добавлено: три новые анимации привлечения внимания — Маятник, Взрыв, Сердцебиение.</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.36</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -2082,13 +2090,14 @@ jQuery(function($){
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row"><label for="chat_widget_bottom_offset">Отступ снизу (px)</label></th>
+                        <th scope="row"><label for="chat_widget_bottom_offset">Высота значка над низом экрана (px)</label></th>
                         <td>
                             <div style="display:flex;align-items:center;gap:12px;">
-                                <input type="range" id="chat_widget_bottom_offset_range" min="0" max="200" value="<?php echo esc_attr( $bottom_offset ); ?>" style="width:200px;" />
-                                <input type="number" id="chat_widget_bottom_offset" name="chat_widget_bottom_offset" value="<?php echo esc_attr( $bottom_offset ); ?>" min="0" max="200" style="width:70px;" />
+                                <input type="range" id="chat_widget_bottom_offset_range" min="0" max="300" value="<?php echo esc_attr( $bottom_offset ); ?>" style="width:220px;" />
+                                <input type="number" id="chat_widget_bottom_offset" name="chat_widget_bottom_offset" value="<?php echo esc_attr( $bottom_offset ); ?>" min="0" max="300" style="width:70px;" />
                                 <span>px</span>
                             </div>
+                            <p class="description" style="margin-top:6px;">Увеличьте значение (например, до 70–90 px), если нижнее меню темы перекрывает значок чата.</p>
                             <script>(function(){var r=document.getElementById('chat_widget_bottom_offset_range');var n=document.getElementById('chat_widget_bottom_offset');if(r&&n){r.addEventListener('input',function(){n.value=r.value;});n.addEventListener('input',function(){r.value=n.value;});}})()</script>
                         </td>
                     </tr>
@@ -2160,6 +2169,21 @@ jQuery(function($){
                                     <span>Вариант 3 — Тихий сигнал</span>
                                     <button type="button" class="button wp-ru-max-preview-sound" data-sound="sound3">&#9654; Прослушать</button>
                                 </label>
+                                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                                    <input type="radio" name="chat_widget_sound" value="sound4" <?php checked( $sound, 'sound4' ); ?> />
+                                    <span>Вариант 4 — Мягкий клик</span>
+                                    <button type="button" class="button wp-ru-max-preview-sound" data-sound="sound4">&#9654; Прослушать</button>
+                                </label>
+                                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                                    <input type="radio" name="chat_widget_sound" value="sound5" <?php checked( $sound, 'sound5' ); ?> />
+                                    <span>Вариант 5 — Водный импульс</span>
+                                    <button type="button" class="button wp-ru-max-preview-sound" data-sound="sound5">&#9654; Прослушать</button>
+                                </label>
+                                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                                    <input type="radio" name="chat_widget_sound" value="sound6" <?php checked( $sound, 'sound6' ); ?> />
+                                    <span>Вариант 6 — Капля воды</span>
+                                    <button type="button" class="button wp-ru-max-preview-sound" data-sound="sound6">&#9654; Прослушать</button>
+                                </label>
                             </div>
                         </td>
                     </tr>
@@ -2209,7 +2233,7 @@ jQuery(function($){
                         <td>
                             <div style="display:flex;flex-wrap:wrap;gap:12px;">
                                 <?php
-                                $anim_options = array( 'none'=>'Без анимации', 'pulse'=>'Пульсация', 'ripple'=>'Рябь', 'bounce'=>'Подпрыгивание', 'shake'=>'Покачивание', 'glow'=>'Свечение', 'rotate'=>'Вращение', 'float'=>'Левитация' );
+                                $anim_options = array( 'none'=>'Без анимации', 'pulse'=>'Пульсация', 'ripple'=>'Рябь', 'bounce'=>'Подпрыгивание', 'shake'=>'Покачивание', 'glow'=>'Свечение', 'rotate'=>'Вращение', 'float'=>'Левитация', 'pendulum'=>'Маятник', 'burst'=>'Взрыв', 'heartbeat'=>'Сердцебиение' );
                                 foreach ( $anim_options as $val => $label ) :
                                 ?>
                                 <label style="display:flex;align-items:center;gap:6px;cursor:pointer;background:<?php echo $animation === $val ? '#e8f0fe' : '#f8f9fa'; ?>;border:2px solid <?php echo $animation === $val ? '#4a90d9' : '#ddd'; ?>;border-radius:8px;padding:8px 14px;">
