@@ -1,4 +1,4 @@
-/* WP Ru-max Chat Widget v1.0.24 */
+/* WP Ru-max Chat Widget v1.0.37 */
 (function () {
     'use strict';
 
@@ -7,6 +7,7 @@
     var showDelay  = typeof cfg.showDelay  === 'number' ? cfg.showDelay  : 0;
     var sound      = cfg.sound      || 'none';
     var soundDelay = typeof cfg.soundDelay === 'number' ? cfg.soundDelay : 3000;
+    var soundsUrl  = cfg.soundsUrl  || '';
     var soundPages          = cfg.soundPages          || 'all';
     var soundSpecificPages  = Array.isArray(cfg.soundSpecificPages) ? cfg.soundSpecificPages : [];
     var soundOncePerSession = !!cfg.soundOncePerSession;
@@ -31,7 +32,6 @@
     function normalizePath(p) {
         if (!p) return '/';
         try {
-            // If full URL, extract pathname
             if (p.indexOf('http://') === 0 || p.indexOf('https://') === 0 || p.indexOf('//') === 0) {
                 var a = document.createElement('a');
                 a.href = p;
@@ -39,7 +39,6 @@
             }
         } catch (e) {}
         if (p.charAt(0) !== '/') p = '/' + p;
-        // Strip trailing slash (keep root '/')
         if (p.length > 1) p = p.replace(/\/+$/, '');
         return p || '/';
     }
@@ -209,7 +208,26 @@
         osc.stop(t + dur + 0.05);
     }
 
+    /* MP3 sounds: play via HTML5 Audio */
+    function playMp3Sound(filename) {
+        if (!soundsUrl) return;
+        try {
+            var audio = new Audio(soundsUrl + filename);
+            audio.volume = 0.7;
+            var playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(function() {});
+            }
+        } catch (e) {}
+    }
+
     function doPlaySound(type) {
+        /* MP3-based sounds (sound4, sound5, sound6) */
+        if (type === 'sound4') { playMp3Sound('sound4.mp3'); return; }
+        if (type === 'sound5') { playMp3Sound('sound5.mp3'); return; }
+        if (type === 'sound6') { playMp3Sound('sound6.mp3'); return; }
+
+        /* Web Audio API synthesised sounds */
         if (!audioCtx) return;
         if (audioCtx.state === 'suspended') { audioCtx.resume(); }
 
@@ -300,7 +318,6 @@
             widget.style.display = 'none';
             widget.style.opacity = '1';
             widget.style.transition = '';
-            // Mark balloon as not closed so it can re-appear next cycle
             balloon.dataset.closed = '';
         }, 400);
     }
@@ -317,14 +334,13 @@
 
         if (sound && sound !== 'none') {
             pendingSoundAt = Date.now() + soundDelay;
-            soundPlayed = false; // allow next cycle to play (still gated by once-per-session)
+            soundPlayed = false;
 
             if (userInteracted) {
                 setTimeout(fireSound, soundDelay);
             }
         }
 
-        // Schedule auto-hide of the entire widget
         if (hideDelay > 0) {
             setTimeout(function () {
                 hideWidget();
@@ -358,7 +374,11 @@
             'wp-ru-max-anim-bounce',
             'wp-ru-max-anim-shake',
             'wp-ru-max-anim-glow',
-            'wp-ru-max-anim-rotate'
+            'wp-ru-max-anim-rotate',
+            'wp-ru-max-anim-float',
+            'wp-ru-max-anim-pendulum',
+            'wp-ru-max-anim-burst',
+            'wp-ru-max-anim-heartbeat'
         );
         if (animation && animation !== 'none') {
             iconEl.classList.add('wp-ru-max-anim-' + animation);
