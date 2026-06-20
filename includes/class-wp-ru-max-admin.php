@@ -598,6 +598,12 @@ jQuery(function($){
                 case 'chat_widget_retention_title':
                 case 'chat_widget_retention_stay_text':
                 case 'chat_widget_retention_leave_text':
+                case 'chat_widget_utm_source':
+                case 'chat_widget_utm_medium':
+                case 'chat_widget_utm_campaign':
+                case 'chat_widget_utm_content':
+                case 'chat_widget_ya_metrika_counter':
+                case 'chat_widget_ya_metrika_goal':
                     $settings[ $field ] = sanitize_text_field( $value );
                     break;
                 case 'chat_widget_retention_message':
@@ -627,6 +633,7 @@ jQuery(function($){
                 case 'send_delay_seconds':
                 case 'retry_count':
                 case 'retry_delay_seconds':
+                case 'general_dedup_ttl':
                     $settings[ $field ] = max( 0, intval( $value ) );
                     break;
                 case 'image_size_limit_mb':
@@ -665,6 +672,8 @@ jQuery(function($){
                 case 'max_oauth_enabled':
                 case 'multisite_enabled':
                 case 'woo_filter_enabled':
+                case 'chat_widget_ya_metrika_enabled':
+                case 'general_dedup_enabled':
                     $settings[ $field ] = filter_var( $value, FILTER_VALIDATE_BOOLEAN );
                     break;
                 case 'max_oauth_client_id':
@@ -686,10 +695,10 @@ jQuery(function($){
                     break;
             }
         } else {
-            $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages', 'max_oauth_bot_username' );
+            $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages', 'max_oauth_bot_username', 'chat_widget_utm_source', 'chat_widget_utm_medium', 'chat_widget_utm_campaign', 'chat_widget_utm_content', 'chat_widget_ya_metrika_counter', 'chat_widget_ya_metrika_goal' );
             $allowed_textarea = array( 'notify_template', 'post_message_template', 'chat_widget_retention_message', 'chat_widget_sound_specific_pages' );
-            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled', 'multisite_enabled', 'woo_filter_enabled' );
-            $allowed_int      = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay', 'send_delay_seconds', 'retry_count', 'retry_delay_seconds' );
+            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled', 'multisite_enabled', 'woo_filter_enabled', 'chat_widget_ya_metrika_enabled', 'general_dedup_enabled' );
+            $allowed_int      = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay', 'send_delay_seconds', 'retry_count', 'retry_delay_seconds', 'general_dedup_ttl' );
             $allowed_float    = array( 'image_size_limit_mb' );
             $allowed_color    = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
             $allowed_array    = array( 'post_types', 'channels', 'notify_chat_ids', 'filter_categories', 'filter_tags', 'woo_notify_statuses' );
@@ -1002,10 +1011,6 @@ jQuery(function($){
             <p style="color:#666;font-style:italic;margin-bottom:16px;">Запланировано к реализации — список для себя, чтобы не забыть что добавим в следующих версиях.</p>
 
             <ul style="margin-left:20px;list-style:disc;line-height:2;">
-                <li>
-                    <strong>Передача событий в Яндекс.Метрику</strong><br>
-                    <span style="color:#555;">Передача событий в Яндекс.Метрику позволит анализировать поведение пользователей на сайте и улучшать его функциональность.</span>
-                </li>
                 <li style="margin-top:10px;">
                     <strong>CRM + автоматизация</strong><br>
                     <span style="color:#555;">Интеграция с CRM-системами (amoCRM, Bitrix24) и автоматизация отдела продаж позволит упростить работу с клиентами и повысить эффективность продаж.</span>
@@ -1019,6 +1024,14 @@ jQuery(function($){
 
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
+
+            <h4 style="margin-bottom:4px;">v1.0.38</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li>Добавлено: UTM-метки для чат-виджета — параметры utm_source, utm_medium, utm_campaign, utm_content автоматически добавляются к ссылке виджета.</li>
+                <li>Добавлено: интеграция с Яндекс.Метрикой — событие reachGoal при клике на иконку виджета; настраиваются номер счётчика и идентификатор цели.</li>
+                <li>Добавлено: общая защита от дублей уведомлений — предотвращает двойные уведомления от MPHB, Bookly, YClients (второй email с тем же #ID в теме пропускается).</li>
+                <li>Исправлено: ссылки на платформу MAX обновлены с max.ru/partner на business.max.ru.</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.37</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -1124,7 +1137,7 @@ jQuery(function($){
         ?>
         <div class="wp-ru-max-card">
             <h2>Настройки бота MAX</h2>
-            <p>Введите токен вашего бота из мессенджера MAX. Для получения токена перейдите на <a href="https://max.ru/partner" target="_blank" rel="noopener">платформу MAX для партнёров</a>.</p>
+            <p>Введите токен вашего бота из мессенджера MAX. Для получения токена перейдите на <a href="https://business.max.ru" target="_blank" rel="noopener">платформу MAX для партнёров</a>.</p>
 
             <?php if ( ! $is_licensed ) : ?>
             <div class="wp-ru-max-license-banner">
@@ -1683,6 +1696,40 @@ jQuery(function($){
             </div>
 
             <div class="wp-ru-max-card">
+                <h3>Общая защита от дублей уведомлений</h3>
+                <p>Если плагин бронирования (MPHB, Bookly, YClients и др.) отправляет <strong>два письма по одному бронированию</strong> — например, «Новое бронирование #1154» и «Запрос на бронирование #1154» — включите эту опцию. Второе уведомление с тем же номером будет автоматически пропущено.</p>
+                <p><em>Не распространяется на WooCommerce — для него используйте «WooCommerce — фильтр заказов» выше.</em></p>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">Включить защиту от дублей</th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="general_dedup_enabled" id="general_dedup_enabled" value="1" <?php checked( ! empty( $settings['general_dedup_enabled'] ) ); ?> />
+                                <strong>Блокировать повторные уведомления с одинаковым #ID в теме письма</strong>
+                            </label>
+                            <p class="description">Работает по первому числу вида #NNNN в теме email. Если таких чисел нет — письмо всегда проходит.</p>
+                        </td>
+                    </tr>
+                    <tr id="general_dedup_ttl_row" style="<?php echo empty( $settings['general_dedup_enabled'] ) ? 'display:none;' : ''; ?>">
+                        <th scope="row"><label for="general_dedup_ttl">Окно дедупликации (сек)</label></th>
+                        <td>
+                            <input type="number" id="general_dedup_ttl" name="general_dedup_ttl" value="<?php echo esc_attr( isset( $settings['general_dedup_ttl'] ) ? $settings['general_dedup_ttl'] : 30 ); ?>" min="5" max="3600" style="width:80px;" />
+                            <p class="description">Как долго хранится метка уже отправленного уведомления. По умолчанию 30 секунд — достаточно для MPHB.</p>
+                        </td>
+                    </tr>
+                </table>
+                <script>
+                (function(){
+                    var cb = document.getElementById('general_dedup_enabled');
+                    var row = document.getElementById('general_dedup_ttl_row');
+                    if (cb && row) {
+                        cb.addEventListener('change', function(){ row.style.display = cb.checked ? '' : 'none'; });
+                    }
+                })();
+                </script>
+            </div>
+
+            <div class="wp-ru-max-card">
                 <h3>Встроенные кнопки клавиатуры</h3>
                 <div id="notify_buttons_list" style="margin:12px 0;">
                     <?php
@@ -1909,7 +1956,7 @@ jQuery(function($){
         <div class="wp-ru-max-card">
             <h3>Шаг 1: Регистрация на платформе MAX для партнёров</h3>
             <ol>
-                <li>Перейдите на <a href="https://max.ru/partner" target="_blank" rel="noopener"><strong>платформу MAX для партнёров</strong></a> и войдите в аккаунт или зарегистрируйтесь.</li>
+                <li>Перейдите на <a href="https://business.max.ru" target="_blank" rel="noopener"><strong>платформу MAX для партнёров</strong></a> и войдите в аккаунт или зарегистрируйтесь.</li>
                 <li>Создайте профиль вашей организации и пройдите верификацию.</li>
             </ol>
         </div>
@@ -1950,7 +1997,7 @@ jQuery(function($){
             <p>Если вы хотите, чтобы посетители сайта могли входить через аккаунт мессенджера MAX — выполните следующие шаги. MAX использует систему Mini App, а не стандартный OAuth — Client ID и Secret <strong>не нужны</strong>.</p>
             <ol>
                 <li>
-                    Перейдите на <a href="https://max.ru/partner" target="_blank" rel="noopener"><strong>платформу MAX для партнёров</strong></a> и войдите в аккаунт.
+                    Перейдите на <a href="https://business.max.ru" target="_blank" rel="noopener"><strong>платформу MAX для партнёров</strong></a> и войдите в аккаунт.
                 </li>
                 <li>
                     Откройте раздел <strong>«Чат-боты»</strong>, выберите вашего бота, перейдите на вкладку <strong>«Мини-приложение»</strong>.
@@ -1985,7 +2032,7 @@ jQuery(function($){
         <div class="wp-ru-max-card">
             <h3>Полезные ссылки</h3>
             <ul>
-                <li><a href="https://max.ru/partner" target="_blank" rel="noopener">Платформа MAX для партнёров</a></li>
+                <li><a href="https://business.max.ru" target="_blank" rel="noopener">Платформа MAX для партнёров</a></li>
                 <li><a href="https://dev.max.ru" target="_blank" rel="noopener">Документация MAX API</a></li>
                 <li><a href="https://рукодер.рф/" target="_blank" rel="noopener">Разработка сайтов под ключ</a></li>
             </ul>
@@ -2019,6 +2066,18 @@ jQuery(function($){
         $hide_delay    = isset( $settings['chat_widget_hide_delay'] )    ? (int) $settings['chat_widget_hide_delay']    : 0;
         $repeat_delay  = isset( $settings['chat_widget_repeat_delay'] )  ? (int) $settings['chat_widget_repeat_delay']  : 0;
         $animation     = $settings['chat_widget_animation']   ?? 'none';
+
+        // UTM-метки
+        $utm_source   = $settings['chat_widget_utm_source']   ?? '';
+        $utm_medium   = $settings['chat_widget_utm_medium']   ?? '';
+        $utm_campaign = $settings['chat_widget_utm_campaign'] ?? '';
+        $utm_content  = $settings['chat_widget_utm_content']  ?? '';
+
+        // Яндекс.Метрика
+        $ya_metrika_enabled = ! empty( $settings['chat_widget_ya_metrika_enabled'] );
+        $ya_metrika_counter = $settings['chat_widget_ya_metrika_counter'] ?? '';
+        $ya_metrika_goal    = $settings['chat_widget_ya_metrika_goal']    ?? 'chat_widget_click';
+
         $retention_enabled = ! empty( $settings['chat_widget_retention_enabled'] );
         $retention_title   = $settings['chat_widget_retention_title']   ?? 'Специальное предложение!';
         $retention_message = $settings['chat_widget_retention_message'] ?? 'Уже уходите? Получите скидку 10% на первый заказ!';
@@ -2099,6 +2158,59 @@ jQuery(function($){
                             </div>
                             <p class="description" style="margin-top:6px;">Увеличьте значение (например, до 70–90 px), если нижнее меню темы перекрывает значок чата.</p>
                             <script>(function(){var r=document.getElementById('chat_widget_bottom_offset_range');var n=document.getElementById('chat_widget_bottom_offset');if(r&&n){r.addEventListener('input',function(){n.value=r.value;});n.addEventListener('input',function(){r.value=n.value;});}})()</script>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="wp-ru-max-card">
+                <h3>UTM-метки</h3>
+                <p>Добавьте UTM-метки к ссылке виджета, чтобы отслеживать переходы в Яндекс.Метрике или Google Analytics.</p>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="chat_widget_utm_source">utm_source</label></th>
+                        <td><input type="text" id="chat_widget_utm_source" name="chat_widget_utm_source" value="<?php echo esc_attr( $utm_source ); ?>" class="regular-text" placeholder="max" /></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="chat_widget_utm_medium">utm_medium</label></th>
+                        <td><input type="text" id="chat_widget_utm_medium" name="chat_widget_utm_medium" value="<?php echo esc_attr( $utm_medium ); ?>" class="regular-text" placeholder="chat_widget" /></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="chat_widget_utm_campaign">utm_campaign</label></th>
+                        <td><input type="text" id="chat_widget_utm_campaign" name="chat_widget_utm_campaign" value="<?php echo esc_attr( $utm_campaign ); ?>" class="regular-text" placeholder="site" /></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="chat_widget_utm_content">utm_content</label></th>
+                        <td><input type="text" id="chat_widget_utm_content" name="chat_widget_utm_content" value="<?php echo esc_attr( $utm_content ); ?>" class="regular-text" placeholder="icon" /></td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="wp-ru-max-card">
+                <h3>Яндекс.Метрика</h3>
+                <p>При клике на иконку виджета будет вызвано событие <code>reachGoal</code>, что позволяет считать конверсии в Яндекс.Метрике.</p>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">Включить</th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="chat_widget_ya_metrika_enabled" id="chat_widget_ya_metrika_enabled" value="1" <?php checked( $ya_metrika_enabled ); ?> />
+                                <strong>Отправлять событие reachGoal при клике на виджет</strong>
+                            </label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="chat_widget_ya_metrika_counter">Номер счётчика</label></th>
+                        <td>
+                            <input type="text" id="chat_widget_ya_metrika_counter" name="chat_widget_ya_metrika_counter" value="<?php echo esc_attr( $ya_metrika_counter ); ?>" class="regular-text" placeholder="12345678" />
+                            <p class="description">Числовой ID счётчика Яндекс.Метрики (найдите в коде счётчика: <code>ym(XXXXXXXX, 'init', ...)</code>).</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="chat_widget_ya_metrika_goal">Идентификатор цели</label></th>
+                        <td>
+                            <input type="text" id="chat_widget_ya_metrika_goal" name="chat_widget_ya_metrika_goal" value="<?php echo esc_attr( $ya_metrika_goal ); ?>" class="regular-text" placeholder="chat_widget_click" />
+                            <p class="description">Идентификатор цели из настроек Яндекс.Метрики. По умолчанию: <code>chat_widget_click</code>.</p>
                         </td>
                     </tr>
                 </table>
