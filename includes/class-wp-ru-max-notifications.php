@@ -189,6 +189,27 @@ class WP_Ru_Max_Notifications {
     }
 
     /**
+     * Общая защита от дублей уведомлений по номеру (#ID) в теме письма.
+     * Работает для MPHB, YClients, Bookly и любых других плагинов бронирования.
+     * Извлекает первый #NNNN из темы письма и блокирует повторную отправку того же ID.
+     *
+     * @param string $subject Тема письма.
+     * @param int    $ttl     Время жизни защиты от дублей в секундах (по умолчанию 30).
+     * @return bool true — отправить, false — дубль, пропустить.
+     */
+    private function general_dedup_check( $subject, $ttl = 30 ) {
+        if ( ! preg_match( '/#(\d+)/', $subject, $m ) ) {
+            return true; // Нет номера в теме — пропускаем без дедупликации
+        }
+        $key = 'wp_ru_max_gdedup_' . $m[1];
+        if ( get_transient( $key ) ) {
+            return false;
+        }
+        set_transient( $key, 1, $ttl );
+        return true;
+    }
+
+    /**
      * Проверяет и регистрирует дедупликацию WooCommerce-уведомления.
      * Возвращает true, если уведомление нужно отправить.
      * Возвращает false, если это дубль и отправку нужно пропустить.
@@ -254,6 +275,21 @@ class WP_Ru_Max_Notifications {
                 WP_Ru_Max_Logger::log( 'notifications', 'info',
                     "WooCommerce заказ #{$order_id} (статус: {$status}) — дубль уведомления пропущен (защита от спама).",
                     array( 'order_id' => $order_id, 'status' => $status )
+                );
+                return $args;
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
+        // ── Общая защита от дублей для плагинов бронирования (MPHB, Bookly и др.) ──
+        // Работает только для не-WooCommerce писем, содержащих номер #ID в теме.
+        // Предотвращает дублирование, когда плагин отправляет 2 письма по одному бронированию.
+        if ( empty( $woo_info ) && ! empty( $settings['general_dedup_enabled'] ) ) {
+            $general_ttl = isset( $settings['general_dedup_ttl'] ) ? max( 5, intval( $settings['general_dedup_ttl'] ) ) : 30;
+            if ( ! $this->general_dedup_check( $subject, $general_ttl ) ) {
+                WP_Ru_Max_Logger::log( 'notifications', 'info',
+                    "Дубль уведомления пропущен — общая защита от дублей (тема: «{$subject}»).",
+                    array( 'subject' => $subject )
                 );
                 return $args;
             }
