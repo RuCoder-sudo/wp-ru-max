@@ -1,7 +1,7 @@
 /* WP Ru-max Admin Styles */
 
 .wp-ru-max-wrap {
-    max-width: 980px;
+    max-width: 1100px;
 }
 
 .wp-ru-max-header {
@@ -28,48 +28,64 @@
     font-weight: 600;
 }
 
-/* Tabs */
-.wp-ru-max-tabs {
-    margin-bottom: 0 !important;
-    border-bottom: none !important;
+/* Layout: sidebar + content */
+.wp-ru-max-layout {
     display: flex;
-    flex-wrap: nowrap;
-    gap: 2px;
-    width: 100%;
+    align-items: flex-start;
+    gap: 0;
+    margin-top: 16px;
 }
 
-.wp-ru-max-tabs .nav-tab {
+/* Sidebar Tabs */
+.wp-ru-max-tabs {
+    display: flex;
+    flex-direction: column;
+    width: 175px;
+    min-width: 175px;
+    flex-shrink: 0;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-right: none;
+    border-radius: 8px 0 0 8px;
+    padding: 8px 0;
     margin: 0;
-    border-radius: 8px 8px 0 0;
-    font-size: 12px;
-    padding: 8px 10px;
-    background: #f1f5f9;
-    border-color: #e2e8f0;
+}
+
+.wp-ru-max-tab {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 10px 16px;
+    font-size: 13px;
     color: #475569;
-    transition: all 0.2s;
+    text-decoration: none;
+    border-left: 3px solid transparent;
+    transition: all 0.18s;
     white-space: nowrap;
-    flex: 1 1 auto;
-    text-align: center;
-    min-width: 0;
+    line-height: 1.3;
 }
 
-.wp-ru-max-tabs .nav-tab:hover {
-    background: #e2e8f0;
+.wp-ru-max-tab:hover {
+    background: #e8edf5;
     color: #1e293b;
+    text-decoration: none;
 }
 
-.wp-ru-max-tabs .nav-tab-active {
+.wp-ru-max-tab.nav-tab-active {
     background: white;
-    border-bottom-color: white;
+    border-left-color: #6366f1;
     color: #6366f1;
     font-weight: 600;
 }
 
-/* Content */
+
+/* Content area */
 .wp-ru-max-content {
+    flex: 1;
+    min-width: 0;
     background: white;
     border: 1px solid #e2e8f0;
-    border-radius: 0 8px 8px 8px;
+    border-radius: 0 8px 8px 0;
     padding: 0;
 }
 
@@ -468,27 +484,47 @@
     margin: 0 0 8px;
 }
 
+
 /* Responsive */
-@media (max-width: 980px) {
-    .wp-ru-max-tabs .nav-tab {
-        font-size: 11px;
-        padding: 7px 6px;
+@media (max-width: 900px) {
+    .wp-ru-max-tabs {
+        width: 150px;
+        min-width: 150px;
+    }
+    .wp-ru-max-tab {
+        padding: 9px 12px;
+        font-size: 12px;
     }
 }
 
-@media (max-width: 768px) {
-    .wp-ru-max-tabs {
-        flex-wrap: wrap;
+@media (max-width: 700px) {
+    .wp-ru-max-layout {
+        flex-direction: column;
     }
-    .wp-ru-max-tabs .nav-tab {
-        flex: 0 1 auto;
+    .wp-ru-max-tabs {
+        width: 100%;
+        min-width: 0;
+        flex-direction: row;
+        flex-wrap: wrap;
+        border-right: 1px solid #e2e8f0;
+        border-radius: 8px 8px 0 0;
+        padding: 6px;
+        gap: 4px;
+    }
+    .wp-ru-max-tab {
+        border-left: none;
+        border-bottom: 3px solid transparent;
         border-radius: 6px;
-        margin-bottom: 4px;
-        font-size: 12px;
-        padding: 8px 10px;
+        flex: 0 1 auto;
+        padding: 7px 10px;
+    }
+    .wp-ru-max-tab.nav-tab-active {
+        border-left-color: transparent;
+        border-bottom-color: #6366f1;
+        background: #f0f0ff;
     }
     .wp-ru-max-content {
-        border-radius: 8px;
+        border-radius: 0 0 8px 8px;
     }
     .wp-ru-max-history-toolbar {
         flex-direction: column;
@@ -503,19 +539,17 @@
 
 /* Alert tab highlight — pulse when plugin not activated */
 .wp-ru-max-tab-activation-alert {
-    color: #d63638 !important;
-    border-bottom-color: #d63638 !important;
-    font-weight: 600;
+    color: #d63638;
+    border-left-color: #d63638 !important;
     animation: wp-ru-max-tab-pulse 2.8s ease-in-out infinite;
 }
 .wp-ru-max-tab-activation-alert:hover {
-    color: #b42121 !important;
     animation: none;
     background: #fff0f0 !important;
 }
 @keyframes wp-ru-max-tab-pulse {
-    0%, 100% { background: #f1f5f9; color: #d63638 !important; }
-    50%       { background: #fff0f0; color: #a31515 !important; box-shadow: 0 0 0 2px rgba(214,54,56,0.2); }
+    0%, 100% { background: #f8fafc; }
+    50%       { background: #fff0f0; box-shadow: inset 3px 0 0 rgba(214,54,56,0.6); }
 }
 
 /* License banner on main tab */
