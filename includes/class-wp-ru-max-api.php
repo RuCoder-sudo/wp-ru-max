@@ -232,9 +232,29 @@ class WP_Ru_Max_API {
     }
 
     /**
-     * Отправить текстовое сообщение.
+     * Нормализует chat_id для MAX API.
+     * MAX API иногда возвращает chat_id в формате "id{user_id}_{bot_id}_bot",
+     * но при отправке принимает только числовой user_id.
+     * Также поддерживает: числовые ID, @channel, -100123456789.
      */
+    private function normalize_chat_id( $chat_id ) {
+        $chat_id = trim( (string) $chat_id );
+
+        // Формат "id7751383448_4_bot" → "7751383448"
+        if ( preg_match( '/^id(\d+)_\d+_bot$/i', $chat_id, $m ) ) {
+            return $m[1];
+        }
+
+        // Формат "id7751383448" → "7751383448"
+        if ( preg_match( '/^id(\d+)$/i', $chat_id, $m ) ) {
+            return $m[1];
+        }
+
+        return $chat_id;
+    }
+
     public function send_message( $chat_id, $text, $format = 'html', $buttons = array() ) {
+        $chat_id = $this->normalize_chat_id( $chat_id );
         $text = $this->sanitize_utf8( $text, true );
 
         $payload = array(
@@ -442,6 +462,7 @@ class WP_Ru_Max_API {
      *   3. Отправка только текста (без изображения)
      */
     public function send_message_with_image( $chat_id, $text, $image_url, $format = 'html', $buttons = array() ) {
+        $chat_id = $this->normalize_chat_id( $chat_id );
         $text = $this->sanitize_utf8( $text, true );
 
         // Проверяем размер изображения
