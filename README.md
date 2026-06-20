@@ -16,7 +16,7 @@
 
 <br>
 
-[![Версия](https://img.shields.io/badge/версия-1.0.36-blue?style=flat-square)](https://github.com/RuCoder-sudo/wp-ru-max/releases)
+[![Версия](https://img.shields.io/badge/версия-1.0.38-blue?style=flat-square)](https://github.com/RuCoder-sudo/wp-ru-max/releases)
 [![Скачать](https://img.shields.io/badge/⬇_Скачать-GitHub_Releases-ff5b3d?style=flat-square)](https://github.com/RuCoder-sudo/wp-ru-max/releases)
 [![Документация](https://img.shields.io/badge/📖_Документация-docs.html-ffb27a?style=flat-square)](https://rucoder-sudo.github.io/wp-ru-max/docs.html)
 [![GitHub](https://img.shields.io/badge/★_GitHub-RuCoder--sudo%2Fwp--ru--max-1a0d12?style=flat-square)](https://github.com/RuCoder-sudo/wp-ru-max)
@@ -34,6 +34,15 @@
 - **Чат-виджет** — плавающая кнопка MAX с приветствием, звуком и попапом удержания
 
 ---
+
+## Новое в версии 1.0.38
+
+| Что добавлено | Описание |
+|---|---|
+| **UTM-метки для виджета** | Параметры utm_source, utm_medium, utm_campaign, utm_content автоматически добавляются к ссылке чат-виджета. |
+| **Яндекс.Метрика** | Событие `reachGoal` при клике на иконку виджета — анализ конверсий в Яндекс.Метрике. |
+| **Защита от дублей** | Предотвращает двойные Telegram-уведомления от MPHB, Bookly, YClients. |
+| **Ссылки MAX** | Все ссылки обновлены с `max.ru/partner` на `business.max.ru`. |
 
 ## Новое в версии 1.0.36
 
