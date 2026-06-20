@@ -1,4 +1,4 @@
-/* WP Ru-max Chat Widget v1.0.37 */
+/* WP Ru-max Chat Widget v1.0.38 */
 (function () {
     'use strict';
 
@@ -16,6 +16,11 @@
     var animation  = cfg.animation  || 'none';
     var retentionEnabled = !!cfg.retentionEnabled;
     var homeUrl    = cfg.homeUrl    || '/';
+
+    /* Яндекс.Метрика */
+    var yaMetrikaEnabled = !!cfg.yaMetrikaEnabled;
+    var yaMetrikaCounter = cfg.yaMetrikaCounter || 0;
+    var yaMetrikaGoal    = cfg.yaMetrikaGoal    || 'chat_widget_click';
 
     var widget   = document.getElementById('wp-ru-max-widget');
     var balloon  = document.getElementById('wp-ru-max-balloon');
@@ -362,6 +367,19 @@
     widget.addEventListener('mouseenter', function () {
         showBalloon();
     });
+
+    /* ================================================================== */
+    /* YANDEX.METRIKA — reachGoal при клике на иконку виджета              */
+    /* ================================================================== */
+    if (iconEl && yaMetrikaEnabled && yaMetrikaCounter) {
+        iconEl.addEventListener('click', function () {
+            try {
+                if (typeof ym === 'function') {
+                    ym(yaMetrikaCounter, 'reachGoal', yaMetrikaGoal);
+                }
+            } catch (e) {}
+        });
+    }
 
     /* ================================================================== */
     /* ATTENTION ANIMATIONS                                                 */
