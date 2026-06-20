@@ -19,17 +19,34 @@
         $el.removeClass('success error info').addClass(type).html(message).fadeIn(200);
     }
 
-    /* -- Token visibility -- */
-    $('#toggle_token_visibility').on('click', function () {
-        var $input = $('#bot_token');
-        if ($input.attr('type') === 'password') {
-            $input.attr('type', 'text');
-            $(this).text('Скрыть');
-        } else {
-            $input.attr('type', 'password');
-            $(this).text('Показать');
+    /* -- Token visibility + защита от браузерного автозаполнения -- */
+    (function () {
+        var $token = $('#bot_token');
+        if (!$token.length) { return; }
+
+        /* autocomplete="new-password" не всегда срабатывает в Chrome.
+           Дополнительно: восстанавливаем значение из data-token через 300 мс,
+           после того как браузер мог подставить сохранённые credentials. */
+        var serverToken = $token.data('token');
+        if (typeof serverToken === 'string') {
+            setTimeout(function () {
+                if ($token.val() !== serverToken) {
+                    $token.val(serverToken);
+                }
+            }, 300);
         }
-    });
+
+        /* Кнопка «Показать/Скрыть» */
+        $('#toggle_token_visibility').on('click', function () {
+            if ($token.attr('type') === 'password') {
+                $token.attr('type', 'text');
+                $(this).text('Скрыть');
+            } else {
+                $token.attr('type', 'password');
+                $(this).text('Показать');
+            }
+        });
+    }());
 
     /* -- Main Tab -- */
     $('#save_main_settings').on('click', function () {
@@ -288,6 +305,8 @@
             notify_site_errors:         $('input[name="notify_site_errors"]').is(':checked') ? '1' : '0',
             woo_filter_enabled:         $('input[name="woo_filter_enabled"]').is(':checked') ? '1' : '0',
             'woo_notify_statuses[]':    wooStatuses,
+            general_dedup_enabled:      $('input[name="general_dedup_enabled"]').is(':checked') ? '1' : '0',
+            general_dedup_ttl:          parseInt($('#general_dedup_ttl').val(), 10) || 30,
         }, collectNotifyButtons());
 
         doAjax('wp_ru_max_save_settings', data, function (res) {
@@ -404,6 +423,13 @@
             chat_widget_retention_stay_color:     $('input[name="chat_widget_retention_stay_color"]').val() || '#ffffff',
             chat_widget_retention_leave_bg:       $('input[name="chat_widget_retention_leave_bg"]').val() || '#f0f0f0',
             chat_widget_retention_leave_color:    $('input[name="chat_widget_retention_leave_color"]').val() || '#555555',
+            chat_widget_utm_source:    $('#chat_widget_utm_source').val() || '',
+            chat_widget_utm_medium:    $('#chat_widget_utm_medium').val() || '',
+            chat_widget_utm_campaign:  $('#chat_widget_utm_campaign').val() || '',
+            chat_widget_utm_content:   $('#chat_widget_utm_content').val() || '',
+            chat_widget_ya_metrika_enabled:  $('#chat_widget_ya_metrika_enabled').is(':checked') ? '1' : '0',
+            chat_widget_ya_metrika_counter:  $('#chat_widget_ya_metrika_counter').val() || '',
+            chat_widget_ya_metrika_goal:     $('#chat_widget_ya_metrika_goal').val() || 'chat_widget_click',
         }, function (res) {
             $btn.prop('disabled', false).text('Сохранить');
             if (res.success) {
