@@ -3,7 +3,7 @@
  * Plugin Name:       WP Ru-max
  * Plugin URI:        https://рукодер.рф/wp-ru-max/
  * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Jetpack / Elementor и настраиваемый чат-виджет с анимацией и звуком. Поддерживает WordPress Multisite (мультисайт) и поддомены.
- * Version:           1.0.37
+ * Version:           1.0.38
  * Author:            Сергей Солошенко (RuCoder)
  * Author URI:        https://рукодер.рф/
  * License:           GPL v2 or later
@@ -45,7 +45,7 @@
  *
  * FAQ:
  * Q: Где взять токен бота MAX?
- * A: На платформе MAX для партнёров: https://max.ru/partner → «Чат-боты» → «Интеграция» → «Получить токен».
+ * A: На платформе MAX для партнёров: https://business.max.ru → «Чат-боты» → «Интеграция» → «Получить токен».
  *
  * Q: Как узнать ID канала или группы?
  * A: Для публичного канала — никнейм с @ (например, @my_channel).
@@ -73,7 +73,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'WP_RU_MAX_VERSION', '1.0.37' );
+define( 'WP_RU_MAX_VERSION', '1.0.38' );
 define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
 define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
