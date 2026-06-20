@@ -1,4 +1,4 @@
-/* WP Ru-max Chat Widget v1.0.38 */
+/* WP Ru-max Chat Widget v1.0.39 */
 (function () {
     'use strict';
 
