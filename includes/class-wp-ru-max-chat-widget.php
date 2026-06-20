@@ -62,6 +62,31 @@ class WP_Ru_Max_Chat_Widget {
         $size          = isset( $settings['chat_widget_size'] )          ? $settings['chat_widget_size']                  : 'medium';
         $url           = isset( $settings['chat_widget_url'] )           ? trim( $settings['chat_widget_url'] )           : '';
         $message       = isset( $settings['chat_widget_message'] )       ? $settings['chat_widget_message']               : 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!';
+
+        // UTM-метки
+        $utm_source   = isset( $settings['chat_widget_utm_source'] )   ? trim( $settings['chat_widget_utm_source'] )   : '';
+        $utm_medium   = isset( $settings['chat_widget_utm_medium'] )   ? trim( $settings['chat_widget_utm_medium'] )   : '';
+        $utm_campaign = isset( $settings['chat_widget_utm_campaign'] ) ? trim( $settings['chat_widget_utm_campaign'] ) : '';
+        $utm_content  = isset( $settings['chat_widget_utm_content'] )  ? trim( $settings['chat_widget_utm_content'] )  : '';
+
+        // Яндекс.Метрика
+        $ya_enabled = ! empty( $settings['chat_widget_ya_metrika_enabled'] );
+        $ya_counter = isset( $settings['chat_widget_ya_metrika_counter'] ) ? trim( $settings['chat_widget_ya_metrika_counter'] ) : '';
+        $ya_goal    = isset( $settings['chat_widget_ya_metrika_goal'] )    ? trim( $settings['chat_widget_ya_metrika_goal'] )    : 'chat_widget_click';
+
+        // Добавляем UTM-метки к ссылке виджета
+        if ( ! empty( $url ) ) {
+            $utm_params = array_filter( array(
+                'utm_source'   => $utm_source,
+                'utm_medium'   => $utm_medium,
+                'utm_campaign' => $utm_campaign,
+                'utm_content'  => $utm_content,
+            ) );
+            if ( ! empty( $utm_params ) ) {
+                $separator = ( strpos( $url, '?' ) !== false ) ? '&' : '?';
+                $url      .= $separator . http_build_query( $utm_params );
+            }
+        }
         $position      = isset( $settings['chat_widget_position'] )      ? $settings['chat_widget_position']              : 'right';
         $bottom_offset = isset( $settings['chat_widget_bottom_offset'] ) ? (int) $settings['chat_widget_bottom_offset']   : 20;
         $show_delay    = isset( $settings['chat_widget_show_delay'] )    ? (int) $settings['chat_widget_show_delay']      : 0;
@@ -159,6 +184,9 @@ class WP_Ru_Max_Chat_Widget {
         'animation'            => $animation,
         'retentionEnabled'     => (bool) $retention_enabled,
         'homeUrl'              => home_url( '/' ),
+        'yaMetrikaEnabled'     => (bool) $ya_enabled,
+        'yaMetrikaCounter'     => $ya_enabled ? (int) $ya_counter : 0,
+        'yaMetrikaGoal'        => $ya_goal,
     ) ); ?>;
     </script>
 </div>
