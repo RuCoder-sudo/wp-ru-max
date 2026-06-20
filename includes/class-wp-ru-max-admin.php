@@ -695,9 +695,9 @@ jQuery(function($){
                     break;
             }
         } else {
-            $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages', 'max_oauth_bot_username', 'chat_widget_utm_source', 'chat_widget_utm_medium', 'chat_widget_utm_campaign', 'chat_widget_utm_content', 'chat_widget_ya_metrika_counter', 'chat_widget_ya_metrika_goal' );
+            $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages', 'max_oauth_bot_username', 'chat_widget_utm_source', 'chat_widget_utm_medium', 'chat_widget_utm_campaign', 'chat_widget_utm_content', 'chat_widget_ya_metrika_counter', 'chat_widget_ya_metrika_goal', 'hashtags_custom_mentions' );
             $allowed_textarea = array( 'notify_template', 'post_message_template', 'chat_widget_retention_message', 'chat_widget_sound_specific_pages' );
-            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled', 'multisite_enabled', 'woo_filter_enabled', 'chat_widget_ya_metrika_enabled', 'general_dedup_enabled' );
+            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled', 'multisite_enabled', 'woo_filter_enabled', 'chat_widget_ya_metrika_enabled', 'general_dedup_enabled', 'hashtags_enabled' );
             $allowed_int      = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay', 'send_delay_seconds', 'retry_count', 'retry_delay_seconds', 'general_dedup_ttl' );
             $allowed_float    = array( 'image_size_limit_mb' );
             $allowed_color    = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
@@ -917,62 +917,96 @@ jQuery(function($){
                 <span class="wp-ru-max-version">v<?php echo esc_html( WP_RU_MAX_VERSION ); ?></span>
             </div>
 
-            <nav class="wp-ru-max-tabs nav-tab-wrapper">
-                <?php
-                $tabs = array(
-                    'main'         => 'Главная',
-                    'post_sender'  => 'Отправка публикаций',
-                    'notifications'=> 'Личные уведомления',
-                    'advanced'     => 'Дополнительные настройки',
-                    'instructions' => 'Инструкция',
-                    'chat'         => 'Чат',
-                    'history'      => 'История',
-                    'activation'   => WP_Ru_Max_License::is_active() ? 'Активирован' : 'Активация',
-                    'updates'      => 'Обновления',
-                );
-                foreach ( $tabs as $tab_key => $tab_label ) {
-                    $class = ( $active_tab === $tab_key ) ? 'nav-tab nav-tab-active' : 'nav-tab';
-                    if ( $tab_key === 'activation' && ! WP_Ru_Max_License::is_active() ) {
-                        $class .= ' wp-ru-max-tab-activation-alert';
-                    }
-                    echo '<a href="' . esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=' . $tab_key ) ) . '" class="' . esc_attr( $class ) . '">' . esc_html( $tab_label ) . '</a>';
-                }
-                ?>
-            </nav>
+            <style>
+                .wp-ru-max-layout{display:flex!important;flex-direction:row!important;align-items:flex-start!important;gap:0!important;margin-top:16px!important;}
+                .wp-ru-max-tabs{display:flex!important;flex-direction:column!important;width:190px!important;min-width:190px!important;flex-shrink:0!important;background:#f8fafc!important;border:1px solid #e2e8f0!important;border-right:none!important;border-radius:8px 0 0 8px!important;padding:6px 0!important;margin:0!important;float:none!important;}
+                .wp-ru-max-tab{display:block!important;width:100%!important;padding:12px 18px!important;font-size:13px!important;color:#475569!important;text-decoration:none!important;border-left:3px solid transparent!important;border-bottom:none!important;border-top:none!important;border-right:none!important;background:transparent!important;box-sizing:border-box!important;white-space:normal!important;line-height:1.4!important;transition:all .18s!important;}
+                .wp-ru-max-tab:hover{background:#e8edf5!important;color:#1e293b!important;text-decoration:none!important;}
+                .wp-ru-max-tab.nav-tab-active{background:#fff!important;border-left-color:#6366f1!important;color:#6366f1!important;font-weight:600!important;}
+                .wp-ru-max-content{flex:1!important;min-width:0!important;background:#fff!important;border:1px solid #e2e8f0!important;border-radius:0 8px 8px 0!important;padding:0!important;}
+                .wp-ru-max-tab-activation-alert{color:#d63638!important;border-left-color:#d63638!important;}
+            </style>
 
-            <div class="wp-ru-max-content">
-                <?php
-                switch ( $active_tab ) {
-                    case 'main':
-                        $this->render_tab_main( $settings );
-                        break;
-                    case 'post_sender':
-                        $this->render_tab_post_sender( $settings );
-                        break;
-                    case 'notifications':
-                        $this->render_tab_notifications( $settings );
-                        break;
-                    case 'advanced':
-                        $this->render_tab_advanced( $settings );
-                        break;
-                    case 'instructions':
-                        $this->render_tab_instructions();
-                        break;
-                    case 'chat':
-                        $this->render_tab_chat( $settings );
-                        break;
-                    case 'history':
-                        $this->render_tab_history();
-                        break;
-                    case 'activation':
-                        $this->render_tab_activation();
-                        break;
-                    case 'updates':
-                        $this->render_tab_updates();
-                        break;
-                }
-                ?>
-            </div>
+            <div class="wp-ru-max-layout">
+
+                <nav class="wp-ru-max-tabs">
+                    <?php
+                    $tabs = array(
+                        'main'         => 'Главная',
+                        'post_sender'  => 'Отправка публикаций',
+                        'notifications'=> 'Личные уведомления',
+                        'chat'         => 'Чат',
+                        'advanced'     => 'Дополнительные',
+                        'instructions' => 'Инструкция',
+                        'history'      => 'История',
+                        'activation'   => WP_Ru_Max_License::is_active() ? 'Активирован' : 'Активация',
+                        'updates'      => 'Обновления',
+                    );
+                    foreach ( $tabs as $tab_key => $tab_label ) {
+                        $class = ( $active_tab === $tab_key ) ? 'wp-ru-max-tab nav-tab-active' : 'wp-ru-max-tab';
+                        if ( $tab_key === 'activation' && ! WP_Ru_Max_License::is_active() ) {
+                            $class .= ' wp-ru-max-tab-activation-alert';
+                        }
+                        echo '<a href="' . esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=' . $tab_key ) ) . '" class="' . esc_attr( $class ) . '">' . esc_html( $tab_label ) . '</a>';
+                    }
+                    ?>
+                </nav>
+
+                <div class="wp-ru-max-content">
+                    <?php
+                    $all_tabs = array( 'main', 'post_sender', 'notifications', 'chat', 'advanced', 'instructions', 'history', 'activation', 'updates' );
+                    foreach ( $all_tabs as $tab_key ) :
+                        $is_active = ( $active_tab === $tab_key );
+                    ?>
+                    <div id="wp-ru-max-pane-<?php echo esc_attr( $tab_key ); ?>" class="wp-ru-max-pane" style="<?php echo $is_active ? '' : 'display:none'; ?>">
+                        <?php
+                        switch ( $tab_key ) {
+                            case 'main':          $this->render_tab_main( $settings );         break;
+                            case 'post_sender':   $this->render_tab_post_sender( $settings );  break;
+                            case 'notifications': $this->render_tab_notifications( $settings ); break;
+                            case 'advanced':      $this->render_tab_advanced( $settings );      break;
+                            case 'instructions':  $this->render_tab_instructions();             break;
+                            case 'chat':          $this->render_tab_chat( $settings );          break;
+                            case 'history':       $this->render_tab_history();                  break;
+                            case 'activation':    $this->render_tab_activation();               break;
+                            case 'updates':       $this->render_tab_updates();                  break;
+                        }
+                        ?>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+
+            </div><!-- /.wp-ru-max-layout -->
+
+            <script>
+            (function($){
+                /* ── Переключение вкладок без перезагрузки ── */
+                $('.wp-ru-max-tab').on('click', function(e){
+                    e.preventDefault();
+                    var href = $(this).attr('href');
+                    var m = href.match(/tab=([a-z_]+)/);
+                    if (!m) return;
+                    var key = m[1];
+                    $('.wp-ru-max-pane').hide();
+                    $('#wp-ru-max-pane-' + key).show();
+                    $('.wp-ru-max-tab').removeClass('nav-tab-active');
+                    $(this).addClass('nav-tab-active');
+                    if (window.history && history.replaceState) {
+                        history.replaceState(null, '', href);
+                    }
+                });
+
+                /* ── Патч: всегда добавлять dedup-поля при сохранении уведомлений ── */
+                $(document).on('ajaxSend', function(e, xhr, settings){
+                    if (settings.data && settings.data.indexOf('action=wp_ru_max_save_settings') !== -1
+                        && settings.data.indexOf('general_dedup_enabled') === -1) {
+                        var dedup = '&general_dedup_enabled=' + ($('#general_dedup_enabled').is(':checked') ? '1' : '0')
+                                  + '&general_dedup_ttl='     + (parseInt($('#general_dedup_ttl').val(), 10) || 30);
+                        settings.data += dedup;
+                    }
+                });
+            })(jQuery);
+            </script>
         </div>
         <?php
     }
@@ -1015,15 +1049,18 @@ jQuery(function($){
                     <strong>CRM + автоматизация</strong><br>
                     <span style="color:#555;">Интеграция с CRM-системами (amoCRM, Bitrix24) и автоматизация отдела продаж позволит упростить работу с клиентами и повысить эффективность продаж.</span>
                 </li>
-                <li style="margin-top:10px;">
-                    <strong>Хэштеги и упоминания</strong><br>
-                    <span style="color:#555;">Хэштеги и упоминания в посте позволят уведомлять менеджеров о важных событиях или комментариях.</span>
-                </li>
             </ul>
         </div>
 
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
+
+            <h4 style="margin-bottom:4px;">v1.0.39</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li>Добавлено: Хэштеги и упоминания — теги WordPress автоматически превращаются в хэштеги MAX (#тег) в сообщении при публикации. Поддерживаются пользовательские @упоминания менеджеров.</li>
+                <li>Интерфейс: вкладки приборной панели перенесены в левую боковую панель WordPress.</li>
+                <li>Исправлено: формат chat_id — нормализация id{user_id}_{bot_id}_bot → числовой ID пользователя.</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.38</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -1155,7 +1192,12 @@ jQuery(function($){
                     <td>
                         <?php if ( $is_licensed ) : ?>
                         <div class="wp-ru-max-token-row">
-                            <input type="password" id="bot_token" name="bot_token" value="<?php echo esc_attr( $settings['bot_token'] ?? '' ); ?>" class="regular-text" placeholder="Вставьте токен бота MAX..." autocomplete="off" />
+                            <input type="password" id="bot_token" name="bot_token"
+                                value="<?php echo esc_attr( $settings['bot_token'] ?? '' ); ?>"
+                                class="regular-text"
+                                placeholder="Вставьте токен бота MAX..."
+                                autocomplete="new-password"
+                                data-token="<?php echo esc_attr( $settings['bot_token'] ?? '' ); ?>" />
                             <button type="button" class="button" id="toggle_token_visibility">Показать</button>
                         </div>
                         <p class="description">Токен находится в разделе «Интеграция» в личном кабинете MAX для партнёров.</p>
@@ -1335,6 +1377,26 @@ jQuery(function($){
                                 <input type="checkbox" name="show_author_date" value="1" <?php checked( isset( $settings['show_author_date'] ) ? $settings['show_author_date'] : true ); ?> />
                                 Показывать автора и дату в сообщении
                             </label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Хэштеги из тегов</th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="hashtags_enabled" value="1" <?php checked( ! empty( $settings['hashtags_enabled'] ) ); ?> />
+                                Добавлять теги WordPress как хэштеги (#тег) в конец сообщения
+                            </label>
+                            <p class="description">Теги записи автоматически преобразуются в формат <code>#тег</code> и прикрепляются к сообщению в MAX.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="hashtags_custom_mentions">Упоминания менеджеров</label></th>
+                        <td>
+                            <input type="text" id="hashtags_custom_mentions" name="hashtags_custom_mentions"
+                                value="<?php echo esc_attr( isset( $settings['hashtags_custom_mentions'] ) ? $settings['hashtags_custom_mentions'] : '' ); ?>"
+                                class="regular-text"
+                                placeholder="@manager1, @manager2" />
+                            <p class="description">Укажите @username менеджеров через запятую. Они будут добавлены в каждое сообщение при публикации записи для уведомления о важных событиях.</p>
                         </td>
                     </tr>
                     <tr>
