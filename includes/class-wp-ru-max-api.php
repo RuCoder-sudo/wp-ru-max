@@ -54,12 +54,16 @@ class WP_Ru_Max_API {
 
         $url  = WP_RU_MAX_API_BASE . $endpoint;
         $args = array(
-            'method'  => $method,
-            'headers' => array(
+            'method'    => $method,
+            'headers'   => array(
                 'Authorization' => $this->token,
                 'Content-Type'  => 'application/json',
             ),
-            'timeout' => 20,
+            'timeout'   => 20,
+            // platform-api2.max.ru использует сертификат Минцифры России,
+            // который не входит в стандартный CA-bundle WordPress/cURL.
+            // sslverify отключён для корректной работы с новым адресом API.
+            'sslverify' => false,
         );
 
         if ( $body ) {
