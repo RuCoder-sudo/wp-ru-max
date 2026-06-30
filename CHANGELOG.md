@@ -5,6 +5,12 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.0.0/),
 и этот проект придерживается [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [1.0.40] - 2026-06-30
+
+### Changed
+- **Адрес MAX API** — константа `WP_RU_MAX_API_BASE` изменена с `https://platform-api.max.ru` на `https://platform-api2.max.ru` согласно официальному уведомлению MAX для бизнеса (обязательный переход до 19 июля 2026).
+- **Поддержка сертификата Минцифры** — в основном методе `request()` класса `WP_Ru_Max_API` добавлен параметр `'sslverify' => false`. Новый адрес `platform-api2.max.ru` использует сертификат Минцифры России, которого нет в стандартном CA-bundle WordPress/cURL, из-за чего без этого параметра все запросы к API падали бы с SSL-ошибкой. Метод `request_multipart()` и загрузка изображений уже имели `sslverify => false` — теперь поведение единообразно во всех методах.
+
 ## [1.0.39] - 2026-06-20
 
 ### Added
