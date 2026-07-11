@@ -15,13 +15,124 @@ class WP_Ru_Max_Post_Sender {
         return self::$instance;
     }
 
+    const QUEUE_OPTION = 'wp_ru_max_queue';
+    const QUEUE_LOCK   = 'wp_ru_max_queue_lock';
+
     private function __construct() {
         $settings = get_option( 'wp_ru_max_settings', array() );
         if ( ! empty( $settings['post_sender_enabled'] ) ) {
             add_action( 'transition_post_status', array( $this, 'on_post_status_change' ), 10, 3 );
         }
-        // Хук для отложенной отправки через WP-Cron
+        // Хук для отложенной отправки через WP-Cron (основной путь)
         add_action( 'wp_ru_max_delayed_send', array( $this, 'do_delayed_send' ), 10, 1 );
+
+        // Подстраховка: WP-Cron запускается только при заходе посетителя на сайт
+        // (page-load триггер), поэтому на сайтах с низким ночным трафиком
+        // или при заблокированном loopback-запросе (spawn_cron) запланированное
+        // событие может «зависнуть» и не сработать вовремя. Дополнительно
+        // проверяем очередь на каждом заходе (фронт и админка) — это не зависит
+        // от того, срабатывает ли сам WP-Cron.
+        add_action( 'init', array( $this, 'maybe_process_due_queue' ), 20 );
+    }
+
+    /**
+     * Возвращает текущую очередь отложенных отправок (job_key => данные).
+     */
+    private function get_queue() {
+        $queue = get_option( self::QUEUE_OPTION, array() );
+        return is_array( $queue ) ? $queue : array();
+    }
+
+    private function save_queue( $queue ) {
+        update_option( self::QUEUE_OPTION, $queue, false );
+    }
+
+    private function queue_add( $job_key, $post_id, $is_new, $due ) {
+        $queue = $this->get_queue();
+        $queue[ $job_key ] = array(
+            'post_id' => $post_id,
+            'is_new'  => $is_new,
+            'due'     => $due,
+        );
+        $this->save_queue( $queue );
+    }
+
+    /**
+     * Публичный статус очереди для админ-панели (диагностика).
+     */
+    public static function get_queue_status() {
+        $queue = get_option( self::QUEUE_OPTION, array() );
+        $queue = is_array( $queue ) ? $queue : array();
+        $now   = time();
+        $overdue = 0;
+        foreach ( $queue as $job ) {
+            if ( isset( $job['due'] ) && $job['due'] < $now ) {
+                $overdue++;
+            }
+        }
+        return array(
+            'total'   => count( $queue ),
+            'overdue' => $overdue,
+        );
+    }
+
+    /**
+     * Проверяет очередь и обрабатывает все задания, время которых уже наступило.
+     * Вызывается на каждом 'init' (лёгкая проверка — выходит сразу, если очередь пуста),
+     * а также вручную из админки («Обработать очередь сейчас»).
+     */
+    public function maybe_process_due_queue( $force_all = false ) {
+        $queue = $this->get_queue();
+        if ( empty( $queue ) ) {
+            return 0;
+        }
+
+        // Простая блокировка от параллельной обработки при одновременных запросах.
+        if ( get_transient( self::QUEUE_LOCK ) ) {
+            return 0;
+        }
+        set_transient( self::QUEUE_LOCK, 1, 30 );
+
+        $now       = time();
+        $processed = 0;
+
+        foreach ( $queue as $job_key => $data ) {
+            $is_due = $force_all || ( isset( $data['due'] ) && $data['due'] <= $now );
+            if ( $is_due ) {
+                $this->process_job( $job_key );
+                // Снимаем оригинальное wp-cron событие, если оно ещё не сработало,
+                // чтобы запись не отправилась повторно позже.
+                wp_clear_scheduled_hook( 'wp_ru_max_delayed_send', array( $job_key ) );
+                $processed++;
+            }
+        }
+
+        delete_transient( self::QUEUE_LOCK );
+        return $processed;
+    }
+
+    /**
+     * Обрабатывает одно задание из очереди. Идемпотентно: если задание уже было
+     * удалено из очереди (например, обработано другим триггером первым), просто
+     * ничего не делает.
+     */
+    private function process_job( $job_key ) {
+        $queue = $this->get_queue();
+        if ( ! isset( $queue[ $job_key ] ) ) {
+            return; // Уже обработано.
+        }
+        $data = $queue[ $job_key ];
+        unset( $queue[ $job_key ] );
+        $this->save_queue( $queue );
+
+        $post = get_post( $data['post_id'] );
+        if ( ! $post || $post->post_status !== 'publish' ) {
+            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Отложенная отправка: запись #{$data['post_id']} не найдена или снята с публикации." );
+            return;
+        }
+
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        $this->send_post( $post, ! empty( $data['is_new'] ), $settings );
     }
 
     public function on_post_status_change( $new_status, $old_status, $post ) {
@@ -89,14 +200,14 @@ class WP_Ru_Max_Post_Sender {
         $delay = isset( $settings['send_delay_seconds'] ) ? (int) $settings['send_delay_seconds'] : 0;
 
         if ( $delay > 0 ) {
-            // Запись данных для отложенного запуска
+            // Запись данных для отложенного запуска. Храним задание в постоянной
+            // опции (а не только в transient), чтобы её можно было перебрать и
+            // обработать даже если само wp-cron событие не сработает вовремя.
             $job_key = 'wp_ru_max_delayed_' . $post->ID . '_' . time();
-            set_transient( $job_key, array(
-                'post_id' => $post->ID,
-                'is_new'  => $is_new,
-            ), $delay + 300 );
+            $due     = time() + $delay;
+            $this->queue_add( $job_key, $post->ID, $is_new, $due );
 
-            wp_schedule_single_event( time() + $delay, 'wp_ru_max_delayed_send', array( $job_key ) );
+            wp_schedule_single_event( $due, 'wp_ru_max_delayed_send', array( $job_key ) );
 
             WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} поставлена в очередь на отправку через {$delay} сек.", array(
                 'post_id' => $post->ID,
@@ -111,23 +222,13 @@ class WP_Ru_Max_Post_Sender {
     }
 
     /**
-     * Обработчик отложенной отправки (WP-Cron).
+     * Обработчик отложенной отправки (WP-Cron). Основной путь срабатывания —
+     * если по какой-то причине WP-Cron не вызвал этот хук вовремя, то же самое
+     * задание всё равно будет подхвачено и отправлено через maybe_process_due_queue()
+     * при следующем заходе на сайт (см. хук 'init' в конструкторе).
      */
     public function do_delayed_send( $job_key ) {
-        $data = get_transient( $job_key );
-        if ( ! $data || empty( $data['post_id'] ) ) {
-            return;
-        }
-        delete_transient( $job_key );
-
-        $post = get_post( $data['post_id'] );
-        if ( ! $post || $post->post_status !== 'publish' ) {
-            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Отложенная отправка: запись #{$data['post_id']} не найдена или снята с публикации." );
-            return;
-        }
-
-        $settings = get_option( 'wp_ru_max_settings', array() );
-        $this->send_post( $post, $data['is_new'], $settings );
+        $this->process_job( $job_key );
     }
 
     /**
