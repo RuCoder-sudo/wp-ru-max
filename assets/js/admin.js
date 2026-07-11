@@ -486,11 +486,11 @@
                 osc.stop(t + 0.5);
             } else if (type === 'sound3') {
                 tone(523.25, 0, 0.12, 0.55);
-            } else if (type === 'sound4' || type === 'sound5' || type === 'sound6') {
+            } else if (type === 'sound4' || type === 'sound5' || type === 'sound6' || type === 'sound7') {
                 /* MP3-based sounds — play via HTML5 Audio */
                 var soundsUrl = (typeof wpRuMax !== 'undefined' && wpRuMax.soundsUrl) ? wpRuMax.soundsUrl : '';
                 if (soundsUrl) {
-                    var filenames = { 'sound4': 'sound4.mp3', 'sound5': 'sound5.mp3', 'sound6': 'sound6.mp3' };
+                    var filenames = { 'sound4': 'sound4.mp3', 'sound5': 'sound5.mp3', 'sound6': 'sound6.mp3', 'sound7': 'sound7.mp3' };
                     var audio = new Audio(soundsUrl + filenames[type]);
                     audio.volume = 0.7;
                     var p = audio.play();
@@ -504,6 +504,15 @@
     $(document).on('click', '.wp-ru-max-preview-sound', function (e) {
         e.preventDefault();
         adminPlaySound($(this).data('sound'));
+    });
+
+    /* -- Очередь отложенной отправки: обработать сейчас -- */
+    $('#flush_queue_now').on('click', function () {
+        var $btn = $(this).prop('disabled', true).text('Обработка...');
+        doAjax('wp_ru_max_flush_queue', {}, function (res) {
+            $btn.prop('disabled', false).text('Обработать очередь сейчас');
+            showNotice($('#flush_queue_result'), res.success ? 'success' : 'error', res.success ? res.data.message : res.data);
+        });
     });
 
     /* -- History Tab -- */
