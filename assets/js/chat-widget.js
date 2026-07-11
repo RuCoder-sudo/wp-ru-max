@@ -227,10 +227,11 @@
     }
 
     function doPlaySound(type) {
-        /* MP3-based sounds (sound4, sound5, sound6) */
+        /* MP3-based sounds (sound4, sound5, sound6, sound7) */
         if (type === 'sound4') { playMp3Sound('sound4.mp3'); return; }
         if (type === 'sound5') { playMp3Sound('sound5.mp3'); return; }
         if (type === 'sound6') { playMp3Sound('sound6.mp3'); return; }
+        if (type === 'sound7') { playMp3Sound('sound7.mp3'); return; }
 
         /* Web Audio API synthesised sounds */
         if (!audioCtx) return;
