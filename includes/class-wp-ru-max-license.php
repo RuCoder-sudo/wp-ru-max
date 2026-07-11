@@ -4,9 +4,21 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class WP_Ru_Max_Logger {
+class WP_Ru_Max_License {
 
     private static $instance = null;
+
+    const OPTION_KEY         = 'wp_ru_max_license';
+    const NETWORK_OPTION_KEY = 'wp_ru_max_network_license';
+    const RATE_LIMIT_KEY     = 'wp_ru_max_license_attempts';
+    const MAX_ATTEMPTS       = 5;
+    const BLOCK_MINUTES      = 60;
+    const RECHECK_DAYS       = 160;
+    const RECHECK_SECONDS    = 13824000;
+
+    const VERIFY_URL  = 'https://xn--d1acnqieq.xn--p1ai/wp-json/wp-ru-max-km/v1/verify';
+    const API_SECRET  = 'd0563fa8f8fce6879cdf697eed0460a82fa7977897fd364ec911c93ed8bb25b3';
+    const OWNER_EMAIL = 'rucoder.rf@yandex.ru';
 
     public static function instance() {
         if ( null === self::$instance ) {
@@ -15,68 +27,488 @@ class WP_Ru_Max_Logger {
         return self::$instance;
     }
 
-    public static function log( $event_type, $status, $event_data, $details = null ) {
-        global $wpdb;
-        $table = $wpdb->prefix . 'ru_max_history';
+    private function __construct() {
+        add_action( 'wp_ajax_wp_ru_max_activate_license',         array( $this, 'ajax_activate_license' ) );
+        add_action( 'wp_ajax_wp_ru_max_request_license',          array( $this, 'ajax_request_license' ) );
+        add_action( 'wp_ajax_wp_ru_max_deactivate_license',       array( $this, 'ajax_deactivate_license' ) );
+        add_action( 'wp_ajax_wp_ru_max_recheck_license',          array( $this, 'ajax_recheck_license' ) );
+        add_action( 'admin_notices',                               array( $this, 'show_activation_notice' ) );
 
-        $details_str = '';
-        if ( is_array( $details ) || is_object( $details ) ) {
-            $details_str = wp_json_encode( $details, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT );
-        } elseif ( ! is_null( $details ) ) {
-            $details_str = strval( $details );
+        if ( is_multisite() ) {
+            add_action( 'wp_ajax_wp_ru_max_activate_network_license',   array( $this, 'ajax_activate_network_license' ) );
+            add_action( 'wp_ajax_wp_ru_max_deactivate_network_license', array( $this, 'ajax_deactivate_network_license' ) );
+            add_action( 'wp_ajax_wp_ru_max_recheck_network_license',    array( $this, 'ajax_recheck_network_license' ) );
+            add_action( 'network_admin_notices',                        array( $this, 'show_network_activation_notice' ) );
+        }
+    }
+
+    public static function is_active() {
+        $data = get_option( self::OPTION_KEY, array() );
+        if ( ! empty( $data['status'] ) && $data['status'] === 'active' ) {
+            return true;
         }
 
-        $wpdb->insert(
-            $table,
-            array(
-                'event_type' => sanitize_text_field( $event_type ),
-                'event_data' => sanitize_textarea_field( $event_data ),
-                'status'     => sanitize_text_field( $status ),
-                'details'    => $details_str,
-            ),
-            array( '%s', '%s', '%s', '%s' )
+        if ( is_multisite() ) {
+            $net_data = get_site_option( self::NETWORK_OPTION_KEY, array() );
+            if ( ! empty( $net_data['status'] ) && $net_data['status'] === 'active' ) {
+                $scope = $net_data['scope'] ?? 'network';
+                if ( $scope === 'network' ) {
+                    return true;
+                }
+                if ( ! empty( $net_data['domain'] ) && self::domain_matches( $net_data['domain'] ) ) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    public static function is_multisite_feature_enabled() {
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        return ! empty( $settings['multisite_enabled'] );
+    }
+
+    public static function is_network_active() {
+        if ( ! is_multisite() ) {
+            return false;
+        }
+        $data = get_site_option( self::NETWORK_OPTION_KEY, array() );
+        return ! empty( $data['status'] ) && $data['status'] === 'active';
+    }
+
+    public static function get_data() {
+        return get_option( self::OPTION_KEY, array() );
+    }
+
+    public static function get_network_data() {
+        return get_site_option( self::NETWORK_OPTION_KEY, array() );
+    }
+
+    public function show_activation_notice() {
+        if ( self::is_active() ) {
+            return;
+        }
+        $screen = get_current_screen();
+        if ( $screen && strpos( $screen->id, 'wp-ru-max' ) !== false ) {
+            return;
+        }
+        $url = admin_url( 'admin.php?page=wp-ru-max&tab=activation' );
+        ?>
+        <div class="notice notice-warning is-dismissible">
+            <p>
+                <img src="<?php echo esc_url( WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png' ); ?>" style="vertical-align:middle;width:20px;height:20px;margin-right:6px;" />
+                <strong>WP Ru-max</strong> — плагин не активирован. Для доступа ко всем функциям
+                <a href="<?php echo esc_url( $url ); ?>"><strong>введите лицензионный ключ</strong></a>.
+            </p>
+        </div>
+        <?php
+    }
+
+    public function show_network_activation_notice() {
+        if ( self::is_network_active() ) {
+            return;
+        }
+        $screen = get_current_screen();
+        if ( $screen && strpos( $screen->id, 'wp-ru-max' ) !== false ) {
+            return;
+        }
+        $url = network_admin_url( 'admin.php?page=wp-ru-max-network' );
+        ?>
+        <div class="notice notice-info is-dismissible">
+            <p>
+                <img src="<?php echo esc_url( WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png' ); ?>" style="vertical-align:middle;width:20px;height:20px;margin-right:6px;" />
+                <strong>WP Ru-max</strong> — сетевая лицензия не активирована.
+                Вы можете <a href="<?php echo esc_url( $url ); ?>"><strong>активировать сетевую лицензию</strong></a>
+                (одна лицензия для всей сети) или активировать плагин на каждом подсайте отдельно.
+            </p>
+        </div>
+        <?php
+    }
+
+    public function ajax_activate_license() {
+        check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
+        }
+
+        $key = isset( $_POST['license_key'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['license_key'] ) ) ) : '';
+        if ( empty( $key ) ) {
+            wp_send_json_error( 'Введите лицензионный ключ.' );
+        }
+
+        $rate_check = $this->check_rate_limit();
+        if ( is_wp_error( $rate_check ) ) {
+            wp_send_json_error( $rate_check->get_error_message() );
+        }
+
+        $result = $this->verify_key( $key );
+        if ( is_wp_error( $result ) ) {
+            $this->increment_attempts();
+            wp_send_json_error( $result->get_error_message() );
+        }
+
+        $domain    = self::get_current_domain();
+        $lic_data  = array(
+            'status'        => 'active',
+            'key'           => $key,
+            'domain'        => $domain,
+            'activated_at'  => current_time( 'mysql' ),
+            'last_verified' => current_time( 'mysql' ),
         );
-    }
+        update_option( self::OPTION_KEY, $lic_data );
 
-    public static function get_logs( $limit = 100, $offset = 0, $type = '' ) {
-        global $wpdb;
-        $table = $wpdb->prefix . 'ru_max_history';
-
-        $where = '';
-        if ( $type ) {
-            $where = $wpdb->prepare( 'WHERE event_type = %s', $type );
+        if ( is_multisite() && self::is_multisite_feature_enabled() ) {
+            update_site_option( self::NETWORK_OPTION_KEY, array_merge( $lic_data, array( 'scope' => 'subdomain' ) ) );
         }
 
-        $results = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT * FROM $table $where ORDER BY id DESC LIMIT %d OFFSET %d",
-                $limit,
-                $offset
-            )
+        delete_transient( self::RATE_LIMIT_KEY . '_' . $this->get_site_id() );
+
+        WP_Ru_Max_Logger::log( 'license', 'success', 'Плагин успешно активирован на домене ' . $domain );
+
+        $extra = ( is_multisite() && self::is_multisite_feature_enabled() )
+            ? ' Все поддомены и подсайты сети также активированы автоматически.'
+            : '';
+
+        wp_send_json_success( array(
+            'message' => 'Плагин успешно активирован! Все функции теперь доступны.' . $extra,
+        ) );
+    }
+
+    public function ajax_request_license() {
+        check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
+        }
+
+        $name           = isset( $_POST['req_name'] )           ? sanitize_text_field( wp_unslash( $_POST['req_name'] ) )           : '';
+        $email          = isset( $_POST['req_email'] )          ? sanitize_email( wp_unslash( $_POST['req_email'] ) )               : '';
+        $site           = isset( $_POST['req_site'] )           ? esc_url_raw( wp_unslash( $_POST['req_site'] ) )                   : '';
+        $social         = isset( $_POST['req_social'] )         ? sanitize_text_field( wp_unslash( $_POST['req_social'] ) )         : '';
+        $consent        = isset( $_POST['consent'] )            ? filter_var( wp_unslash( $_POST['consent'] ), FILTER_VALIDATE_BOOLEAN )         : false;
+        $mailing        = isset( $_POST['mailing'] )            ? filter_var( wp_unslash( $_POST['mailing'] ), FILTER_VALIDATE_BOOLEAN )         : false;
+        $bot_confirmed  = isset( $_POST['bot_info_confirmed'] ) ? filter_var( wp_unslash( $_POST['bot_info_confirmed'] ), FILTER_VALIDATE_BOOLEAN ) : false;
+
+        if ( empty( $name ) )        wp_send_json_error( 'Укажите ваше имя.' );
+        if ( ! is_email( $email ) )  wp_send_json_error( 'Укажите корректный email.' );
+        if ( empty( $site ) )        wp_send_json_error( 'Укажите ссылку на ваш сайт.' );
+        if ( ! $consent )            wp_send_json_error( 'Необходимо дать согласие на обработку персональных данных.' );
+        if ( ! $mailing )            wp_send_json_error( 'Необходимо дать согласие на получение уведомлений.' );
+
+        $domain   = self::get_current_domain();
+        $site_url = get_site_url();
+        $is_ms    = is_multisite() ? ' [Multisite]' : '';
+
+        $subject = 'Запрос лицензии WP Ru-max — ' . $name;
+        $body  = "=== НОВЫЙ ЗАПРОС ЛИЦЕНЗИИ WP Ru-max ===\n\n";
+        $body .= "Имя:    " . $name . "\n";
+        $body .= "Email:  " . $email . "\n";
+        $body .= "Сайт заявителя: " . ( $site !== '' ? $site : '— не указано —' ) . "\n";
+        $body .= "Соцсеть/мессенджер: " . ( $social !== '' ? $social : '— не указано —' ) . "\n";
+        $body .= "Сайт WP (auto): " . $site_url . $is_ms . "\n";
+        $body .= "Домен:  " . $domain . "\n\n";
+        $body .= "Согласие на обработку данных: Да\n";
+        $body .= "Согласие на рассылку: " . ( $mailing ? 'Да' : 'Нет' ) . "\n";
+        $body .= "Подтверждение о боте (ИП/ООО): " . ( $bot_confirmed ? 'Да' : 'Нет' ) . "\n";
+        $body .= "Дата запроса: " . current_time( 'd.m.Y H:i:s' ) . "\n\n";
+        $body .= "=== Выдайте ключ на https://рукодер.рф/wp-admin/admin.php?page=wp-ru-max-keys ===\n";
+
+        $headers = array(
+            'Content-Type: text/plain; charset=UTF-8',
+            'Reply-To: ' . $name . ' <' . $email . '>',
         );
 
-        return $results ? $results : array();
-    }
+        $sent = wp_mail( self::OWNER_EMAIL, $subject, $body, $headers );
 
-    public static function get_count( $type = '' ) {
-        global $wpdb;
-        $table = $wpdb->prefix . 'ru_max_history';
-
-        if ( $type ) {
-            return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $table WHERE event_type = %s", $type ) );
-        }
-
-        return (int) $wpdb->get_var( "SELECT COUNT(*) FROM $table" );
-    }
-
-    public static function clear_logs( $type = '' ) {
-        global $wpdb;
-        $table = $wpdb->prefix . 'ru_max_history';
-
-        if ( $type ) {
-            $wpdb->delete( $table, array( 'event_type' => $type ), array( '%s' ) );
+        if ( $sent ) {
+            wp_send_json_success( 'Запрос отправлен! Владелец пришлёт ключ на ' . $email . ' в ближайшее время.' );
         } else {
-            $wpdb->query( "TRUNCATE TABLE $table" );
+            wp_send_json_error( 'Не удалось отправить запрос. Напишите напрямую: ' . self::OWNER_EMAIL );
         }
+    }
+
+    public function ajax_deactivate_license() {
+        check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
+        }
+        delete_option( self::OPTION_KEY );
+        wp_send_json_success( 'Лицензия сброшена.' );
+    }
+
+    public function ajax_recheck_license() {
+        check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
+        }
+        $data = self::force_recheck();
+        if ( ! empty( $data['status'] ) && $data['status'] === 'active' ) {
+            wp_send_json_success( array( 'status' => 'active', 'message' => 'Лицензия действительна.' ) );
+        }
+        wp_send_json_error( 'Лицензия отозвана или недействительна. Плагин деактивирован.' );
+    }
+
+    public function ajax_activate_network_license() {
+        check_ajax_referer( 'wp_ru_max_network_nonce', 'nonce' );
+        if ( ! is_super_admin() ) {
+            wp_send_json_error( 'Требуются права суперадминистратора сети.' );
+        }
+
+        $key = isset( $_POST['license_key'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['license_key'] ) ) ) : '';
+        if ( empty( $key ) ) {
+            wp_send_json_error( 'Введите лицензионный ключ.' );
+        }
+
+        $result = $this->verify_key( $key );
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( $result->get_error_message() );
+        }
+
+        $domain = self::get_network_domain();
+        update_site_option( self::NETWORK_OPTION_KEY, array(
+            'status'        => 'active',
+            'scope'         => 'network',
+            'key'           => $key,
+            'domain'        => $domain,
+            'activated_at'  => current_time( 'mysql' ),
+            'last_verified' => current_time( 'mysql' ),
+        ) );
+
+        wp_send_json_success( array(
+            'message' => 'Сетевая лицензия активирована! Все подсайты сети теперь имеют доступ ко всем функциям.',
+        ) );
+    }
+
+    public function ajax_deactivate_network_license() {
+        check_ajax_referer( 'wp_ru_max_network_nonce', 'nonce' );
+        if ( ! is_super_admin() ) {
+            wp_send_json_error( 'Требуются права суперадминистратора сети.' );
+        }
+        delete_site_option( self::NETWORK_OPTION_KEY );
+        wp_send_json_success( 'Сетевая лицензия сброшена.' );
+    }
+
+    public function ajax_recheck_network_license() {
+        check_ajax_referer( 'wp_ru_max_network_nonce', 'nonce' );
+        if ( ! is_super_admin() ) {
+            wp_send_json_error( 'Требуются права суперадминистратора сети.' );
+        }
+        $data = self::force_recheck_network();
+        if ( ! empty( $data['status'] ) && $data['status'] === 'active' ) {
+            wp_send_json_success( array( 'status' => 'active', 'message' => 'Сетевая лицензия действительна.' ) );
+        }
+        wp_send_json_error( 'Сетевая лицензия отозвана или недействительна.' );
+    }
+
+    private function verify_key( $key ) {
+        $response = wp_remote_post( self::VERIFY_URL, array(
+            'timeout'   => 15,
+            'sslverify' => true,
+            'headers'   => array(
+                'Content-Type'  => 'application/json',
+                'X-WPRM-Secret' => self::API_SECRET,
+            ),
+            'body' => json_encode( array( 'key' => $key ) ),
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            return new WP_Error(
+                'network_error',
+                'Не удалось связаться с сервером активации. Проверьте интернет-соединение и попробуйте ещё раз.'
+            );
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( $code === 429 ) {
+            return new WP_Error( 'rate_limited', 'Сервер временно заблокировал запросы. Попробуйте через 1 час.' );
+        }
+        if ( $code === 403 ) {
+            return new WP_Error( 'auth_error', 'Ошибка авторизации. Обратитесь к разработчику.' );
+        }
+        if ( ! empty( $body['valid'] ) ) {
+            return true;
+        }
+        return new WP_Error( 'invalid_key', 'Неверный лицензионный ключ. Проверьте правильность ввода.' );
+    }
+
+    public static function recheck_if_needed() {
+        if ( self::is_multisite_feature_enabled() && is_multisite() && self::is_network_active() ) {
+            $data = self::get_network_data();
+            $last = strtotime( $data['last_verified'] ?? '2000-01-01' );
+            if ( ( time() - $last ) >= self::RECHECK_SECONDS ) {
+                self::do_recheck_network( $data );
+            }
+            return;
+        }
+
+        if ( ! self::is_active() ) {
+            return;
+        }
+        $data = self::get_data();
+        $last = strtotime( $data['last_verified'] ?? '2000-01-01' );
+        if ( ( time() - $last ) < self::RECHECK_SECONDS ) {
+            return;
+        }
+        self::do_recheck( $data );
+    }
+
+    public static function force_recheck() {
+        $data = self::get_data();
+        if ( empty( $data['key'] ) ) {
+            return $data;
+        }
+        return self::do_recheck( $data );
+    }
+
+    public static function force_recheck_network() {
+        $data = self::get_network_data();
+        if ( empty( $data['key'] ) ) {
+            return $data;
+        }
+        return self::do_recheck_network( $data );
+    }
+
+    private static function do_recheck( $data ) {
+        $instance = self::instance();
+        $result   = $instance->verify_key( $data['key'] ?? '' );
+
+        if ( is_wp_error( $result ) ) {
+            $error_code = $result->get_error_code();
+            if ( $error_code === 'invalid_key' ) {
+                $data['status']         = 'suspended';
+                $data['recheck_failed'] = 0;
+                WP_Ru_Max_Logger::log( 'license', 'error', 'Лицензия отозвана сервером — плагин деактивирован.' );
+            } else {
+                $data['recheck_failed'] = ( $data['recheck_failed'] ?? 0 ) + 1;
+                if ( $data['recheck_failed'] >= 3 ) {
+                    $data['status'] = 'suspended';
+                }
+            }
+        } else {
+            $data['status']         = 'active';
+            $data['recheck_failed'] = 0;
+            $data['last_verified']  = current_time( 'mysql' );
+        }
+        update_option( self::OPTION_KEY, $data );
+        return $data;
+    }
+
+    private static function do_recheck_network( $data ) {
+        $instance = self::instance();
+        $result   = $instance->verify_key( $data['key'] ?? '' );
+
+        if ( is_wp_error( $result ) ) {
+            $error_code = $result->get_error_code();
+            if ( $error_code === 'invalid_key' ) {
+                $data['status']         = 'suspended';
+                $data['recheck_failed'] = 0;
+            } else {
+                $data['recheck_failed'] = ( $data['recheck_failed'] ?? 0 ) + 1;
+                if ( $data['recheck_failed'] >= 3 ) {
+                    $data['status'] = 'suspended';
+                }
+            }
+        } else {
+            $data['status']         = 'active';
+            $data['recheck_failed'] = 0;
+            $data['last_verified']  = current_time( 'mysql' );
+        }
+        update_site_option( self::NETWORK_OPTION_KEY, $data );
+        return $data;
+    }
+
+    public static function get_current_domain() {
+        $host = parse_url( get_site_url(), PHP_URL_HOST );
+        return $host ? strtolower( $host ) : '';
+    }
+
+    public static function get_network_domain() {
+        if ( is_multisite() ) {
+            $network = get_network();
+            return $network ? strtolower( $network->domain ) : self::get_current_domain();
+        }
+        return self::get_current_domain();
+    }
+
+    public static function domain_matches( $licensed_domain, $current_domain = '' ) {
+        if ( empty( $licensed_domain ) ) {
+            return false;
+        }
+        if ( empty( $current_domain ) ) {
+            $current_domain = self::get_current_domain();
+        }
+        $licensed_domain = strtolower( trim( $licensed_domain ) );
+        $current_domain  = strtolower( trim( $current_domain ) );
+
+        if ( $licensed_domain === $current_domain ) {
+            return true;
+        }
+
+        if ( str_ends_with( $current_domain, '.' . $licensed_domain ) ) {
+            return true;
+        }
+
+        $without_www = preg_replace( '/^www\./', '', $current_domain );
+        if ( $without_www === $licensed_domain ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function check_rate_limit() {
+        $transient_key = self::RATE_LIMIT_KEY . '_' . $this->get_site_id();
+        $attempts      = get_transient( $transient_key );
+        if ( $attempts !== false && (int) $attempts >= self::MAX_ATTEMPTS ) {
+            return new WP_Error(
+                'rate_limit',
+                'Слишком много неверных попыток. Повторите через ' . self::BLOCK_MINUTES . ' минут.'
+            );
+        }
+        return true;
+    }
+
+    private function increment_attempts() {
+        $transient_key = self::RATE_LIMIT_KEY . '_' . $this->get_site_id();
+        $attempts      = get_transient( $transient_key );
+        if ( $attempts === false ) {
+            set_transient( $transient_key, 1, self::BLOCK_MINUTES * MINUTE_IN_SECONDS );
+        } else {
+            set_transient( $transient_key, (int) $attempts + 1, self::BLOCK_MINUTES * MINUTE_IN_SECONDS );
+        }
+    }
+
+    private function get_site_id() {
+        return md5( get_site_url() );
+    }
+
+    public function get_remaining_attempts() {
+        $transient_key = self::RATE_LIMIT_KEY . '_' . $this->get_site_id();
+        $attempts      = get_transient( $transient_key );
+        if ( $attempts === false ) {
+            return self::MAX_ATTEMPTS;
+        }
+        return max( 0, self::MAX_ATTEMPTS - (int) $attempts );
+    }
+
+    public static function get_days_until_recheck() {
+        $data = self::get_data();
+        if ( empty( $data['last_verified'] ) ) {
+            return 0;
+        }
+        $last    = strtotime( $data['last_verified'] );
+        $next    = $last + self::RECHECK_SECONDS;
+        $seconds = $next - time();
+        return max( 0, (int) ceil( $seconds / DAY_IN_SECONDS ) );
+    }
+}
+
+if ( ! function_exists( 'str_ends_with' ) ) {
+    function str_ends_with( string $haystack, string $needle ): bool {
+        if ( $needle === '' ) return true;
+        $len = strlen( $needle );
+        return substr( $haystack, -$len ) === $needle;
     }
 }
