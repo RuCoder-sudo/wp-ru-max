@@ -16,7 +16,7 @@
 
 <br>
 
-[![Версия](https://img.shields.io/badge/версия-1.0.38-blue?style=flat-square)](https://github.com/RuCoder-sudo/wp-ru-max/releases)
+[![Версия](https://img.shields.io/badge/версия-1.0.41-blue?style=flat-square)](https://github.com/RuCoder-sudo/wp-ru-max/releases)
 [![Скачать](https://img.shields.io/badge/⬇_Скачать-GitHub_Releases-ff5b3d?style=flat-square)](https://github.com/RuCoder-sudo/wp-ru-max/releases)
 [![Документация](https://img.shields.io/badge/📖_Документация-docs.html-ffb27a?style=flat-square)](https://rucoder-sudo.github.io/wp-ru-max/docs.html)
 [![GitHub](https://img.shields.io/badge/★_GitHub-RuCoder--sudo%2Fwp--ru--max-1a0d12?style=flat-square)](https://github.com/RuCoder-sudo/wp-ru-max)
@@ -34,6 +34,15 @@
 - **Чат-виджет** — плавающая кнопка MAX с приветствием, звуком и попапом удержания
 
 ---
+
+## Новое в версии 1.0.41
+
+| Что изменено | Описание |
+|---|---|
+| **Загрузка изображений исправлена** | Файл отправлялся в multipart-поле «file», а API MAX принимает его только в поле «data» — сервер молча игнорировал файл, из-за чего пост мог уйти без картинки. Также исправлен разбор ответа загрузки (вложенная структура `photos.*.token`). |
+| **Надёжность отложенной отправки** | Добавлена дополнительная проверка очереди при каждом заходе на сайт и кнопка «Обработать очередь сейчас» — снижает риск «зависших» постов, если планировщик WP-Cron не сработал вовремя. |
+| **Новый звук виджета** | Добавлен «Вариант 7». |
+| **Проверка API** | Все методы плагина сверены с актуальной документацией MAX перед обязательным переходом на platform-api2.max.ru. |
 
 ## Новое в версии 1.0.38
 
