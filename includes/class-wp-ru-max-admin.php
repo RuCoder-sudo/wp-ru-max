@@ -33,6 +33,7 @@ class WP_Ru_Max_Admin {
         add_action( 'wp_ajax_wp_ru_max_get_skip',        array( $this, 'ajax_get_skip' ) );
         add_action( 'wp_ajax_wp_ru_max_set_skip',        array( $this, 'ajax_set_skip' ) );
         add_action( 'wp_ajax_wp_ru_max_send_push',       array( $this, 'ajax_send_push' ) );
+        add_action( 'wp_ajax_wp_ru_max_flush_queue',     array( $this, 'ajax_flush_queue' ) );
         add_action( 'save_post',                         array( $this, 'persist_skip_meta_on_save' ), 10, 2 );
         add_action( 'post_submitbox_misc_actions',       array( $this, 'render_classic_editor_panel' ) );
         add_filter( 'plugin_action_links_' . WP_RU_MAX_PLUGIN_BASENAME, array( $this, 'add_plugin_links' ) );
@@ -879,6 +880,26 @@ jQuery(function($){
         }
     }
 
+    /**
+     * Принудительно обрабатывает все задания в очереди отложенной отправки,
+     * независимо от того, наступило ли их время (используется кнопкой
+     * «Обработать очередь сейчас» на вкладке «Дополнительные»).
+     */
+    public function ajax_flush_queue() {
+        check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
+        }
+
+        $processed = WP_Ru_Max_Post_Sender::instance()->maybe_process_due_queue( true );
+        wp_send_json_success( array(
+            'processed' => $processed,
+            'message'   => $processed > 0
+                ? "Обработано заданий: {$processed}."
+                : 'В очереди нет ожидающих заданий.',
+        ) );
+    }
+
     public function ajax_get_logs() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -1054,6 +1075,23 @@ jQuery(function($){
 
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
+
+            <h4 style="margin-bottom:4px;">v1.0.41</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li>Исправлено (критично): загрузка изображений — multipart-поле файла переименовано с «file» на «data» согласно официальному API MAX; сервер больше не игнорирует файл. Также исправлен разбор ответа загрузки — для изображений токен теперь корректно находится во вложенной структуре photos.*.token.</li>
+                <li>Исправлено: убран неподдерживаемый API «Метод A» прямой загрузки файла — используется только официальная двухшаговая схема загрузки.</li>
+                <li>Добавлено: обработка ошибки attachment.not.ready с автоматическим повтором отправки, если MAX ещё не успел обработать загруженный файл.</li>
+                <li>Добавлено: повышена надёжность отложенной автопубликации — дополнительная проверка очереди при каждом заходе на сайт (подстраховка, если планировщик WP-Cron не сработал вовремя на сайтах с низким ночным трафиком).</li>
+                <li>Добавлено: диагностика очереди (число заданий, статус DISABLE_WP_CRON) и кнопка «Обработать очередь сейчас» на вкладке «Дополнительные».</li>
+                <li>Добавлено: новый звук уведомления чат-виджета — «Вариант 7».</li>
+                <li>Проверено: соответствие всех методов плагина актуальной документации MAX API (dev.max.ru) перед обязательным переходом на platform-api2.max.ru.</li>
+            </ul>
+
+            <h4 style="margin-bottom:4px;">v1.0.40</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li>Изменено: адрес MAX API обновлён с platform-api.max.ru на platform-api2.max.ru согласно официальному уведомлению MAX для бизнеса (обязательный переход до 19 июля 2026).</li>
+                <li>Изменено: добавлена поддержка сертификата Минцифры России — параметр sslverify=false добавлен в основной метод request() класса API; теперь все методы работают единообразно с новым адресом без SSL-ошибок.</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.39</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -1976,6 +2014,31 @@ jQuery(function($){
             </table>
         </div>
 
+        <?php
+        $queue_status    = WP_Ru_Max_Post_Sender::get_queue_status();
+        $cron_disabled   = defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON;
+        $next_cron_event = wp_next_scheduled( 'wp_ru_max_delayed_send' ) ? wp_next_scheduled( 'wp_ru_max_delayed_send' ) : null;
+        ?>
+        <div class="wp-ru-max-card">
+            <h3>Очередь отложенной отправки</h3>
+            <p class="description" style="margin-top:0;">
+                Отложенная отправка публикаций опирается на планировщик WordPress (WP-Cron), который запускается только когда кто-то заходит на сайт.
+                На сайтах с низким ночным трафиком (или если хостинг блокирует внутренние loopback-запросы) событие может не сработать вовремя.
+                Плагин дополнительно проверяет очередь на каждом заходе на сайт — это уменьшает риск «зависших» отправок, но не устраняет его полностью на сайтах совсем без посетителей.
+                Для 100% надёжности рекомендуем настроить у хостинга реальный системный cron, обращающийся к <code>wp-cron.php</code> раз в 1–2 минуты, вместо стандартного псевдо-cron по посещениям.
+            </p>
+            <table class="form-table wp-ru-max-debug-table">
+                <tr><th>Заданий в очереди:</th><td><?php echo (int) $queue_status['total']; ?></td></tr>
+                <tr><th>Просрочено (ожидают обработки):</th><td><?php echo (int) $queue_status['overdue']; ?></td></tr>
+                <tr><th>DISABLE_WP_CRON:</th><td><?php echo $cron_disabled ? 'включён (используется внешний/реальный cron)' : 'выключен (стандартный псевдо-cron по посещениям)'; ?></td></tr>
+                <tr><th>Ближайшее запланированное событие:</th><td><?php echo $next_cron_event ? esc_html( date_i18n( 'd.m.Y H:i:s', $next_cron_event ) ) : '—'; ?></td></tr>
+            </table>
+            <div class="wp-ru-max-actions">
+                <button type="button" class="button" id="flush_queue_now">Обработать очередь сейчас</button>
+            </div>
+            <div id="flush_queue_result" class="wp-ru-max-notice" style="display:none;"></div>
+        </div>
+
         <div class="wp-ru-max-card">
             <h3>Очистка при удалении</h3>
             <table class="form-table">
@@ -2357,6 +2420,11 @@ jQuery(function($){
                                     <input type="radio" name="chat_widget_sound" value="sound6" <?php checked( $sound, 'sound6' ); ?> />
                                     <span>Вариант 6 — Капля воды</span>
                                     <button type="button" class="button wp-ru-max-preview-sound" data-sound="sound6">&#9654; Прослушать</button>
+                                </label>
+                                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                                    <input type="radio" name="chat_widget_sound" value="sound7" <?php checked( $sound, 'sound7' ); ?> />
+                                    <span>Вариант 7 — Новое уведомление</span>
+                                    <button type="button" class="button wp-ru-max-preview-sound" data-sound="sound7">&#9654; Прослушать</button>
                                 </label>
                             </div>
                         </td>
