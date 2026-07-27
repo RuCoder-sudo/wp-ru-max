@@ -16,7 +16,7 @@
 
 <br>
 
-[![Версия](https://img.shields.io/badge/версия-1.0.41-blue?style=flat-square)](https://github.com/RuCoder-sudo/wp-ru-max/releases)
+[![Версия](https://img.shields.io/badge/версия-1.0.43-blue?style=flat-square)](https://github.com/RuCoder-sudo/wp-ru-max/releases)
 [![Скачать](https://img.shields.io/badge/⬇_Скачать-GitHub_Releases-ff5b3d?style=flat-square)](https://github.com/RuCoder-sudo/wp-ru-max/releases)
 [![Документация](https://img.shields.io/badge/📖_Документация-docs.html-ffb27a?style=flat-square)](https://rucoder-sudo.github.io/wp-ru-max/docs.html)
 [![GitHub](https://img.shields.io/badge/★_GitHub-RuCoder--sudo%2Fwp--ru--max-1a0d12?style=flat-square)](https://github.com/RuCoder-sudo/wp-ru-max)
@@ -34,6 +34,24 @@
 - **Чат-виджет** — плавающая кнопка MAX с приветствием, звуком и попапом удержания
 
 ---
+## Changelog
+
+### 1.0.43
+* Добавлено: новые вкладки интерфейса — «Настройки», «Социальные сети», «Прямой доступ».
+* Добавлено: поддержка ВКонтакте — публикация в паблик или на личную страницу.
+* Добавлено: поддержка Одноклассников — публикация в группу или на страницу через OK API.
+* Добавлено: поддержка Яндекс Дзен — публикация статей в канал через официальное API.
+* Добавлено: поддержка Telegram — подключение ботов, отправка с фото и кнопкой «Читать далее».
+* Добавлено: Telegram — новый метод `send_photo_with_button()` для одновременной отправки фото и кнопки; fallback на текст при отклонении фото.
+* Исправлено (критично): ВКонтакте — публикация `wall.post` переведена с GET на POST, токен больше не попадает в server logs.
+* Исправлено: Одноклассники — убран неподдерживаемый блок `photo` с внешним URL, исправлен `type=GROUP_THEME` без `gid`, убран лишний блок `link` в attachment.
+* Исправлено: Яндекс Дзен — неверная структура payload исправлена (`title` и `blocks` вложены в `content`).
+* Исправлено: Telegram — ошибка 400 на спецсимволах `<`, `>`, `&` в заголовках записей при HTML parse_mode.
+* Исправлено: быстрый шаринг Telegram — фото и кнопка больше не взаимоисключают друг друга (4 явные ветки).
+* Исправлено: `ajax_send_push` — исправлен порядок выбора токена Telegram (`direct_telegram_token` теперь учитывается).
+
+### 1.0.42
+* Исправлено: email-адреса в личных уведомлениях MAX отображались с заменой `@` на `[at]` (например, `12[at]mail.ru` вместо `12@mail.ru`). Теперь адрес показывается полностью и без искажений — вместо видимой замены текста используется невидимый символ, который по-прежнему не даёт MAX превратить адрес в кликабельную ссылку `mailto:`.
 
 ## Новое в версии 1.0.41
 
