@@ -7,16 +7,27 @@
     var historyType = typeof wpRuMaxHistoryType !== 'undefined' ? wpRuMaxHistoryType : '';
 
     /* -- Helper: AJAX -- */
-    function doAjax(action, data, callback) {
+    function doAjax(action, data, callback, failCallback) {
         data = $.extend({ action: action, nonce: wpRuMax.nonce }, data);
-        $.post(wpRuMax.ajaxUrl, data, function (res) {
+        return $.post(wpRuMax.ajaxUrl, data, function (res) {
             callback(res);
+        }).fail(function (xhr) {
+            // Обработка сетевых ошибок (500, таймаут и т.д.) — без этого
+            // кнопки могли зависнуть навсегда в состоянии «Сохранение...»
+            var msg = 'Ошибка сети: ' + (xhr.status || 'нет ответа');
+            if (typeof failCallback === 'function') {
+                failCallback(msg);
+            } else {
+                console.error('[wp-ru-max] doAjax failed:', action, msg);
+            }
         });
     }
 
     /* -- Helper: Show Notice -- */
     function showNotice($el, type, message) {
-        $el.removeClass('success error info').addClass(type).html(message).fadeIn(200);
+        // Используем .text() вместо .html() — серверные сообщения об ошибках
+        // могут содержать HTML-теги, что создаёт риск XSS в панели администратора.
+        $el.removeClass('success error info').addClass(type).text(message).fadeIn(200);
     }
 
     /* -- Token visibility + защита от браузерного автозаполнения -- */
@@ -486,11 +497,12 @@
                 osc.stop(t + 0.5);
             } else if (type === 'sound3') {
                 tone(523.25, 0, 0.12, 0.55);
-            } else if (type === 'sound4' || type === 'sound5' || type === 'sound6' || type === 'sound7') {
+            } else if (type === 'sound4' || type === 'sound5' || type === 'sound6') {
                 /* MP3-based sounds — play via HTML5 Audio */
+                /* sound7 убран: файл assets/sounds/sound7.mp3 не существует */
                 var soundsUrl = (typeof wpRuMax !== 'undefined' && wpRuMax.soundsUrl) ? wpRuMax.soundsUrl : '';
                 if (soundsUrl) {
-                    var filenames = { 'sound4': 'sound4.mp3', 'sound5': 'sound5.mp3', 'sound6': 'sound6.mp3', 'sound7': 'sound7.mp3' };
+                    var filenames = { 'sound4': 'sound4.mp3', 'sound5': 'sound5.mp3', 'sound6': 'sound6.mp3' };
                     var audio = new Audio(soundsUrl + filenames[type]);
                     audio.volume = 0.7;
                     var p = audio.play();
@@ -516,12 +528,20 @@
     });
 
     /* -- History Tab -- */
+    var currentLogsXhr = null; // Хранит активный XHR для отмены дублирующих запросов.
+
     function loadLogs(page) {
         currentPage = page || 1;
         var offset = (currentPage - 1) * perPage;
+
+        // Отменяем предыдущий запрос, если он ещё не завершён (клик по пагинации).
+        if (currentLogsXhr && currentLogsXhr.readyState !== 4) {
+            currentLogsXhr.abort();
+        }
+
         $('#history_table_wrap').html('<div class="wp-ru-max-loading">Загрузка...</div>');
 
-        doAjax('wp_ru_max_get_logs', { limit: perPage, offset: offset, type: historyType }, function (res) {
+        currentLogsXhr = doAjax('wp_ru_max_get_logs', { limit: perPage, offset: offset, type: historyType }, function (res) {
             if (!res.success) {
                 $('#history_table_wrap').html('<p>Ошибка загрузки логов.</p>');
                 return;
@@ -534,11 +554,14 @@
                 $('#history_table_wrap').html('<p style="padding:20px;color:#94a3b8;">Записей не найдено.</p>');
             } else {
                 var typeLabels = {
-                    api: 'API',
-                    post_sender: 'Публикации',
+                    api:           'MAX / API',
+                    post_sender:   'Публикации MAX',
                     notifications: 'Уведомления',
-                    test: 'Тест',
-                    settings: 'Настройки',
+                    test:          'Тест',
+                    settings:      'Настройки',
+                    direct_access: 'Прямой доступ',
+                    social:        'Соц. сети',
+                    push:          'Push',
                 };
                 var html = '<table><thead><tr><th>ID</th><th>Время</th><th>Тип</th><th>Статус</th><th>Событие</th><th>Детали</th></tr></thead><tbody>';
                 $.each(logs, function (i, log) {
@@ -551,11 +574,11 @@
                     html += '<td style="white-space:nowrap;font-size:12px;">' + log.event_time + '</td>';
                     html += '<td><span class="log-type-badge ' + typeClass + '">' + typeLabel + '</span></td>';
                     html += '<td class="' + statusClass + '">' + log.status + '</td>';
-                    html += '<td>' + $('<div>').text(log.event_data).html() + '</td>';
+                    html += '<td>' + escHtml(log.event_data) + '</td>';
                     html += '<td>';
                     if (hasDetails) {
                         html += '<span class="toggle-details" data-id="' + log.id + '">показать ▼</span>';
-                        html += '<pre class="log-details" id="details-' + log.id + '">' + $('<div>').text(log.details).html() + '</pre>';
+                        html += '<pre class="log-details" id="details-' + log.id + '">' + escHtml(log.details) + '</pre>';
                     } else {
                         html += '—';
                     }
