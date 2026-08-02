@@ -3,7 +3,7 @@
  * Plugin Name:       WP Ru-max
  * Plugin URI:        https://рукодер.рф/wp-ru-max/
  * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Jetpack / Elementor и настраиваемый чат-виджет с анимацией и звуком. Поддерживает WordPress Multisite (мультисайт) и поддомены.
- * Version:           1.0.42
+ * Version:           1.0.43
  * Author:            Сергей Солошенко (RuCoder)
  * Author URI:        https://рукодер.рф/
  * License:           GPL v2 or later
@@ -73,7 +73,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'WP_RU_MAX_VERSION', '1.0.42' );
+define( 'WP_RU_MAX_VERSION', '1.0.43' );
 define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
 define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -91,6 +91,8 @@ require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-admin.php';
 require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-updater.php';
 require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-share.php';
 require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-oauth.php';
+require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-telegram-api.php';
+require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-social-poster.php';
 
 function wp_ru_max() {
     return WP_Ru_Max::instance();
@@ -98,7 +100,11 @@ function wp_ru_max() {
 
 wp_ru_max();
 
-new WP_Ru_Max_Updater( WP_RU_MAX_PLUGIN_FILE, WP_RU_MAX_VERSION );
+// Инициализируем апдейтер только в контексте wp-admin, иначе он добавляет
+// фильтры и обращается к transient-кешу на каждом фронтенд-запросе.
+if ( is_admin() ) {
+    new WP_Ru_Max_Updater( WP_RU_MAX_PLUGIN_FILE, WP_RU_MAX_VERSION );
+}
 
 // Хуки активации/деактивации
 register_activation_hook( __FILE__, array( 'WP_Ru_Max', 'activate' ) );
