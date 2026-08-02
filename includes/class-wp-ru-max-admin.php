@@ -3199,7 +3199,7 @@ jQuery(function($){
                     <table class="form-table" style="margin:0;">
                         <tr>
                             <th style="width:160px;"><label>Токен бота <span style="color:#d63638;">*</span></label></th>
-                            <td><input type="text" class="regular-text tg-bot-token" value="<?php echo esc_attr( $bot['token'] ); ?>" placeholder="110201543:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw" /></td>
+                            <td><input type="text" class="regular-text tg-bot-token" value="<?php echo esc_attr( $bot['token'] ); ?>" placeholder="Вставьте токен бота из @BotFather" /></td>
                         </tr>
                         <tr>
                             <th><label>Username бота</label></th>
@@ -3393,7 +3393,7 @@ jQuery(function($){
                     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;"><strong>🤖 Новый бот</strong>'
                     +'<button type="button" class="button button-small tg-remove-bot" style="margin-left:auto;color:#d63638;">Удалить бота</button></div>'
                     +'<table class="form-table" style="margin:0;">'
-                    +'<tr><th style="width:160px;"><label>Токен бота *</label></th><td><input type="text" class="regular-text tg-bot-token" placeholder="110201543:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw" /></td></tr>'
+                    +'<tr><th style="width:160px;"><label>Токен бота *</label></th><td><input type="text" class="regular-text tg-bot-token" placeholder="Вставьте токен бота из @BotFather" /></td></tr>'
                     +'<tr><th><label>Username бота</label></th><td><input type="text" class="regular-text tg-bot-username" placeholder="@my_site_bot" /></td></tr>'
                     +'</table>'
                     +'<div class="tg-chats-list" style="margin-top:12px;"><strong>Каналы / Чаты:</strong></div>'
