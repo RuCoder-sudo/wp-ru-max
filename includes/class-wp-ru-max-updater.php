@@ -180,12 +180,33 @@ class WP_Ru_Max_Updater {
         }
 
         global $wp_filesystem;
+
+        // Инициализируем WP_Filesystem перед использованием — без этого $wp_filesystem может быть null.
+        if ( ! function_exists( 'WP_Filesystem' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+        WP_Filesystem();
+
+        if ( ! $wp_filesystem || ! is_object( $wp_filesystem ) ) {
+            return new WP_Error( 'fs_unavailable', 'WP_Filesystem не инициализирован, переименование папки пропущено.' );
+        }
+
         $plugin_folder = WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . dirname( $this->plugin_slug );
-        $wp_filesystem->move( $result['destination'], $plugin_folder );
+
+        // Проверяем результат переименования — без этого при ошибке плагин
+        // остался бы в папке с временным именем и стал бы недоступен.
+        if ( ! $wp_filesystem->move( $result['destination'], $plugin_folder ) ) {
+            return new WP_Error( 'rename_failed', 'WP Ru-max: не удалось переименовать папку плагина после обновления.' );
+        }
+
         $result['destination'] = $plugin_folder;
 
-        // Автоматически реактивировать плагин после обновления
-        activate_plugin( $this->plugin_slug );
+        // Реактивируем плагин. Проверяем ошибку, но не прерываем —
+        // папка уже переименована корректно, плагин можно включить вручную.
+        $activate_result = activate_plugin( $this->plugin_slug );
+        if ( is_wp_error( $activate_result ) ) {
+            error_log( 'WP Ru-max updater: реактивация не удалась — ' . $activate_result->get_error_message() );
+        }
 
         return $result;
     }
