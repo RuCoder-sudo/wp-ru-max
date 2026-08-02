@@ -87,11 +87,12 @@ class WP_Ru_Max_Post_Sender {
             return 0;
         }
 
-        // Простая блокировка от параллельной обработки при одновременных запросах.
-        if ( get_transient( self::QUEUE_LOCK ) ) {
+        // Атомарная блокировка: add_transient использует INSERT на уровне БД
+        // и вернёт false, если ключ уже существует — устраняет состояние гонки
+        // при одновременных запросах (check-then-set → atomic add).
+        if ( ! add_transient( self::QUEUE_LOCK, 1, 30 ) ) {
             return 0;
         }
-        set_transient( self::QUEUE_LOCK, 1, 30 );
 
         $now       = time();
         $processed = 0;
@@ -207,7 +208,11 @@ class WP_Ru_Max_Post_Sender {
             $due     = time() + $delay;
             $this->queue_add( $job_key, $post->ID, $is_new, $due );
 
-            wp_schedule_single_event( $due, 'wp_ru_max_delayed_send', array( $job_key ) );
+            // Проверяем, не запланировано ли уже аналогичное событие, чтобы
+            // избежать дублирования задания при повторных вызовах хука save_post.
+            if ( ! wp_next_scheduled( 'wp_ru_max_delayed_send', array( $job_key ) ) ) {
+                wp_schedule_single_event( $due, 'wp_ru_max_delayed_send', array( $job_key ) );
+            }
 
             WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} поставлена в очередь на отправку через {$delay} сек.", array(
                 'post_id' => $post->ID,
@@ -365,9 +370,11 @@ class WP_Ru_Max_Post_Sender {
      * Заменяет плейсхолдеры {meta_KEY} и {acf_KEY} в строке шаблона.
      */
     private function replace_field_placeholders( $text, $post ) {
+        // Значения meta/ACF экранируются htmlspecialchars, чтобы символы <, >, &
+        // не ломали HTML-разметку при отправке сообщений с parse_mode=html.
         $text = preg_replace_callback( '/\{meta_([a-zA-Z0-9_\-]+)\}/', function( $m ) use ( $post ) {
             $val = get_post_meta( $post->ID, $m[1], true );
-            return is_scalar( $val ) ? (string) $val : '';
+            return is_scalar( $val ) ? htmlspecialchars( (string) $val, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' ) : '';
         }, $text );
 
         $text = preg_replace_callback( '/\{acf_([a-zA-Z0-9_\-]+)\}/', function( $m ) use ( $post ) {
@@ -376,7 +383,7 @@ class WP_Ru_Max_Post_Sender {
                 if ( is_array( $val ) ) {
                     $val = implode( ', ', $val );
                 }
-                return is_scalar( $val ) ? (string) $val : '';
+                return is_scalar( $val ) ? htmlspecialchars( (string) $val, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' ) : '';
             }
             return '';
         }, $text );
@@ -423,23 +430,30 @@ class WP_Ru_Max_Post_Sender {
         $show_action_label = isset( $settings['show_action_label'] ) ? (bool) $settings['show_action_label'] : true;
         $show_author_date  = isset( $settings['show_author_date'] ) ? (bool) $settings['show_author_date'] : true;
 
+        // Экранируем спецсимволы HTML (&, <, >) в динамических полях,
+        // иначе они сломают парсинг HTML-разметки на стороне MAX/Telegram.
+        $title_h  = htmlspecialchars( $title,  ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $author_h = htmlspecialchars( $author, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $date_h   = htmlspecialchars( $date,   ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $url_h    = esc_url( $url );
+
         $msg = '';
         if ( $show_action_label ) {
             $msg .= "<b>$action</b>\n\n";
         }
-        $msg .= "<b>$title</b>\n";
+        $msg .= "<b>$title_h</b>\n";
 
         if ( $excerpt ) {
             $msg .= "\n" . $excerpt . "\n";
         }
 
         if ( $show_author_date ) {
-            $msg .= "\nАвтор: $author";
-            $msg .= "\nДата: $date";
+            $msg .= "\nАвтор: $author_h";
+            $msg .= "\nДата: $date_h";
         }
 
         if ( $show_read_more ) {
-            $msg .= "\n\n<a href=\"$url\">Читать полностью</a>";
+            $msg .= "\n\n<a href=\"$url_h\">Читать полностью</a>";
         }
 
         return $msg;
