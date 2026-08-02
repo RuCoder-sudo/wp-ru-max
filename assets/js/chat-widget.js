@@ -114,12 +114,9 @@
             }
             return false;
         };
-        closeBtn.addEventListener('mouseenter', function () {
-            if (retentionEnabled && retentionModal && !retentionShown) {
-                retentionShown = true;
-                showRetentionModal();
-            }
-        });
+        // Убран обработчик mouseenter: показывать retention-modal при наведении
+        // на кнопку закрытия — слишком агрессивное поведение (UX-баг).
+        // Retention-modal теперь показывается только при клике на кнопку закрытия.
         closeBtn.addEventListener('click', triggerClose);
     }
 
@@ -227,11 +224,11 @@
     }
 
     function doPlaySound(type) {
-        /* MP3-based sounds (sound4, sound5, sound6, sound7) */
+        /* MP3-based sounds (sound4, sound5, sound6) */
+        /* sound7 убран: файл assets/sounds/sound7.mp3 не существует */
         if (type === 'sound4') { playMp3Sound('sound4.mp3'); return; }
         if (type === 'sound5') { playMp3Sound('sound5.mp3'); return; }
         if (type === 'sound6') { playMp3Sound('sound6.mp3'); return; }
-        if (type === 'sound7') { playMp3Sound('sound7.mp3'); return; }
 
         /* Web Audio API synthesised sounds */
         if (!audioCtx) return;
@@ -275,11 +272,16 @@
         if (!typingActive) return;
         if (charIndex < message.length) {
             typed += message.charAt(charIndex);
-            typingEl.innerHTML = typed + '<span class="wp-ru-max-cursor"></span>';
+            // textContent вместо innerHTML: предотвращает интерпретацию HTML-тегов
+            // из текста сообщения (XSS / непреднамеренная разметка).
+            typingEl.textContent = typed;
+            var cursorEl = document.createElement('span');
+            cursorEl.className = 'wp-ru-max-cursor';
+            typingEl.appendChild(cursorEl);
             charIndex++;
             setTimeout(typeChar, 45);
         } else {
-            typingEl.innerHTML = typed;
+            typingEl.textContent = typed;
         }
     }
 
