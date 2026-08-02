@@ -66,7 +66,8 @@ class WP_Ru_Max_Logger {
             return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $table WHERE event_type = %s", $type ) );
         }
 
-        return (int) $wpdb->get_var( "SELECT COUNT(*) FROM $table" );
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared — $table формируется из $wpdb->prefix, пользовательского ввода нет.
+        return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM `%1$s`', $table ) );
     }
 
     public static function clear_logs( $type = '' ) {
