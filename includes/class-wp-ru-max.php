@@ -193,6 +193,8 @@ class WP_Ru_Max {
                 if ( ! empty( $settings['delete_on_uninstall'] ) ) {
                     $wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}ru_max_history" );
                     delete_option( 'wp_ru_max_settings' );
+                    delete_option( 'wp_ru_max_social' );
+                    delete_option( 'wp_ru_max_queue' );
                     delete_option( 'wp_ru_max_license' );
                     delete_option( 'wp_ru_max_license_attempts' );
                     delete_option( 'wp_ru_max_skip_meta_migrated_v1' );
@@ -210,6 +212,8 @@ class WP_Ru_Max {
             if ( ! empty( $settings['delete_on_uninstall'] ) ) {
                 $wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}ru_max_history" );
                 delete_option( 'wp_ru_max_settings' );
+                delete_option( 'wp_ru_max_social' );
+                delete_option( 'wp_ru_max_queue' );
                 delete_option( 'wp_ru_max_license' );
                 delete_option( 'wp_ru_max_license_attempts' );
                 delete_option( 'wp_ru_max_skip_meta_migrated_v1' );
