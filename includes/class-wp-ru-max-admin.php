@@ -33,10 +33,17 @@ class WP_Ru_Max_Admin {
         add_action( 'wp_ajax_wp_ru_max_get_skip',        array( $this, 'ajax_get_skip' ) );
         add_action( 'wp_ajax_wp_ru_max_set_skip',        array( $this, 'ajax_set_skip' ) );
         add_action( 'wp_ajax_wp_ru_max_send_push',       array( $this, 'ajax_send_push' ) );
+        add_action( 'wp_ajax_wp_ru_max_direct_social',   array( $this, 'ajax_direct_social' ) );
+        add_action( 'wp_ajax_wp_ru_max_save_social',      array( $this, 'ajax_save_social_settings' ) );
         add_action( 'wp_ajax_wp_ru_max_flush_queue',     array( $this, 'ajax_flush_queue' ) );
         add_action( 'save_post',                         array( $this, 'persist_skip_meta_on_save' ), 10, 2 );
         add_action( 'post_submitbox_misc_actions',       array( $this, 'render_classic_editor_panel' ) );
         add_filter( 'plugin_action_links_' . WP_RU_MAX_PLUGIN_BASENAME, array( $this, 'add_plugin_links' ) );
+
+        // Быстрый шаринг из списка записей
+        add_action( 'admin_init',                        array( $this, 'register_quick_share_columns' ) );
+        add_action( 'wp_ajax_wp_ru_max_quick_share',     array( $this, 'ajax_quick_share' ) );
+        add_action( 'admin_footer',                      array( $this, 'render_quick_share_drawer' ) );
     }
 
     public function register_rest_routes() {
@@ -314,13 +321,18 @@ class WP_Ru_Max_Admin {
         if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) ) {
             return;
         }
-        if ( ! current_user_can( 'edit_post', $post_id ) ) {
-            return;
-        }
         if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
             return;
         }
         if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+            return;
+        }
+        // Проверяем nonce стандартного редактора WordPress для предотвращения CSRF.
+        if ( ! isset( $_POST['_wpnonce'] ) ||
+             ! wp_verify_nonce( wp_unslash( $_POST['_wpnonce'] ), 'update-post_' . $post_id ) ) {
+            return;
+        }
+        if ( ! current_user_can( 'edit_post', $post_id ) ) {
             return;
         }
 
@@ -343,7 +355,7 @@ class WP_Ru_Max_Admin {
 <style>
 #adminmenu .wp-menu-image img {
     padding: 0px 0 0;
-    opacity: 1.6;
+    opacity: 1;
 }
 #toplevel_page_wp-ru-max .wp-menu-image img {
     width: 18px !important;
@@ -438,7 +450,7 @@ class WP_Ru_Max_Admin {
                            name="<?php echo esc_attr( self::SKIP_META_KEY ); ?>"
                            value="0"
                            <?php checked( $enabled ); ?>>
-                    Автоотправка в MAX: <span class="wp-ru-max-auto-label"><?php echo $enabled ? 'ВКЛ' : 'ВЫКЛ'; ?></span>
+                    Автоотправка в MAX: <span class="wp-ru-max-auto-label"><?php echo esc_html( $enabled ? 'ВКЛ' : 'ВЫКЛ' ); ?></span>
                 </label>
             </div>
             <div style="margin-top:6px;">
@@ -449,7 +461,7 @@ class WP_Ru_Max_Admin {
                         data-nonce="<?php echo esc_attr( $nonce ); ?>">
                     Отправить в MAX вручную
                 </button>
-                <span class="wp-ru-max-classic-result" style="display:none;margin-top:4px;font-size:12px;display:block;"></span>
+                <span class="wp-ru-max-classic-result" style="display:none;margin-top:4px;font-size:12px;"></span>
             </div>
         </div>
         <?php
@@ -457,13 +469,16 @@ class WP_Ru_Max_Admin {
 
     public function ajax_send_post_now() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
-        if ( ! current_user_can( 'edit_posts' ) ) {
-            wp_send_json_error( 'Нет прав доступа.' );
-        }
 
         $post_id = isset( $_POST['post_id'] ) ? intval( $_POST['post_id'] ) : 0;
         if ( ! $post_id ) {
             wp_send_json_error( 'Не указан ID записи.' );
+        }
+
+        // Проверяем права именно на эту запись (edit_post), а не глобальное
+        // edit_posts — иначе любой редактор мог отправить чужую запись.
+        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
         }
 
         $post = get_post( $post_id );
@@ -500,12 +515,15 @@ class WP_Ru_Max_Admin {
             array( 'Главная',                   'manage_options', 'admin.php?page=wp-ru-max&tab=main' ),
             array( 'Отправка публикаций',       'manage_options', 'admin.php?page=wp-ru-max&tab=post_sender' ),
             array( 'Личные уведомления',        'manage_options', 'admin.php?page=wp-ru-max&tab=notifications' ),
-            array( 'Дополнительные настройки',  'manage_options', 'admin.php?page=wp-ru-max&tab=advanced' ),
-            array( 'Инструкция',                'manage_options', 'admin.php?page=wp-ru-max&tab=instructions' ),
             array( 'Чат',                       'manage_options', 'admin.php?page=wp-ru-max&tab=chat' ),
+            array( 'Дополнительные настройки',  'manage_options', 'admin.php?page=wp-ru-max&tab=advanced' ),
+            array( 'Социальные сети',          'manage_options', 'admin.php?page=wp-ru-max&tab=social_networks' ),
+            array( 'Прямой доступ',            'manage_options', 'admin.php?page=wp-ru-max&tab=direct_access' ),
+            array( 'Настройки',                'manage_options', 'admin.php?page=wp-ru-max&tab=settings_social' ),
             array( 'История',                   'manage_options', 'admin.php?page=wp-ru-max&tab=history' ),
-            array( $is_licensed ? 'Активирован ✓' : '⚠ Активация', 'manage_options', 'admin.php?page=wp-ru-max&tab=activation' ),
+            array( 'Инструкция',                'manage_options', 'admin.php?page=wp-ru-max&tab=instructions' ),
             array( 'Обновления',                'manage_options', 'admin.php?page=wp-ru-max&tab=updates' ),
+            array( $is_licensed ? 'Активирован ✓' : '⚠ Активация', 'manage_options', 'admin.php?page=wp-ru-max&tab=activation' ),
         );
     }
 
@@ -582,7 +600,9 @@ jQuery(function($){
         $settings = get_option( 'wp_ru_max_settings', array() );
 
         if ( isset( $_POST['field'] ) ) {
-            $field = sanitize_text_field( $_POST['field'] );
+            // wp_unslash обязателен перед sanitize_text_field для корректной
+            // обработки экранированных символов из $_POST.
+            $field = sanitize_text_field( wp_unslash( $_POST['field'] ) );
             $value = isset( $_POST['value'] ) ? wp_unslash( $_POST['value'] ) : '';
 
             switch ( $field ) {
@@ -865,15 +885,45 @@ jQuery(function($){
             wp_send_json_error( 'Введите текст сообщения.' );
         }
 
-        $api    = new WP_Ru_Max_API();
-        $result = $api->send_message( $chat_id, $message, 'html' );
+        // Определяем токен для отправки. Приоритет:
+        //   1. Токен, явно переданный в $_POST['token'] (поле «Токен бота» вкладки «Прямой доступ»)
+        //   2. Сохранённый токен direct_telegram_token (кнопка «Сохранить конфигурацию»)
+        //   3. Первый бот из списка «Социальные сети → Telegram-боты»
+        // Токены Telegram: «123456789:AAHdq...» (цифры + двоеточие + строка ≥30 символов).
+        // Токены MAX имеют другой формат → отправляем через MAX API.
+        $custom_token = isset( $_POST['token'] ) ? sanitize_text_field( wp_unslash( $_POST['token'] ) ) : '';
+
+        $resolved_token = $custom_token;
+        if ( empty( $resolved_token ) ) {
+            $social         = get_option( 'wp_ru_max_social', array() );
+            // Попытка 2: direct_telegram_token (сохранённый токен вкладки «Прямой доступ»)
+            $resolved_token = $social['direct_telegram_token'] ?? '';
+        }
+        if ( empty( $resolved_token ) ) {
+            // Попытка 3: первый бот из «Социальных сетей»
+            $tg_bots        = $social['telegram_bots'] ?? array();
+            $first_bot      = ! empty( $tg_bots ) ? reset( $tg_bots ) : array();
+            $resolved_token = $first_bot['token'] ?? '';
+        }
+
+        // Признак Telegram-токена: «числа:буквы» (официальный формат Bot API)
+        $is_tg_token = ! empty( $resolved_token ) && preg_match( '/^\d+:[A-Za-z0-9_-]{30,}$/', $resolved_token );
+
+        if ( $is_tg_token ) {
+            $tg_api = new WP_Ru_Max_Telegram_API( $resolved_token );
+            $result = $tg_api->send_message( $chat_id, $message, 'HTML' );
+        } else {
+            // Нет Telegram-токена (или передан MAX-токен) → MAX API (оригинальное поведение)
+            $api    = new WP_Ru_Max_API( $custom_token ?: null );
+            $result = $api->send_message( $chat_id, $message, 'html' );
+        }
 
         if ( is_wp_error( $result ) ) {
-            WP_Ru_Max_Logger::log( 'push', 'error',
+            WP_Ru_Max_Logger::log( 'direct_access', 'error',
                 'Push НЕУДАЧНО → ' . $chat_id . ': ' . $result->get_error_message() );
             wp_send_json_error( $result->get_error_message() );
         } else {
-            WP_Ru_Max_Logger::log( 'push', 'success',
+            WP_Ru_Max_Logger::log( 'direct_access', 'success',
                 'Push отправлен → ' . $chat_id,
                 array( 'msg_length' => mb_strlen( $message ) ) );
             wp_send_json_success( 'Push-уведомление успешно отправлено в ' . esc_html( $chat_id ) . '!' );
@@ -937,6 +987,29 @@ jQuery(function($){
                 <h1>WP Ru-max</h1>
                 <span class="wp-ru-max-version">v<?php echo esc_html( WP_RU_MAX_VERSION ); ?></span>
             </div>
+            <script>
+            (function(){
+                var header = document.querySelector('.wp-ru-max-header');
+                if (!header) return;
+                function moveNotices(){
+                    var notices = header.querySelectorAll('.notice,.updated,.error,.warning,.notice-success,.notice-error,.notice-warning,.notice-info');
+                    if (!notices.length) return;
+                    var wrapper = header.nextElementSibling;
+                    if (!wrapper || !wrapper.classList.contains('wp-ru-max-notices-moved')) {
+                        wrapper = document.createElement('div');
+                        wrapper.className = 'wp-ru-max-notices-moved';
+                        wrapper.style.cssText = 'margin:10px 0 0 0;';
+                        header.parentNode.insertBefore(wrapper, header.nextSibling);
+                    }
+                    notices.forEach(function(n){ wrapper.appendChild(n); });
+                }
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', moveNotices);
+                } else {
+                    moveNotices();
+                }
+            })();
+            </script>
 
             <style>
                 .wp-ru-max-layout{display:flex!important;flex-direction:row!important;align-items:flex-start!important;gap:0!important;margin-top:16px!important;}
@@ -953,15 +1026,18 @@ jQuery(function($){
                 <nav class="wp-ru-max-tabs">
                     <?php
                     $tabs = array(
-                        'main'         => 'Главная',
-                        'post_sender'  => 'Отправка публикаций',
-                        'notifications'=> 'Личные уведомления',
-                        'chat'         => 'Чат',
-                        'advanced'     => 'Дополнительные',
-                        'instructions' => 'Инструкция',
-                        'history'      => 'История',
-                        'activation'   => WP_Ru_Max_License::is_active() ? 'Активирован' : 'Активация',
-                        'updates'      => 'Обновления',
+                        'main'            => 'Главная',
+                        'post_sender'     => 'Отправка публикаций',
+                        'notifications'   => 'Личные уведомления',
+                        'chat'            => 'Чат',
+                        'advanced'        => 'Дополнительные',
+                        'social_networks' => 'Социальные сети',
+                        'direct_access'   => 'Прямой доступ',
+                        'settings_social' => 'Настройки',
+                        'history'         => 'История',
+                        'instructions'    => 'Инструкция',
+                        'updates'         => 'Обновления',
+                        'activation'      => WP_Ru_Max_License::is_active() ? 'Активирован' : 'Активация',
                     );
                     foreach ( $tabs as $tab_key => $tab_label ) {
                         $class = ( $active_tab === $tab_key ) ? 'wp-ru-max-tab nav-tab-active' : 'wp-ru-max-tab';
@@ -975,7 +1051,7 @@ jQuery(function($){
 
                 <div class="wp-ru-max-content">
                     <?php
-                    $all_tabs = array( 'main', 'post_sender', 'notifications', 'chat', 'advanced', 'instructions', 'history', 'activation', 'updates' );
+                    $all_tabs = array( 'main', 'post_sender', 'notifications', 'chat', 'advanced', 'social_networks', 'direct_access', 'settings_social', 'history', 'instructions', 'updates', 'activation' );
                     foreach ( $all_tabs as $tab_key ) :
                         $is_active = ( $active_tab === $tab_key );
                     ?>
@@ -990,7 +1066,10 @@ jQuery(function($){
                             case 'chat':          $this->render_tab_chat( $settings );          break;
                             case 'history':       $this->render_tab_history();                  break;
                             case 'activation':    $this->render_tab_activation();               break;
-                            case 'updates':       $this->render_tab_updates();                  break;
+                            case 'updates':         $this->render_tab_updates();                    break;
+                            case 'social_networks': $this->render_tab_social_networks( $settings ); break;
+                            case 'direct_access':   $this->render_tab_direct_access( $settings );   break;
+                            case 'settings_social': $this->render_tab_settings_social( $settings );  break;
                         }
                         ?>
                     </div>
@@ -1075,6 +1154,22 @@ jQuery(function($){
 
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
+
+            <h4 style="margin-bottom:4px;">v1.0.43</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Добавлено:</strong> Новые вкладки интерфейса — <strong>«Настройки»</strong> (общие параметры публикации), <strong>«Социальные сети»</strong> (единый раздел управления всеми платформами), <strong>«Прямой доступ»</strong> (быстрый шаринг и ручная отправка push-уведомлений).</li>
+                <li><strong>Добавлено:</strong> Интеграция с <strong>ВКонтакте</strong> — подключение паблика или личной страницы, автоматическая публикация записей.</li>
+                <li><strong>Добавлено:</strong> Интеграция с <strong>Одноклассниками</strong> — публикация в группу (<code>type=GROUP_THEME</code>) или на личную страницу (<code>type=USER</code>) через OK API.</li>
+                <li><strong>Добавлено:</strong> Интеграция с <strong>Яндекс Дзен</strong> — публикация статей и анонсов в канал через официальное API.</li>
+                <li><strong>Добавлено:</strong> Интеграция с <strong>Telegram</strong> — подключение ботов, отправка сообщений с изображением и кнопкой «Читать далее».</li>
+                <li><strong>Добавлено:</strong> Telegram — новый метод <code>send_photo_with_button()</code> для одновременной отправки фото и кнопки «Читать далее» с автоматическим fallback на текст при отказе Telegram.</li>
+                <li><strong>Исправлено (критично):</strong> ВКонтакте — публикация <code>wall.post</code> переведена с GET на POST; токен доступа больше не попадает в server logs и не обрезается при длинных текстах.</li>
+                <li><strong>Исправлено:</strong> Одноклассники — убран неподдерживаемый блок <code>photo</code> с внешним URL (OK API его не принимает); исправлена ошибка <code>type=GROUP_THEME</code> без <code>gid</code>; убран лишний блок <code>link</code> в attachment.</li>
+                <li><strong>Исправлено:</strong> Яндекс Дзен — неверная структура payload исправлена: поля <code>title</code> и <code>blocks</code> вложены в обязательный объект <code>content</code> согласно документации API.</li>
+                <li><strong>Исправлено:</strong> Telegram — ошибка 400 при наличии символов <code>&lt;</code>, <code>&gt;</code>, <code>&amp;</code> в заголовках записей (HTML parse_mode); все переменные шаблона теперь экранируются через <code>htmlspecialchars()</code>.</li>
+                <li><strong>Исправлено:</strong> Быстрый шаринг Telegram — фото и кнопка «Читать далее» больше не взаимоисключают друг друга (переработаны на 4 явные ветки).</li>
+                <li><strong>Исправлено:</strong> <code>ajax_send_push</code> — исправлен порядок выбора токена Telegram: <code>direct_telegram_token</code> теперь учитывается корректно.</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.42</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -1302,7 +1397,7 @@ jQuery(function($){
                     <input type="checkbox" id="post_sender_enabled" <?php checked( $enabled ); ?> />
                     <span class="wp-ru-max-toggle-slider"></span>
                 </label>
-                <span><?php echo $enabled ? '<strong>Включено</strong>' : 'Выключено'; ?></span>
+                <span><?php echo $enabled ? '<strong>Включено</strong>' : esc_html( 'Выключено' ); ?></span>
             </div>
         </div>
 
@@ -1329,31 +1424,6 @@ jQuery(function($){
                         </td>
                     </tr>
                 </table>
-            </div>
-
-            <div class="wp-ru-max-card">
-                <h3>Отправка push-уведомлений в MAX</h3>
-                <p>Отправьте произвольное сообщение напрямую от бота в выбранный канал/группу MAX.</p>
-                <table class="form-table">
-                    <tr>
-                        <th scope="row"><label for="push_chat_id">Канал / Chat ID <span style="color:#d63638;">*</span></label></th>
-                        <td>
-                            <input type="text" id="push_chat_id" class="regular-text" placeholder="@channel_name или -100123456789" />
-                            <p class="description">Имя канала или числовой ID группы из списка «Канал(ы)» выше.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><label for="push_message">Сообщение</label></th>
-                        <td>
-                            <textarea id="push_message" rows="5" class="large-text" placeholder="Текст push-уведомления..."></textarea>
-                            <p class="description">Поддерживается HTML: <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;a href="..."&gt;</code>.</p>
-                        </td>
-                    </tr>
-                </table>
-                <div class="wp-ru-max-actions" style="margin-top:12px;">
-                    <button type="button" class="button button-primary" id="send_push_btn">Отправить push</button>
-                </div>
-                <div id="push_result" class="wp-ru-max-notice" style="display:none;margin-top:10px;"></div>
             </div>
 
             <div class="wp-ru-max-card">
@@ -2168,6 +2238,114 @@ jQuery(function($){
             </ul>
         </div>
         <div class="wp-ru-max-card">
+            <h2 style="border-bottom:2px solid #6366f1;padding-bottom:10px;">Инструкция: Telegram</h2>
+            <p>Следуйте этим шагам, чтобы подключить автопостинг в Telegram.</p>
+        </div>
+        <div class="wp-ru-max-card">
+            <h3>Шаг 1: Создать бота в Telegram</h3>
+            <ol>
+                <li>Откройте Telegram и найдите бота <a href="https://t.me/BotFather" target="_blank" rel="noopener"><strong>@BotFather</strong></a>.</li>
+                <li>Отправьте команду <code>/newbot</code>.</li>
+                <li>Следуйте инструкциям: введите название бота, затем username (должен заканчиваться на <code>bot</code>, например <code>my_site_bot</code>).</li>
+                <li>BotFather выдаст <strong>токен бота</strong> — скопируйте его, он понадобится на шаге 4.</li>
+            </ol>
+        </div>
+        <div class="wp-ru-max-card">
+            <h3>Шаг 2: Создать канал или группу</h3>
+            <ol>
+                <li>Создайте канал (<em>Telegram → Создать канал</em>) или группу (<em>Создать группу</em>).</li>
+                <li>Откройте настройки канала/группы → <strong>Администраторы</strong> → <strong>Добавить администратора</strong>.</li>
+                <li>Найдите созданного бота по username и добавьте его как администратора с правом <strong>«Публикация сообщений»</strong>.</li>
+            </ol>
+        </div>
+        <div class="wp-ru-max-card">
+            <h3>Шаг 3: Узнать Chat ID канала/группы</h3>
+            <ul>
+                <li>Для <strong>публичного канала</strong>: используйте username в формате <code>@mychannel</code>.</li>
+                <li>Для <strong>приватного канала или группы</strong>: добавьте бота <a href="https://t.me/MyChatInfoBot" target="_blank" rel="noopener"><strong>@MyChatInfoBot</strong></a> в вашу группу/канал — он пришлёт числовой Chat ID (например, <code>-1001234567890</code>).</li>
+                <li>Если хотите отправлять в конкретную тему (топик) группы: добавьте двоеточие и ID темы к Chat ID, например <code>-1001234567890:5</code>.</li>
+            </ul>
+        </div>
+        <div class="wp-ru-max-card">
+            <h3>Шаг 4: Настроить плагин</h3>
+            <ol>
+                <li>Перейдите на вкладку <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=social_networks' ) ); ?>"><strong>«Социальные сети»</strong></a>.</li>
+                <li>В разделе <strong>«Telegram»</strong> нажмите <strong>«Добавить бота»</strong>.</li>
+                <li>Введите <strong>Токен бота</strong>, <strong>Username бота</strong> (например, <code>@my_site_bot</code>) и нажмите <strong>«Добавить»</strong>.</li>
+                <li>Нажмите <strong>«Добавить чат»</strong> под ботом и введите <strong>Chat ID</strong> вашего канала или группы.</li>
+                <li>Нажмите <strong>«Сохранить»</strong>.</li>
+            </ol>
+            <p style="margin-top:10px;padding:10px 14px;background:#e8f4ff;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;">
+                <strong>Поддержка нескольких каналов:</strong> вы можете добавить неограниченное количество ботов и каналов — записи будут публиковаться во все одновременно.
+            </p>
+        </div>
+
+        <div class="wp-ru-max-card">
+            <h2 style="border-bottom:2px solid #f97316;padding-bottom:10px;margin-top:10px;">Инструкция: Одноклассники</h2>
+        </div>
+        <div class="wp-ru-max-card">
+            <h3>Шаг 1: Зарегистрировать приложение на OK.ru</h3>
+            <ol>
+                <li>Войдите на <a href="https://ok.ru" target="_blank" rel="noopener"><strong>ok.ru</strong></a> под своим аккаунтом.</li>
+                <li>Перейдите на <a href="https://apiok.ru/dev/app/create" target="_blank" rel="noopener"><strong>https://apiok.ru/dev/app/create</strong></a> — страница создания приложения.</li>
+                <li>Выберите тип <strong>«Веб-приложение»</strong>, заполните название и описание.</li>
+                <li>В поле <strong>«Адрес сайта»</strong> укажите адрес вашего WordPress-сайта.</li>
+                <li>Сохраните — вы получите <strong>App ID</strong>, <strong>Public Key</strong> и <strong>Secret Key</strong>.</li>
+            </ol>
+        </div>
+        <div class="wp-ru-max-card">
+            <h3>Шаг 2: Настроить плагин</h3>
+            <ol>
+                <li>Перейдите на вкладку <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=social_networks' ) ); ?>"><strong>«Социальные сети»</strong></a>.</li>
+                <li>В разделе <strong>«Одноклассники»</strong> нажмите <strong>«Добавить аккаунт»</strong>.</li>
+                <li>Введите <strong>App ID</strong>, <strong>Public Key</strong>, <strong>Secret Key</strong> из шага 1.</li>
+                <li>Нажмите <strong>«Авторизоваться»</strong> — вы будете перенаправлены на ok.ru для подтверждения доступа.</li>
+                <li>После авторизации выберите группу для публикаций и нажмите <strong>«Сохранить»</strong>.</li>
+            </ol>
+            <p><strong>Документация API:</strong> <a href="https://apiok.ru/dev/methods/" target="_blank" rel="noopener">https://apiok.ru/dev/methods/</a></p>
+        </div>
+
+        <div class="wp-ru-max-card">
+            <h2 style="border-bottom:2px solid #0077ff;padding-bottom:10px;margin-top:10px;">Инструкция: ВКонтакте</h2>
+        </div>
+        <div class="wp-ru-max-card">
+            <h3>Шаг 1: Создать приложение ВКонтакте</h3>
+            <ol>
+                <li>Перейдите на <a href="https://dev.vk.ru/ru/api/open-api/getting-started" target="_blank" rel="noopener"><strong>https://dev.vk.ru/ru/api/open-api/getting-started</strong></a>.</li>
+                <li>Нажмите <strong>«Создать приложение»</strong>. Выберите тип <strong>«Веб-сайт»</strong>.</li>
+                <li>Заполните название и укажите адрес вашего сайта в поле <strong>«Адрес сайта»</strong>.</li>
+                <li>Скопируйте <strong>ID приложения</strong> и <strong>Защищённый ключ</strong>.</li>
+            </ol>
+        </div>
+        <div class="wp-ru-max-card">
+            <h3>Шаг 2: Авторизоваться и настроить плагин</h3>
+            <ol>
+                <li>Перейдите на вкладку <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=social_networks' ) ); ?>"><strong>«Социальные сети»</strong></a>.</li>
+                <li>В разделе <strong>«ВКонтакте»</strong> нажмите <strong>«Добавить аккаунт»</strong>.</li>
+                <li>Нажмите кнопку <strong>«Авторизоваться через ВКонтакте»</strong> — откроется окно авторизации VK.</li>
+                <li>После авторизации скопируйте URL из адресной строки браузера и вставьте в поле <strong>«URL»</strong>.</li>
+                <li>Нажмите <strong>«Сохранить»</strong>. Выберите группу или страницу для публикаций.</li>
+            </ol>
+            <p><strong>Документация:</strong> <a href="https://dev.vk.com/ru/reference" target="_blank" rel="noopener">https://dev.vk.com/ru/reference</a></p>
+        </div>
+
+        <div class="wp-ru-max-card">
+            <h2 style="border-bottom:2px solid #e84d1c;padding-bottom:10px;margin-top:10px;">Инструкция: Яндекс Дзен</h2>
+        </div>
+        <div class="wp-ru-max-card">
+            <h3>Подключение Яндекс Дзен</h3>
+            <ol>
+                <li>Войдите на <a href="https://dzen.ru" target="_blank" rel="noopener"><strong>dzen.ru</strong></a> под аккаунтом Яндекс.</li>
+                <li>Перейдите в раздел <strong>«Монетизация»</strong> → <strong>«Партнёрская программа»</strong> → включите монетизацию канала.</li>
+                <li>Откройте <strong>Настройки канала</strong> → <strong>«Внешние источники»</strong> → добавьте RSS-ленту вашего сайта (обычно <code>https://ваш-сайт.ru/feed/</code>).</li>
+                <li>В разделе <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=social_networks' ) ); ?>"><strong>«Социальные сети»</strong></a> → <strong>«Яндекс Дзен»</strong> введите URL вашего RSS и OAuth-токен (получается в кабинете разработчика Яндекса).</li>
+                <li>Нажмите <strong>«Сохранить»</strong>.</li>
+            </ol>
+            <p style="margin-top:10px;padding:10px 14px;background:#fff8e1;border-left:4px solid #e84d1c;border-radius:0 6px 6px 0;">
+                <strong>Обратите внимание:</strong> Яндекс Дзен также поддерживает автоматическую синхронизацию через RSS — это простейший способ, не требующий API-токена.
+            </p>
+        </div>
+        <div class="wp-ru-max-card">
             <h3>Согласие пользователя</h3>
             <p>Используя плагин WP Ru-max и активируя лицензию, пользователь подтверждает, что ознакомлен с указанными ниже страницами и даёт согласие на обработку его <strong>email, имени, фамилии и домена</strong>:</p>
             <ul>
@@ -2602,12 +2780,15 @@ jQuery(function($){
                 <div class="wp-ru-max-filter-tabs">
                     <?php
                     $filter_options = array(
-                        ''             => 'Все события',
-                        'api'          => 'API',
-                        'post_sender'  => 'Публикации',
-                        'notifications'=> 'Уведомления',
-                        'test'         => 'Тесты',
-                        'settings'     => 'Настройки',
+                        ''               => 'Все события',
+                        'api'            => 'MAX / API',
+                        'post_sender'    => 'Публикации MAX',
+                        'notifications'  => 'Уведомления',
+                        'test'           => 'Тесты',
+                        'settings'       => 'Настройки',
+                        'direct_access'  => 'Прямой доступ',
+                        'social'         => 'Социальные сети',
+                        'push'           => 'Push (устар.)',
                     );
                     foreach ( $filter_options as $val => $label ) {
                         $active = $filter_type === $val ? 'class="active"' : '';
@@ -2879,5 +3060,1476 @@ jQuery(function($){
         })(jQuery);
         </script>
         <?php
+    }
+
+    /* =========================================================
+     * AJAX: сохранение настроек социальных сетей
+     * ========================================================= */
+    public function ajax_save_social_settings() {
+        check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
+        }
+
+        $social = get_option( 'wp_ru_max_social', array() );
+
+        // --- Telegram боты ---
+        if ( isset( $_POST['telegram_bots'] ) && is_array( $_POST['telegram_bots'] ) ) {
+            $bots = array();
+            foreach ( wp_unslash( $_POST['telegram_bots'] ) as $bot ) {
+                $token    = sanitize_text_field( $bot['token'] ?? '' );
+                $username = sanitize_text_field( $bot['username'] ?? '' );
+                $chats    = array();
+                if ( isset( $bot['chats'] ) && is_array( $bot['chats'] ) ) {
+                    foreach ( $bot['chats'] as $chat ) {
+                        $cid  = sanitize_text_field( $chat['chat_id'] ?? '' );
+                        $name = sanitize_text_field( $chat['name'] ?? '' );
+                        if ( $cid ) {
+                            $chats[] = array( 'chat_id' => $cid, 'name' => $name );
+                        }
+                    }
+                }
+                if ( $token ) {
+                    $bots[] = array( 'token' => $token, 'username' => $username, 'chats' => $chats );
+                }
+            }
+            $social['telegram_bots'] = $bots;
+        }
+
+        // --- Одноклассники ---
+        if ( isset( $_POST['ok_app_id'] ) ) {
+            $social['ok_app_id']     = sanitize_text_field( wp_unslash( $_POST['ok_app_id'] ) );
+            $social['ok_public_key'] = sanitize_text_field( wp_unslash( $_POST['ok_public_key'] ?? '' ) );
+            $social['ok_secret_key'] = sanitize_text_field( wp_unslash( $_POST['ok_secret_key'] ?? '' ) );
+            $social['ok_access_token'] = sanitize_text_field( wp_unslash( $_POST['ok_access_token'] ?? '' ) );
+            $social['ok_group_id'] = sanitize_text_field( wp_unslash( $_POST['ok_group_id'] ?? '' ) );
+            $social['ok_enabled']  = ! empty( $_POST['ok_enabled'] );
+        }
+
+        // --- ВКонтакте ---
+        if ( isset( $_POST['vk_app_id'] ) ) {
+            $social['vk_app_id']      = sanitize_text_field( wp_unslash( $_POST['vk_app_id'] ) );
+            $social['vk_secret_key']  = sanitize_text_field( wp_unslash( $_POST['vk_secret_key'] ?? '' ) );
+            $social['vk_access_token'] = sanitize_text_field( wp_unslash( $_POST['vk_access_token'] ?? '' ) );
+            $social['vk_owner_id']    = sanitize_text_field( wp_unslash( $_POST['vk_owner_id'] ?? '' ) );
+            $social['vk_enabled']     = ! empty( $_POST['vk_enabled'] );
+        }
+
+        // --- Яндекс Дзен ---
+        if ( isset( $_POST['dzen_rss_url'] ) ) {
+            $social['dzen_rss_url']     = esc_url_raw( wp_unslash( $_POST['dzen_rss_url'] ) );
+            $social['dzen_oauth_token'] = sanitize_text_field( wp_unslash( $_POST['dzen_oauth_token'] ?? '' ) );
+            $social['dzen_channel_id']  = sanitize_text_field( wp_unslash( $_POST['dzen_channel_id'] ?? '' ) );
+            $social['dzen_enabled']     = ! empty( $_POST['dzen_enabled'] );
+        }
+
+        // --- Прямой доступ ---
+        if ( isset( $_POST['direct_telegram_token'] ) ) {
+            $social['direct_telegram_token']   = sanitize_text_field( wp_unslash( $_POST['direct_telegram_token'] ) );
+            $social['direct_telegram_chat_id'] = sanitize_text_field( wp_unslash( $_POST['direct_telegram_chat_id'] ?? '' ) );
+        }
+
+        // --- Настройки публикаций для соц. сетей ---
+        if ( isset( $_POST['social_post_types'] ) ) {
+            $social['social_post_types'] = is_array( $_POST['social_post_types'] )
+                ? array_map( 'sanitize_text_field', wp_unslash( $_POST['social_post_types'] ) )
+                : array();
+        }
+        if ( isset( $_POST['social_hashtag_taxonomies'] ) ) {
+            $social['social_hashtag_taxonomies'] = is_array( $_POST['social_hashtag_taxonomies'] )
+                ? array_map( 'sanitize_text_field', wp_unslash( $_POST['social_hashtag_taxonomies'] ) )
+                : array();
+        }
+        if ( isset( $_POST['social_url_params'] ) ) {
+            $social['social_url_params'] = sanitize_text_field( wp_unslash( $_POST['social_url_params'] ) );
+        }
+        if ( isset( $_POST['social_unique_link'] ) ) {
+            $social['social_unique_link'] = ! empty( $_POST['social_unique_link'] );
+        }
+        foreach ( array( 'tg', 'ok', 'vk', 'dzen' ) as $net ) {
+            $tpl_key = 'social_template_' . $net;
+            $btn_key = 'social_readmore_' . $net;
+            $btn_txt = 'social_readmore_text_' . $net;
+            $cut_key = 'social_cut_limit_' . $net;
+            if ( isset( $_POST[ $tpl_key ] ) ) {
+                $social[ $tpl_key ] = sanitize_textarea_field( wp_unslash( $_POST[ $tpl_key ] ) );
+            }
+            if ( isset( $_POST[ $btn_key ] ) ) {
+                $social[ $btn_key ] = ! empty( $_POST[ $btn_key ] );
+            }
+            if ( isset( $_POST[ $btn_txt ] ) ) {
+                $social[ $btn_txt ] = sanitize_text_field( wp_unslash( $_POST[ $btn_txt ] ) );
+            }
+            if ( isset( $_POST[ $cut_key ] ) ) {
+                $social[ $cut_key ] = ! empty( $_POST[ $cut_key ] );
+            }
+        }
+
+        update_option( 'wp_ru_max_social', $social );
+        WP_Ru_Max_Logger::log( 'social', 'info', 'Настройки социальных сетей обновлены.' );
+        wp_send_json_success( 'Настройки сохранены.' );
+    }
+
+    /* =========================================================
+     * Вкладка: Социальные сети
+     * ========================================================= */
+    private function render_tab_social_networks( $settings ) {
+        $social = get_option( 'wp_ru_max_social', array() );
+        $tg_bots = $social['telegram_bots'] ?? array();
+        ?>
+        <div class="wp-ru-max-card">
+            <h2>Социальные сети</h2>
+            <p>Подключите свои аккаунты в социальных сетях для автоматической публикации записей WordPress.</p>
+        </div>
+
+        <?php /* ---- TELEGRAM ---- */ ?>
+        <div class="wp-ru-max-card" id="sn-telegram-section">
+            <h2 style="display:flex;align-items:center;gap:10px;">
+                Учётные записи — Telegram
+            </h2>
+            <p>Добавьте одного или нескольких ботов Telegram. Каждый бот может публиковать в несколько каналов и групп одновременно.</p>
+
+            <div id="tg-bots-list">
+            <?php foreach ( $tg_bots as $bi => $bot ) : ?>
+                <div class="wp-ru-max-sn-bot-card" data-bot-index="<?php echo (int) $bi; ?>" style="border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:12px;background:#fafbfc;">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+                        <strong>🤖 Бот: <?php echo esc_html( $bot['username'] ?: '(без username)' ); ?></strong>
+                        <button type="button" class="button button-small tg-remove-bot" style="margin-left:auto;color:#d63638;">Удалить бота</button>
+                    </div>
+                    <table class="form-table" style="margin:0;">
+                        <tr>
+                            <th style="width:160px;"><label>Токен бота <span style="color:#d63638;">*</span></label></th>
+                            <td><input type="text" class="regular-text tg-bot-token" value="<?php echo esc_attr( $bot['token'] ); ?>" placeholder="110201543:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw" /></td>
+                        </tr>
+                        <tr>
+                            <th><label>Username бота</label></th>
+                            <td><input type="text" class="regular-text tg-bot-username" value="<?php echo esc_attr( $bot['username'] ); ?>" placeholder="@my_site_bot" /></td>
+                        </tr>
+                    </table>
+                    <div class="tg-chats-list" style="margin-top:12px;">
+                        <strong>Каналы / Чаты:</strong>
+                        <?php foreach ( $bot['chats'] ?? array() as $ci => $chat ) : ?>
+                        <div class="tg-chat-row" style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+                            <input type="text" class="regular-text tg-chat-id" value="<?php echo esc_attr( $chat['chat_id'] ); ?>" placeholder="@channel или -100123456789" style="flex:1;" />
+                            <input type="text" class="regular-text tg-chat-name" value="<?php echo esc_attr( $chat['name'] ); ?>" placeholder="Название (необязательно)" style="max-width:160px;" />
+                            <button type="button" class="button button-small tg-remove-chat" style="color:#d63638;">✕</button>
+                        </div>
+                        <?php endforeach; ?>
+                        <?php if ( empty( $bot['chats'] ) ) : ?>
+                        <p class="description" style="margin-top:6px;color:#d63638;">Добавьте хотя бы один чат / канал.</p>
+                        <?php endif; ?>
+                    </div>
+                    <div style="margin-top:10px;">
+                        <button type="button" class="button tg-add-chat">+ Добавить чат</button>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+            </div>
+
+            <div style="margin-top:12px;">
+                <button type="button" class="button button-secondary" id="tg-add-bot-btn">+ Добавить бота</button>
+            </div>
+        </div>
+
+        <?php /* ---- ОДНОКЛАССНИКИ ---- */ ?>
+        <div class="wp-ru-max-card" id="sn-ok-section">
+            <h2 style="display:flex;align-items:center;gap:10px;">
+                Одноклассники
+            </h2>
+            <p>Для публикации в Одноклассниках создайте приложение на <a href="https://apiok.ru/dev/app/create" target="_blank" rel="noopener">https://apiok.ru/dev/app/create</a> и введите данные ниже.</p>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+                <label class="wp-ru-max-toggle">
+                    <input type="checkbox" id="ok_enabled" <?php checked( ! empty( $social['ok_enabled'] ) ); ?> />
+                    <span class="wp-ru-max-toggle-slider"></span>
+                </label>
+                <span>Включить публикацию в Одноклассники</span>
+            </div>
+            <table class="form-table">
+                <tr>
+                    <th><label for="ok_app_id">App ID <span style="color:#d63638;">*</span></label></th>
+                    <td><input type="text" id="ok_app_id" class="regular-text" value="<?php echo esc_attr( $social['ok_app_id'] ?? '' ); ?>" placeholder="123456789012345" /></td>
+                </tr>
+                <tr>
+                    <th><label for="ok_public_key">Public Key <span style="color:#d63638;">*</span></label></th>
+                    <td><input type="text" id="ok_public_key" class="regular-text" value="<?php echo esc_attr( $social['ok_public_key'] ?? '' ); ?>" placeholder="CBAXXXXXXXXXXXXXXXXXXX" /></td>
+                </tr>
+                <tr>
+                    <th><label for="ok_secret_key">Secret Key <span style="color:#d63638;">*</span></label></th>
+                    <td><input type="password" id="ok_secret_key" class="regular-text" value="<?php echo esc_attr( $social['ok_secret_key'] ?? '' ); ?>" placeholder="Секретный ключ приложения" autocomplete="new-password" /></td>
+                </tr>
+                <tr>
+                    <th><label for="ok_access_token">Access Token</label></th>
+                    <td>
+                        <input type="text" id="ok_access_token" class="regular-text" value="<?php echo esc_attr( $social['ok_access_token'] ?? '' ); ?>" placeholder="Токен доступа после авторизации" />
+                        <p class="description">Получается после нажатия «Авторизоваться» ниже.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="ok_group_id">ID группы / сообщества</label></th>
+                    <td>
+                        <input type="text" id="ok_group_id" class="regular-text" value="<?php echo esc_attr( $social['ok_group_id'] ?? '' ); ?>" placeholder="Числовой ID группы" />
+                        <p class="description">Найти ID группы можно на странице группы в URL.</p>
+                    </td>
+                </tr>
+            </table>
+            <?php
+            $ok_auth_url = add_query_arg( array(
+                'client_id'     => $social['ok_app_id'] ?? '',
+                'scope'         => 'VALUABLE_ACCESS;SET_STATUS;PHOTO_CONTENT',
+                'response_type' => 'token',
+                'redirect_uri'  => admin_url( 'admin.php?page=wp-ru-max&tab=social_networks' ),
+                'layout'        => 'w',
+            ), 'https://connect.ok.ru/oauth/authorize' );
+            ?>
+            <div class="wp-ru-max-actions" style="margin-top:10px;">
+                <a href="<?php echo esc_url( $ok_auth_url ); ?>" target="_blank" class="button button-secondary">Авторизоваться в Одноклассниках</a>
+            </div>
+            <p class="description" style="margin-top:6px;">После авторизации скопируйте access_token из адресной строки и вставьте выше.</p>
+        </div>
+
+        <?php /* ---- ВКОНТАКТЕ ---- */ ?>
+        <div class="wp-ru-max-card" id="sn-vk-section">
+            <h2 style="display:flex;align-items:center;gap:10px;">
+                ВКонтакте
+            </h2>
+            <p>Для публикации ВКонтакте создайте приложение на <a href="https://dev.vk.ru/ru/api/open-api/getting-started" target="_blank" rel="noopener">https://dev.vk.ru</a> и введите данные ниже.</p>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+                <label class="wp-ru-max-toggle">
+                    <input type="checkbox" id="vk_enabled" <?php checked( ! empty( $social['vk_enabled'] ) ); ?> />
+                    <span class="wp-ru-max-toggle-slider"></span>
+                </label>
+                <span>Включить публикацию ВКонтакте</span>
+            </div>
+            <table class="form-table">
+                <tr>
+                    <th><label for="vk_app_id">ID приложения <span style="color:#d63638;">*</span></label></th>
+                    <td>
+                        <input type="text" id="vk_app_id" class="regular-text" value="<?php echo esc_attr( $social['vk_app_id'] ?? '' ); ?>" placeholder="12345678" />
+                        <p class="description">ID из настроек вашего VK-приложения.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="vk_secret_key">Защищённый ключ</label></th>
+                    <td><input type="password" id="vk_secret_key" class="regular-text" value="<?php echo esc_attr( $social['vk_secret_key'] ?? '' ); ?>" placeholder="Secret key из настроек приложения VK" autocomplete="new-password" /></td>
+                </tr>
+                <tr>
+                    <th><label for="vk_access_token">Access Token</label></th>
+                    <td>
+                        <input type="text" id="vk_access_token" class="large-text" value="<?php echo esc_attr( $social['vk_access_token'] ?? '' ); ?>" placeholder="Вставьте скопированный токен из URL после авторизации" />
+                        <p class="description">Получается после нажатия «Авторизоваться» ниже — скопируйте URL и вставьте его полностью в поле.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="vk_owner_id">ID группы / страницы</label></th>
+                    <td>
+                        <input type="text" id="vk_owner_id" class="regular-text" value="<?php echo esc_attr( $social['vk_owner_id'] ?? '' ); ?>" placeholder="-123456789 (минус + числовой ID)" />
+                        <p class="description">Отрицательное число для групп/пабликов. Можно найти в URL страницы.</p>
+                    </td>
+                </tr>
+            </table>
+            <?php
+            $vk_auth_url = add_query_arg( array(
+                'client_id'     => $social['vk_app_id'] ?? '',
+                'scope'         => 'wall,groups,offline',
+                'redirect_uri'  => 'https://oauth.vk.com/blank.html',
+                'display'       => 'page',
+                'response_type' => 'token',
+                'v'             => '5.199',
+            ), 'https://oauth.vk.com/authorize' );
+            ?>
+            <div class="wp-ru-max-actions" style="margin-top:10px;">
+                <a href="<?php echo esc_url( $vk_auth_url ); ?>" target="_blank" class="button button-secondary">Авторизоваться ВКонтакте</a>
+            </div>
+            <p class="description" style="margin-top:6px;">После авторизации скопируйте полный URL из адресной строки браузера и вставьте в поле «Access Token» выше.</p>
+        </div>
+
+        <?php /* ---- ЯНДЕКС ДЗЕН ---- */ ?>
+        <div class="wp-ru-max-card" id="sn-dzen-section">
+            <h2 style="display:flex;align-items:center;gap:10px;">
+                Яндекс Дзен
+            </h2>
+            <p>Публикация в Яндекс Дзен через RSS-синдикацию. Добавьте RSS-ленту вашего сайта в настройки канала на <a href="https://dzen.ru" target="_blank" rel="noopener">dzen.ru</a>.</p>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+                <label class="wp-ru-max-toggle">
+                    <input type="checkbox" id="dzen_enabled" <?php checked( ! empty( $social['dzen_enabled'] ) ); ?> />
+                    <span class="wp-ru-max-toggle-slider"></span>
+                </label>
+                <span>Включить публикацию в Яндекс Дзен</span>
+            </div>
+            <table class="form-table">
+                <tr>
+                    <th><label for="dzen_rss_url">URL RSS-ленты</label></th>
+                    <td>
+                        <input type="url" id="dzen_rss_url" class="large-text" value="<?php echo esc_url( $social['dzen_rss_url'] ?? '' ); ?>" placeholder="<?php echo esc_attr( get_bloginfo( 'url' ) . '/feed/' ); ?>" />
+                        <p class="description">Добавьте этот URL в настройки канала Дзен → «Внешние источники».</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="dzen_channel_id">ID канала Дзен</label></th>
+                    <td><input type="text" id="dzen_channel_id" class="regular-text" value="<?php echo esc_attr( $social['dzen_channel_id'] ?? '' ); ?>" placeholder="ID канала из настроек Дзен" /></td>
+                </tr>
+                <tr>
+                    <th><label for="dzen_oauth_token">OAuth-токен Яндекса</label></th>
+                    <td>
+                        <input type="password" id="dzen_oauth_token" class="regular-text" value="<?php echo esc_attr( $social['dzen_oauth_token'] ?? '' ); ?>" placeholder="Токен из кабинета разработчика Яндекс" autocomplete="new-password" />
+                        <p class="description">Получить токен: <a href="https://oauth.yandex.ru/" target="_blank" rel="noopener">https://oauth.yandex.ru/</a></p>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="wp-ru-max-card">
+            <div class="wp-ru-max-actions">
+                <button type="button" class="button button-primary" id="save_social_networks_btn">Сохранить настройки</button>
+            </div>
+            <div id="social_networks_result" class="wp-ru-max-notice" style="display:none;margin-top:12px;"></div>
+        </div>
+
+        <script>
+        (function($){
+            /* --- Добавить нового бота --- */
+            var botTemplate = function(idx){
+                return '<div class="wp-ru-max-sn-bot-card" data-bot-index="'+idx+'" style="border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:12px;background:#fafbfc;">'
+                    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;"><strong>🤖 Новый бот</strong>'
+                    +'<button type="button" class="button button-small tg-remove-bot" style="margin-left:auto;color:#d63638;">Удалить бота</button></div>'
+                    +'<table class="form-table" style="margin:0;">'
+                    +'<tr><th style="width:160px;"><label>Токен бота *</label></th><td><input type="text" class="regular-text tg-bot-token" placeholder="110201543:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw" /></td></tr>'
+                    +'<tr><th><label>Username бота</label></th><td><input type="text" class="regular-text tg-bot-username" placeholder="@my_site_bot" /></td></tr>'
+                    +'</table>'
+                    +'<div class="tg-chats-list" style="margin-top:12px;"><strong>Каналы / Чаты:</strong></div>'
+                    +'<div style="margin-top:10px;"><button type="button" class="button tg-add-chat">+ Добавить чат</button></div>'
+                    +'</div>';
+            };
+
+            var chatRowTemplate = function(){
+                return '<div class="tg-chat-row" style="display:flex;gap:8px;margin-top:8px;align-items:center;">'
+                    +'<input type="text" class="regular-text tg-chat-id" placeholder="@channel или -100123456789" style="flex:1;" />'
+                    +'<input type="text" class="regular-text tg-chat-name" placeholder="Название (необязательно)" style="max-width:160px;" />'
+                    +'<button type="button" class="button button-small tg-remove-chat" style="color:#d63638;">✕</button>'
+                    +'</div>';
+            };
+
+            var botIdx = <?php echo (int) count( $tg_bots ); ?>;
+
+            $('#tg-add-bot-btn').on('click', function(){
+                $('#tg-bots-list').append(botTemplate(botIdx++));
+            });
+
+            $(document).on('click', '.tg-add-chat', function(){
+                $(this).closest('.wp-ru-max-sn-bot-card').find('.tg-chats-list').append(chatRowTemplate());
+            });
+            $(document).on('click', '.tg-remove-bot', function(){
+                if ( confirm('Удалить бота и все его чаты?') ) {
+                    $(this).closest('.wp-ru-max-sn-bot-card').remove();
+                }
+            });
+            $(document).on('click', '.tg-remove-chat', function(){
+                $(this).closest('.tg-chat-row').remove();
+            });
+
+            /* --- Сохранить всё --- */
+            $('#save_social_networks_btn').on('click', function(){
+                var $btn = $(this).prop('disabled', true).text('Сохраняем...');
+                var data = {
+                    action : 'wp_ru_max_save_social',
+                    nonce  : wpRuMax.nonce,
+                    telegram_bots : [],
+                    ok_enabled   : $('#ok_enabled').is(':checked') ? 1 : 0,
+                    ok_app_id    : $('#ok_app_id').val(),
+                    ok_public_key: $('#ok_public_key').val(),
+                    ok_secret_key: $('#ok_secret_key').val(),
+                    ok_access_token: $('#ok_access_token').val(),
+                    ok_group_id  : $('#ok_group_id').val(),
+                    vk_enabled   : $('#vk_enabled').is(':checked') ? 1 : 0,
+                    vk_app_id    : $('#vk_app_id').val(),
+                    vk_secret_key: $('#vk_secret_key').val(),
+                    vk_access_token: $('#vk_access_token').val(),
+                    vk_owner_id  : $('#vk_owner_id').val(),
+                    dzen_enabled : $('#dzen_enabled').is(':checked') ? 1 : 0,
+                    dzen_rss_url : $('#dzen_rss_url').val(),
+                    dzen_channel_id: $('#dzen_channel_id').val(),
+                    dzen_oauth_token: $('#dzen_oauth_token').val(),
+                };
+
+                /* Собираем ботов Telegram */
+                $('.wp-ru-max-sn-bot-card').each(function(){
+                    var bot = {
+                        token    : $(this).find('.tg-bot-token').val(),
+                        username : $(this).find('.tg-bot-username').val(),
+                        chats    : []
+                    };
+                    $(this).find('.tg-chat-row').each(function(){
+                        bot.chats.push({
+                            chat_id : $(this).find('.tg-chat-id').val(),
+                            name    : $(this).find('.tg-chat-name').val()
+                        });
+                    });
+                    if (bot.token) { data.telegram_bots.push(bot); }
+                });
+
+                $.post(wpRuMax.ajaxUrl, data, function(resp){
+                    var ok = resp.success;
+                    $('#social_networks_result')
+                        .removeClass('notice-success notice-error')
+                        .addClass(ok ? 'notice-success' : 'notice-error')
+                        .css({display:'block',padding:'12px 16px',background:'#fff',
+                              borderLeft: ok ? '4px solid #00a32a' : '4px solid #d63638'})
+                        .text(ok ? (resp.data || 'Сохранено!') : (resp.data || 'Ошибка.'));
+                    $btn.prop('disabled', false).text('Сохранить настройки');
+                }).fail(function(){
+                    $('#social_networks_result').removeClass('notice-success notice-error').addClass('notice-error')
+                        .css({display:'block',padding:'12px 16px',background:'#fff',borderLeft:'4px solid #d63638'})
+                        .text('Ошибка сети.');
+                    $btn.prop('disabled', false).text('Сохранить настройки');
+                });
+            });
+        })(jQuery);
+        </script>
+        <?php
+    }
+
+    /* =========================================================
+     * Вкладка: Прямой доступ
+     * ========================================================= */
+    private function render_tab_direct_access( $settings ) {
+        $social   = get_option( 'wp_ru_max_social', array() );
+        $tg_bots  = $social['telegram_bots'] ?? array();
+        $has_max  = ! empty( $settings['bot_token'] );
+        $has_tg   = ! empty( $tg_bots );
+        $has_vk   = ! empty( $social['vk_enabled'] ) && ! empty( $social['vk_access_token'] );
+        $has_ok   = ! empty( $social['ok_enabled'] ) && ! empty( $social['ok_access_token'] );
+        $has_dzen = ! empty( $social['dzen_enabled'] );
+        $max_icon = esc_url( WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png' );
+
+        // Собираем список активных сетей
+        $networks = array();
+        if ( $has_max )  { $networks[] = 'max'; }
+        if ( $has_tg )   { $networks[] = 'tg'; }
+        if ( $has_vk )   { $networks[] = 'vk'; }
+        if ( $has_ok )   { $networks[] = 'ok'; }
+        if ( $has_dzen ) { $networks[] = 'dzen'; }
+
+        $first = $networks[0] ?? 'max';
+        ?>
+        <div class="wp-ru-max-card">
+            <h2>Прямой доступ</h2>
+            <p>Отправьте произвольное сообщение напрямую в любую подключённую социальную сеть — без привязки к очереди публикаций WordPress. Отображаются только сети с заполненными настройками.</p>
+        </div>
+
+        <?php if ( empty( $networks ) ) : ?>
+        <div class="wp-ru-max-card">
+            <p style="color:#d63638;">Ни одна социальная сеть не настроена. Перейдите на вкладку <a href="<?php echo esc_url( admin_url('admin.php?page=wp-ru-max&tab=social_networks') ); ?>"><strong>Социальные сети</strong></a> и добавьте хотя бы одну учётную запись.</p>
+        </div>
+        <?php return; ?>
+        <?php endif; ?>
+
+        <!-- Выбор социальной сети -->
+        <div class="wp-ru-max-card">
+            <h3 style="margin-bottom:14px;">Выберите социальную сеть</h3>
+            <div id="da-net-selector" style="display:flex;flex-wrap:wrap;gap:10px;">
+                <?php if ( $has_max ) : ?>
+                <button type="button" class="da-net-btn button" data-net="max" style="display:flex;align-items:center;gap:8px;padding:10px 18px;">
+                    <img src="<?php echo esc_url( $max_icon ); ?>" width="20" height="20" style="border-radius:3px;" alt="" />
+                    <span>MAX</span>
+                </button>
+                <?php endif; ?>
+                <?php if ( $has_tg ) : ?>
+                <button type="button" class="da-net-btn button" data-net="tg" style="padding:10px 18px;">
+                    Telegram
+                </button>
+                <?php endif; ?>
+                <?php if ( $has_vk ) : ?>
+                <button type="button" class="da-net-btn button" data-net="vk" style="padding:10px 18px;">
+                    ВКонтакте
+                </button>
+                <?php endif; ?>
+                <?php if ( $has_ok ) : ?>
+                <button type="button" class="da-net-btn button" data-net="ok" style="padding:10px 18px;">
+                    Одноклассники
+                </button>
+                <?php endif; ?>
+                <?php if ( $has_dzen ) : ?>
+                <button type="button" class="da-net-btn button" data-net="dzen" style="padding:10px 18px;">
+                    Яндекс Дзен
+                </button>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- MAX -->
+        <?php if ( $has_max ) : ?>
+        <div class="da-net-panel wp-ru-max-card" id="da-panel-max" style="display:none;">
+            <h3 style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                <img src="<?php echo esc_url( $max_icon ); ?>" width="22" height="22" style="border-radius:3px;" alt="" />
+                Быстрая отправка — MAX
+            </h3>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><label for="da_max_chat">Канал / Chat ID <span style="color:#d63638;">*</span></label></th>
+                    <td>
+                        <input type="text" id="da_max_chat" class="regular-text" placeholder="@channel_name или -100123456789" />
+                        <p class="description">ID канала или группы MAX.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="da_max_msg">Сообщение <span style="color:#d63638;">*</span></label></th>
+                    <td>
+                        <textarea id="da_max_msg" rows="5" class="large-text" placeholder="Введите текст сообщения..."></textarea>
+                        <p class="description">Поддерживаются теги: <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;a href="..."&gt;</code>.</p>
+                    </td>
+                </tr>
+            </table>
+            <div class="wp-ru-max-actions" style="margin-top:12px;">
+                <button type="button" class="button button-primary da-send-btn" data-net="max">Отправить</button>
+            </div>
+            <div class="da-result wp-ru-max-notice" style="display:none;margin-top:10px;"></div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Telegram -->
+        <?php if ( $has_tg ) : ?>
+        <div class="da-net-panel wp-ru-max-card" id="da-panel-tg" style="display:none;">
+            <h3 style="margin-bottom:14px;">Быстрая отправка — Telegram</h3>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><label for="da_tg_bot">Бот</label></th>
+                    <td>
+                        <select id="da_tg_bot" class="regular-text">
+                            <?php foreach ( $tg_bots as $bi => $bot ) :
+                                $username = esc_attr( $bot['username'] ?: '(без username)' );
+                                foreach ( $bot['chats'] ?? array() as $ci => $chat ) :
+                                    $label = $username . ' → ' . ( $chat['name'] ?: $chat['chat_id'] );
+                                    $val   = esc_attr( json_encode( array( 'token' => $bot['token'], 'chat_id' => $chat['chat_id'] ) ) );
+                            ?>
+                            <option value="<?php echo $val; ?>"><?php echo esc_html( $label ); ?></option>
+                            <?php endforeach; endforeach; ?>
+                        </select>
+                        <p class="description">Бот и канал из вкладки «Социальные сети».</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="da_tg_msg">Сообщение <span style="color:#d63638;">*</span></label></th>
+                    <td>
+                        <textarea id="da_tg_msg" rows="5" class="large-text" placeholder="Введите текст сообщения..."></textarea>
+                        <p class="description">Поддерживаются теги: <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;u&gt;</code>, <code>&lt;a href="..."&gt;</code>.</p>
+                    </td>
+                </tr>
+            </table>
+            <div class="wp-ru-max-actions" style="margin-top:12px;">
+                <button type="button" class="button button-primary da-send-btn" data-net="tg">Отправить</button>
+            </div>
+            <div class="da-result wp-ru-max-notice" style="display:none;margin-top:10px;"></div>
+        </div>
+        <?php endif; ?>
+
+        <!-- ВКонтакте -->
+        <?php if ( $has_vk ) : ?>
+        <div class="da-net-panel wp-ru-max-card" id="da-panel-vk" style="display:none;">
+            <h3 style="margin-bottom:14px;">Быстрая отправка — ВКонтакте</h3>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><label for="da_vk_msg">Сообщение <span style="color:#d63638;">*</span></label></th>
+                    <td>
+                        <textarea id="da_vk_msg" rows="5" class="large-text" placeholder="Введите текст публикации..."></textarea>
+                        <p class="description">Публикуется в группу/страницу ВКонтакте из настроек (ID: <strong><?php echo esc_html( $social['vk_owner_id'] ?? '—' ); ?></strong>).</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="da_vk_url">Ссылка (необязательно)</label></th>
+                    <td>
+                        <input type="url" id="da_vk_url" class="regular-text" placeholder="https://..." />
+                        <p class="description">Добавляется к публикации как вложение.</p>
+                    </td>
+                </tr>
+            </table>
+            <div class="wp-ru-max-actions" style="margin-top:12px;">
+                <button type="button" class="button button-primary da-send-btn" data-net="vk">Опубликовать</button>
+            </div>
+            <div class="da-result wp-ru-max-notice" style="display:none;margin-top:10px;"></div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Одноклассники -->
+        <?php if ( $has_ok ) : ?>
+        <div class="da-net-panel wp-ru-max-card" id="da-panel-ok" style="display:none;">
+            <h3 style="margin-bottom:14px;">Быстрая отправка — Одноклассники</h3>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><label for="da_ok_title">Заголовок</label></th>
+                    <td>
+                        <input type="text" id="da_ok_title" class="regular-text" placeholder="Заголовок публикации (необязательно)" />
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="da_ok_msg">Текст <span style="color:#d63638;">*</span></label></th>
+                    <td>
+                        <textarea id="da_ok_msg" rows="5" class="large-text" placeholder="Введите текст публикации..."></textarea>
+                        <p class="description">Публикуется в группу Одноклассники (ID: <strong><?php echo esc_html( $social['ok_group_id'] ?? '—' ); ?></strong>).</p>
+                    </td>
+                </tr>
+            </table>
+            <div class="wp-ru-max-actions" style="margin-top:12px;">
+                <button type="button" class="button button-primary da-send-btn" data-net="ok">Опубликовать</button>
+            </div>
+            <div class="da-result wp-ru-max-notice" style="display:none;margin-top:10px;"></div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Яндекс Дзен -->
+        <?php if ( $has_dzen ) : ?>
+        <div class="da-net-panel wp-ru-max-card" id="da-panel-dzen" style="display:none;">
+            <h3 style="margin-bottom:14px;">Быстрая отправка — Яндекс Дзен</h3>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><label for="da_dzen_title">Заголовок <span style="color:#d63638;">*</span></label></th>
+                    <td>
+                        <input type="text" id="da_dzen_title" class="regular-text" placeholder="Заголовок статьи" />
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="da_dzen_msg">Текст <span style="color:#d63638;">*</span></label></th>
+                    <td>
+                        <textarea id="da_dzen_msg" rows="5" class="large-text" placeholder="Введите текст статьи..."></textarea>
+                    </td>
+                </tr>
+            </table>
+            <div class="wp-ru-max-actions" style="margin-top:12px;">
+                <button type="button" class="button button-primary da-send-btn" data-net="dzen">Опубликовать в Дзен</button>
+            </div>
+            <div class="da-result wp-ru-max-notice" style="display:none;margin-top:10px;"></div>
+        </div>
+        <?php endif; ?>
+
+        <style>
+        .da-net-btn.da-active { background:#0073aa!important;border-color:#005f8c!important;color:#fff!important; }
+        </style>
+        <script>
+        (function($){
+            var firstNet = <?php echo json_encode( $first ); ?>;
+
+            function activateNet(net){
+                $('.da-net-btn').removeClass('da-active');
+                $('.da-net-btn[data-net="' + net + '"]').addClass('da-active');
+                $('.da-net-panel').hide();
+                $('#da-panel-' + net).show();
+            }
+
+            activateNet(firstNet);
+
+            $('.da-net-btn').on('click', function(){
+                activateNet($(this).data('net'));
+            });
+
+            $(document).on('click', '.da-send-btn', function(){
+                var net  = $(this).data('net');
+                var $btn = $(this).prop('disabled', true).text('Отправка...');
+                var $res = $(this).closest('.da-net-panel').find('.da-result');
+                var data = { action: '', nonce: wpRuMax.nonce };
+
+                if (net === 'max') {
+                    var chat = $('#da_max_chat').val().trim();
+                    var msg  = $('#da_max_msg').val().trim();
+                    if (!chat || !msg) { showRes($res, false, 'Заполните все обязательные поля.'); $btn.prop('disabled',false).text('Отправить'); return; }
+                    data.action  = 'wp_ru_max_send_push';
+                    data.chat_id = chat;
+                    data.message = msg;
+
+                } else if (net === 'tg') {
+                    var msg = $('#da_tg_msg').val().trim();
+                    if (!msg) { showRes($res, false, 'Введите текст сообщения.'); $btn.prop('disabled',false).text('Отправить'); return; }
+                    var botData = {};
+                    try { botData = JSON.parse($('#da_tg_bot').val()); } catch(e){}
+                    data.action  = 'wp_ru_max_send_push';
+                    data.chat_id = botData.chat_id || '';
+                    data.message = msg;
+                    data.token   = botData.token || '';
+
+                } else if (net === 'vk' || net === 'ok' || net === 'dzen') {
+                    data.action  = 'wp_ru_max_direct_social';
+                    data.network = net;
+                    if (net === 'vk') {
+                        data.message = $('#da_vk_msg').val().trim();
+                        data.url     = $('#da_vk_url').val().trim();
+                        if (!data.message) { showRes($res, false, 'Введите текст.'); $btn.prop('disabled',false).text('Опубликовать'); return; }
+                    } else if (net === 'ok') {
+                        data.message = $('#da_ok_msg').val().trim();
+                        data.title   = $('#da_ok_title').val().trim();
+                        if (!data.message) { showRes($res, false, 'Введите текст.'); $btn.prop('disabled',false).text('Опубликовать'); return; }
+                    } else if (net === 'dzen') {
+                        data.title   = $('#da_dzen_title').val().trim();
+                        data.message = $('#da_dzen_msg').val().trim();
+                        if (!data.title || !data.message) { showRes($res, false, 'Заполните заголовок и текст.'); $btn.prop('disabled',false).text('Опубликовать в Дзен'); return; }
+                    }
+                }
+
+                $.post(wpRuMax.ajaxUrl, data, function(resp){
+                    showRes($res, resp.success, resp.data || (resp.success ? 'Опубликовано!' : 'Ошибка.'));
+                    $btn.prop('disabled', false).text(net === 'max' || net === 'tg' ? 'Отправить' : 'Опубликовать');
+                }).fail(function(){
+                    showRes($res, false, 'Ошибка сети.');
+                    $btn.prop('disabled', false).text(net === 'max' || net === 'tg' ? 'Отправить' : 'Опубликовать');
+                });
+            });
+
+            function showRes($el, ok, msg){
+                $el.removeClass('notice-success notice-error')
+                   .addClass(ok ? 'notice-success' : 'notice-error')
+                   .css({display:'block', padding:'12px 16px', background:'#fff',
+                         borderLeft: ok ? '4px solid #00a32a' : '4px solid #d63638'})
+                   .text(msg);
+            }
+        })(jQuery);
+        </script>
+        <?php
+    }
+
+    /* =========================================================
+     * AJAX: Прямой доступ — ВКонтакте / Одноклассники / Дзен
+     * ========================================================= */
+    public function ajax_direct_social() {
+        check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
+        }
+
+        $network = isset( $_POST['network'] ) ? sanitize_text_field( wp_unslash( $_POST['network'] ) ) : '';
+        $message = isset( $_POST['message'] ) ? sanitize_textarea_field( wp_unslash( $_POST['message'] ) ) : '';
+        $title   = isset( $_POST['title'] )   ? sanitize_text_field( wp_unslash( $_POST['title'] ) )   : '';
+        $url     = isset( $_POST['url'] )     ? esc_url_raw( wp_unslash( $_POST['url'] ) )              : '';
+
+        if ( empty( $message ) && empty( $title ) ) {
+            wp_send_json_error( 'Не указан текст сообщения.' );
+        }
+
+        $social = get_option( 'wp_ru_max_social', array() );
+
+        switch ( $network ) {
+
+            /* ---- ВКонтакте ---- */
+            case 'vk':
+                $access_token = $social['vk_access_token'] ?? '';
+                $owner_id     = $social['vk_owner_id']     ?? '';
+                if ( empty( $access_token ) ) {
+                    wp_send_json_error( 'Не настроен Access Token ВКонтакте.' );
+                }
+                $params = array(
+                    'owner_id'     => $owner_id,
+                    'message'      => $message,
+                    'access_token' => $access_token,
+                    'v'            => '5.199',
+                );
+                if ( ! empty( $url ) ) {
+                    $params['attachments'] = $url;
+                }
+                $resp = wp_remote_post( 'https://api.vk.com/method/wall.post', array(
+                    'timeout' => 20,
+                    'body'    => $params,
+                ) );
+                if ( is_wp_error( $resp ) ) {
+                    wp_send_json_error( 'Ошибка соединения: ' . $resp->get_error_message() );
+                }
+                $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+                if ( isset( $body['error'] ) ) {
+                    wp_send_json_error( 'VK API: ' . ( $body['error']['error_msg'] ?? 'неизвестная ошибка' ) );
+                }
+                $post_id = $body['response']['post_id'] ?? 0;
+                WP_Ru_Max_Logger::log( 'direct_access', 'success', 'ВКонтакте direct post_id=' . $post_id );
+                wp_send_json_success( 'Опубликовано ВКонтакте (post_id=' . intval( $post_id ) . ').' );
+                break;
+
+            /* ---- Одноклассники ---- */
+            case 'ok':
+                $access_token = $social['ok_access_token'] ?? '';
+                $app_key      = $social['ok_public_key']   ?? '';
+                $secret_key   = $social['ok_secret_key']   ?? '';
+                $group_id     = $social['ok_group_id']     ?? '';
+                if ( empty( $access_token ) || empty( $app_key ) || empty( $secret_key ) ) {
+                    wp_send_json_error( 'Не заполнены токены Одноклассников.' );
+                }
+                $text_block = array( 'type' => 'text', 'text' => ( ! empty( $title ) ? '<b>' . $title . '</b>\n\n' : '' ) . $message );
+                $media      = array( 'type' => 'text', 'text' => '' );
+                $attachment = json_encode( array( 'media' => array( $text_block ) ) );
+                $type       = ! empty( $group_id ) ? 'GROUP_THEME' : 'USER';
+                $ok_params  = array(
+                    'application_key' => $app_key,
+                    'attachment'      => $attachment,
+                    'method'          => 'mediatopic.post',
+                    'type'            => $type,
+                    'format'          => 'json',
+                );
+                if ( ! empty( $group_id ) ) {
+                    $ok_params['gid'] = $group_id;
+                }
+                // Подпись: MD5( ksort params без access_token + secret )
+                $sig_params = $ok_params;
+                ksort( $sig_params );
+                $sig_str    = '';
+                foreach ( $sig_params as $k => $v ) { $sig_str .= $k . '=' . $v; }
+                $sig_str   .= md5( $access_token . $secret_key );
+                $ok_params['sig']          = md5( $sig_str );
+                $ok_params['access_token'] = $access_token;
+                $resp = wp_remote_post( 'https://api.ok.ru/fb.do', array(
+                    'timeout' => 20,
+                    'body'    => $ok_params,
+                ) );
+                if ( is_wp_error( $resp ) ) {
+                    wp_send_json_error( 'Ошибка соединения: ' . $resp->get_error_message() );
+                }
+                $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+                if ( isset( $body['error_code'] ) ) {
+                    wp_send_json_error( 'OK API ошибка ' . $body['error_code'] . ': ' . ( $body['error_msg'] ?? '' ) );
+                }
+                WP_Ru_Max_Logger::log( 'direct_access', 'success', 'Одноклассники direct post топик: ' . ( $body['id'] ?? '?' ) );
+                wp_send_json_success( 'Опубликовано в Одноклассниках.' );
+                break;
+
+            /* ---- Яндекс Дзен ---- */
+            case 'dzen':
+                $oauth_token = $social['dzen_oauth_token'] ?? '';
+                $channel_id  = $social['dzen_channel_id']  ?? '';
+                if ( empty( $oauth_token ) || empty( $channel_id ) ) {
+                    wp_send_json_error( 'Не заполнены OAuth-токен или ID канала Дзен.' );
+                }
+                $payload = array(
+                    'channel_id' => $channel_id,
+                    'content'    => array(
+                        'title'  => $title ?: $message,
+                        'blocks' => array(
+                            array( 'type' => 'text', 'data' => array( 'text' => $message ) ),
+                        ),
+                    ),
+                );
+                $resp = wp_remote_post( 'https://dzen.ru/api/v3/publisher/article', array(
+                    'timeout' => 20,
+                    'headers' => array(
+                        'Authorization' => 'OAuth ' . $oauth_token,
+                        'Content-Type'  => 'application/json',
+                    ),
+                    'body' => wp_json_encode( $payload ),
+                ) );
+                if ( is_wp_error( $resp ) ) {
+                    wp_send_json_error( 'Ошибка соединения: ' . $resp->get_error_message() );
+                }
+                $code = wp_remote_retrieve_response_code( $resp );
+                $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+                if ( $code < 200 || $code >= 300 ) {
+                    $msg_err = $body['message'] ?? wp_remote_retrieve_body( $resp );
+                    wp_send_json_error( 'Дзен API (HTTP ' . $code . '): ' . esc_html( $msg_err ) );
+                }
+                WP_Ru_Max_Logger::log( 'direct_access', 'success', 'Дзен direct post id=' . ( $body['id'] ?? '?' ) );
+                wp_send_json_success( 'Статья отправлена в Яндекс Дзен.' );
+                break;
+
+            default:
+                wp_send_json_error( 'Неизвестная социальная сеть.' );
+        }
+    }
+
+    /* =========================================================
+     * Вкладка: Настройки (социальных сетей)
+     * ========================================================= */
+    private function render_tab_settings_social( $settings ) {
+        $social = get_option( 'wp_ru_max_social', array() );
+        $post_types_selected  = $social['social_post_types']        ?? array( 'post', 'product' );
+        $hashtag_taxonomies   = $social['social_hashtag_taxonomies'] ?? array( 'category', 'post_tag' );
+        $url_params           = $social['social_url_params']        ?? '';
+        $unique_link          = ! empty( $social['social_unique_link'] );
+
+        $all_post_types = get_post_types( array( 'public' => true ), 'objects' );
+        $all_taxonomies = get_taxonomies( array( 'public' => true ), 'objects' );
+        ?>
+        <div class="wp-ru-max-card">
+            <h2>Настройки публикаций в социальные сети</h2>
+            <p>Настройте общие параметры автопубликации, а также индивидуальные шаблоны сообщений для каждой социальной сети.</p>
+        </div>
+
+        <div class="wp-ru-max-card">
+            <h3>Разрешённые типы публикаций</h3>
+            <p class="description">Добавьте типы публикаций, которыми хотите поделиться в социальных сетях.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;">
+                <?php foreach ( $all_post_types as $pt ) : ?>
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    <input type="checkbox" name="social_post_types[]" value="<?php echo esc_attr( $pt->name ); ?>"
+                        <?php checked( in_array( $pt->name, $post_types_selected, true ) ); ?> />
+                    <?php echo esc_html( $pt->label ); ?> <code style="font-size:11px;">(<?php echo esc_html( $pt->name ); ?>)</code>
+                </label>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="wp-ru-max-card">
+            <h3>Таксономии в качестве хэштегов</h3>
+            <p class="description">Выберите таксономии, термины которых будут добавляться как хэштеги (<code>#тег</code>). Используйте ключевое слово <code>{terms}</code> в шаблоне сообщения.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;">
+                <?php foreach ( $all_taxonomies as $tax ) : ?>
+                <label style="display:inline-flex;align-items:center;gap:6px;">
+                    <input type="checkbox" name="social_hashtag_taxonomies[]" value="<?php echo esc_attr( $tax->name ); ?>"
+                        <?php checked( in_array( $tax->name, $hashtag_taxonomies, true ) ); ?> />
+                    <?php echo esc_html( $tax->label ); ?> <code style="font-size:11px;">(<?php echo esc_html( $tax->name ); ?>)</code>
+                </label>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="wp-ru-max-card">
+            <h3>Дополнительные параметры URL</h3>
+            <p class="description">Вы можете настроить URL по своему усмотрению, используя текущие ключевые слова. Например: <code>utm_source=telegram&utm_medium=social&utm_campaign={title}</code></p>
+            <table class="form-table">
+                <tr>
+                    <th><label for="social_url_params">Параметры URL</label></th>
+                    <td><input type="text" id="social_url_params" class="large-text" value="<?php echo esc_attr( $url_params ); ?>" placeholder="utm_source=social&utm_medium=post" /></td>
+                </tr>
+                <tr>
+                    <th><label>Уникальная ссылка на публикацию</label></th>
+                    <td>
+                        <label>
+                            <input type="checkbox" id="social_unique_link" <?php checked( $unique_link ); ?> />
+                            Добавлять случайные символы в конец URL для уникальности
+                        </label>
+                        <p class="description">Публикация одного и того же поста в нескольких сообществах может восприниматься как дублирование — эта опция помогает избежать блокировки.</p>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <?php
+        $sn_settings = array(
+            'tg'   => array( 'label' => 'Telegram', 'limit_note' => 'Telegram ограничивает длину сообщения 4096 символами (1024 при наличии медиа).' ),
+            'ok'   => array( 'label' => 'Одноклассники', 'limit_note' => 'Одноклассники ограничивают пост 32 000 символами.' ),
+            'vk'   => array( 'label' => 'ВКонтакте', 'limit_note' => 'ВКонтакте ограничивает запись 16 384 символами.' ),
+            'dzen' => array( 'label' => 'Яндекс Дзен', 'limit_note' => 'Яндекс Дзен не устанавливает жёсткого лимита символов.' ),
+        );
+        $keywords = array(
+            '{title}' => 'Заголовок записи',
+            '{excerpt}' => 'Анонс / краткое описание',
+            '{url}' => 'Ссылка на запись',
+            '{short_link}' => 'Сокращённая ссылка',
+            '{author}' => 'Автор',
+            '{date}' => 'Дата публикации',
+            '{categories}' => 'Рубрики',
+            '{tags}' => 'Теги',
+            '{terms}' => 'Хэштеги (из выбранных таксономий)',
+            '{site_name}' => 'Название сайта',
+            '{product_regular_price}' => 'Обычная цена товара (WooCommerce)',
+            '{product_sale_price}' => 'Цена со скидкой (WooCommerce)',
+        );
+        foreach ( $sn_settings as $net => $sn ) :
+            $tpl      = $social[ 'social_template_' . $net ]      ?? '';
+            $readmore = ! empty( $social[ 'social_readmore_' . $net ] );
+            $rmtxt    = $social[ 'social_readmore_text_' . $net ]  ?? 'Читать далее';
+            $cut      = ! empty( $social[ 'social_cut_limit_' . $net ] );
+        ?>
+        <div class="wp-ru-max-card">
+            <h3><?php echo esc_html( $sn['label'] ); ?> — шаблон сообщения</h3>
+            <p class="description">Определите, как будет выглядеть публикация в <?php echo esc_html( $sn['label'] ); ?>. Пустое поле — использовать стандартный формат.</p>
+
+            <div style="margin-bottom:10px;">
+                <strong>Доступные ключевые слова</strong> (кликните для вставки):
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+                    <?php foreach ( $keywords as $kw => $kwlabel ) : ?>
+                    <button type="button" class="button button-small sn-kw-btn" data-net="<?php echo esc_attr( $net ); ?>" data-kw="<?php echo esc_attr( $kw ); ?>" title="<?php echo esc_attr( $kwlabel ); ?>" style="font-family:monospace;"><?php echo esc_html( $kw ); ?></button>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <textarea id="social_template_<?php echo esc_attr( $net ); ?>" name="social_template_<?php echo esc_attr( $net ); ?>"
+                rows="7" class="large-text code sn-template-area" data-net="<?php echo esc_attr( $net ); ?>"
+                placeholder="Оставьте пустым для стандартного формата. Пример:&#10;⚡️ {title}&#10;&#10;{excerpt}...&#10;&#10;🔗 {url}"><?php echo esc_textarea( $tpl ); ?></textarea>
+            <p class="description">Поддерживаются теги: <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;u&gt;</code>, <code>&lt;a href="ссылка"&gt;текст&lt;/a&gt;</code>.</p>
+
+            <table class="form-table" style="margin-top:12px;">
+                <tr>
+                    <th><label>Кнопка «Читать далее»</label></th>
+                    <td>
+                        <label>
+                            <input type="checkbox" id="social_readmore_<?php echo esc_attr( $net ); ?>" name="social_readmore_<?php echo esc_attr( $net ); ?>" <?php checked( $readmore ); ?> />
+                            Добавить кнопку «Читать далее» под сообщением
+                        </label>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="social_readmore_text_<?php echo esc_attr( $net ); ?>">Текст кнопки</label></th>
+                    <td>
+                        <input type="text" id="social_readmore_text_<?php echo esc_attr( $net ); ?>" name="social_readmore_text_<?php echo esc_attr( $net ); ?>"
+                            class="regular-text" value="<?php echo esc_attr( $rmtxt ); ?>" placeholder="Читать далее" />
+                        <p class="description">Оставьте пустым для текста по умолчанию.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label>Обрезать по лимиту</label></th>
+                    <td>
+                        <label>
+                            <input type="checkbox" id="social_cut_limit_<?php echo esc_attr( $net ); ?>" name="social_cut_limit_<?php echo esc_attr( $net ); ?>" <?php checked( $cut ); ?> />
+                            Обрезать сообщение до лимита платформы
+                        </label>
+                        <p class="description"><?php echo esc_html( $sn['limit_note'] ); ?> Если включено — публикуются первые N символов. Если выключено — публикация пропускается при превышении лимита.</p>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <?php endforeach; ?>
+
+        <div class="wp-ru-max-card">
+            <div class="wp-ru-max-actions">
+                <button type="button" class="button button-primary" id="save_social_settings_btn">Сохранить настройки</button>
+            </div>
+            <div id="social_settings_result" class="wp-ru-max-notice" style="display:none;margin-top:12px;"></div>
+        </div>
+
+        <script>
+        (function($){
+            /* Вставка ключевого слова по клику */
+            $(document).on('click', '.sn-kw-btn', function(){
+                var net = $(this).data('net');
+                var kw  = $(this).data('kw');
+                var ta  = document.getElementById('social_template_' + net);
+                if (!ta) return;
+                var start = ta.selectionStart, end = ta.selectionEnd;
+                ta.value = ta.value.slice(0, start) + kw + ta.value.slice(end);
+                ta.selectionStart = ta.selectionEnd = start + kw.length;
+                ta.focus();
+            });
+
+            /* Сохранить */
+            $('#save_social_settings_btn').on('click', function(){
+                var $btn = $(this).prop('disabled', true).text('Сохраняем...');
+                var data = {
+                    action            : 'wp_ru_max_save_social',
+                    nonce             : wpRuMax.nonce,
+                    social_url_params : $('#social_url_params').val(),
+                    social_unique_link: $('#social_unique_link').is(':checked') ? 1 : 0,
+                    social_post_types : [],
+                    social_hashtag_taxonomies: []
+                };
+
+                $('[name="social_post_types[]"]:checked').each(function(){ data.social_post_types.push($(this).val()); });
+                $('[name="social_hashtag_taxonomies[]"]:checked').each(function(){ data.social_hashtag_taxonomies.push($(this).val()); });
+
+                <?php foreach ( array_keys( $sn_settings ) as $net ) : ?>
+                data['social_template_<?php echo esc_js( $net ); ?>'] = $('#social_template_<?php echo esc_js( $net ); ?>').val();
+                data['social_readmore_<?php echo esc_js( $net ); ?>'] = $('#social_readmore_<?php echo esc_js( $net ); ?>').is(':checked') ? 1 : 0;
+                data['social_readmore_text_<?php echo esc_js( $net ); ?>'] = $('#social_readmore_text_<?php echo esc_js( $net ); ?>').val();
+                data['social_cut_limit_<?php echo esc_js( $net ); ?>'] = $('#social_cut_limit_<?php echo esc_js( $net ); ?>').is(':checked') ? 1 : 0;
+                <?php endforeach; ?>
+
+                $.post(wpRuMax.ajaxUrl, data, function(resp){
+                    var ok = resp.success;
+                    $('#social_settings_result')
+                        .removeClass('notice-success notice-error')
+                        .addClass(ok ? 'notice-success' : 'notice-error')
+                        .css({display:'block',padding:'12px 16px',background:'#fff',
+                              borderLeft: ok ? '4px solid #00a32a' : '4px solid #d63638'})
+                        .text(ok ? (resp.data || 'Сохранено!') : (resp.data || 'Ошибка.'));
+                    $btn.prop('disabled', false).text('Сохранить настройки');
+                }).fail(function(){
+                    $('#social_settings_result').removeClass('notice-success notice-error').addClass('notice-error')
+                        .css({display:'block',padding:'12px 16px',background:'#fff',borderLeft:'4px solid #d63638'})
+                        .text('Ошибка сети.');
+                    $btn.prop('disabled', false).text('Сохранить настройки');
+                });
+            });
+        })(jQuery);
+        </script>
+        <?php
+    }
+
+    /* =========================================================
+     * Быстрый шаринг из списка записей — колонка с ракетой
+     * ========================================================= */
+
+    /**
+     * Регистрирует колонку «WP Ru-max» для всех публичных типов записей.
+     * Вызывается на хуке admin_init (все CPT к этому моменту уже зарегистрированы).
+     */
+    public function register_quick_share_columns() {
+        if ( ! is_admin() ) {
+            return;
+        }
+        // Исключаем служебные типы WordPress — у них нет стандартного WP_Posts_List_Table
+        $excluded = array(
+            'attachment', 'revision', 'nav_menu_item', 'custom_css', 'customize_changeset',
+            'oembed_cache', 'user_request', 'wp_block', 'wp_template', 'wp_template_part',
+            'wp_navigation', 'wp_font_family', 'wp_font_face', 'wp_global_styles',
+        );
+        $post_types = get_post_types( array( 'show_ui' => true ), 'names' );
+        foreach ( $post_types as $type ) {
+            if ( in_array( $type, $excluded, true ) ) {
+                continue;
+            }
+            add_filter( "manage_{$type}_posts_columns",       array( $this, 'add_quick_share_column' ) );
+            add_action( "manage_{$type}_posts_custom_column", array( $this, 'render_quick_share_column_cell' ), 10, 2 );
+        }
+    }
+
+    /**
+     * Добавляет колонку 🚀 в таблицу записей.
+     */
+    public function add_quick_share_column( $columns ) {
+        $columns['wp_ru_max_share'] = '<span title="WP Ru-max: Поделиться в соц. сетях" style="cursor:default;font-weight:600;font-size:11px;">Ru-max</span>';
+        return $columns;
+    }
+
+    /**
+     * Выводит кнопку-ракету в ячейке колонки.
+     */
+    public function render_quick_share_column_cell( $column, $post_id ) {
+        if ( 'wp_ru_max_share' !== $column ) {
+            return;
+        }
+        $title = esc_attr( get_the_title( $post_id ) );
+        $url   = esc_attr( get_permalink( $post_id ) );
+        echo '<button type="button" class="wp-ru-max-qs-btn"'
+            . ' data-post-id="' . intval( $post_id ) . '"'
+            . ' data-title="' . $title . '"'
+            . ' data-url="' . $url . '"'
+            . ' title="Поделиться в социальных сетях"'
+            . ' style="background:none;border:none;cursor:pointer;font-size:20px;padding:2px 6px;'
+            . 'line-height:1;opacity:.65;transition:opacity .15s;vertical-align:middle;"'
+            . ' onmouseenter="this.style.opacity=\'1\'" onmouseleave="this.style.opacity=\'.65\'">'
+            . '🚀</button>';
+    }
+
+    /**
+     * Выводит боковую панель шаринга и её JS/CSS в футере admin-страницы.
+     * Срабатывает только на страницах списков записей (edit.php).
+     */
+    public function render_quick_share_drawer() {
+        $screen = get_current_screen();
+        if ( ! $screen || $screen->base !== 'edit' ) {
+            return;
+        }
+        if ( ! current_user_can( 'edit_posts' ) ) {
+            return;
+        }
+
+        $social     = get_option( 'wp_ru_max_social', array() );
+        $tg_bots    = $social['telegram_bots'] ?? array();
+        $has_tg     = ! empty( $tg_bots );
+        $has_vk     = ! empty( $social['vk_enabled'] );
+        $has_ok     = ! empty( $social['ok_enabled'] );
+        $has_dzen   = ! empty( $social['dzen_enabled'] );
+        $ajax_url   = esc_js( admin_url( 'admin-ajax.php' ) );
+        $nonce      = esc_js( wp_create_nonce( 'wp_ru_max_nonce' ) );
+        $max_icon   = esc_url( WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png' );
+        ?>
+<style id="wp-ru-max-qs-styles">
+#wp-ru-max-qs-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99998;}
+#wp-ru-max-qs-drawer{
+    position:fixed;top:0;right:-440px;width:400px;max-width:92vw;height:100%;
+    background:#fff;box-shadow:-4px 0 28px rgba(0,0,0,.2);z-index:99999;
+    transition:right .28s cubic-bezier(.4,0,.2,1);overflow-y:auto;
+    display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+#wp-ru-max-qs-drawer.open{right:0;}
+.wp-ru-max-qs-header{background:#0073aa;color:#fff;padding:18px 20px 14px;display:flex;align-items:center;gap:10px;}
+.wp-ru-max-qs-header-close{background:none;border:none;color:#fff;font-size:24px;cursor:pointer;line-height:1;padding:0;margin-left:auto;opacity:.85;}
+.wp-ru-max-qs-header-close:hover{opacity:1;}
+.wp-ru-max-qs-body{padding:20px 22px;flex:1;}
+.wp-ru-max-qs-net-list{display:flex;flex-direction:column;gap:9px;margin-top:4px;}
+.wp-ru-max-qs-net-label{
+    display:flex;align-items:center;gap:11px;font-size:14px;cursor:pointer;
+    padding:10px 13px;border:1px solid #e2e8f0;border-radius:8px;transition:border-color .15s,background .15s;
+}
+.wp-ru-max-qs-net-label:hover{border-color:#0073aa;background:#f0f8ff;}
+.wp-ru-max-qs-net-label input[type=checkbox]{width:17px;height:17px;cursor:pointer;accent-color:#0073aa;}
+.wp-ru-max-qs-net-label .qs-net-icon{font-size:20px;line-height:1;}
+.wp-ru-max-qs-result{display:none;margin-top:14px;padding:10px 14px;border-radius:6px;font-size:13px;}
+.wp-ru-max-qs-footer{padding:16px 22px;border-top:1px solid #e5e7eb;background:#f9fafb;}
+.wp-ru-max-qs-submit{
+    width:100%;padding:11px;background:#0073aa;color:#fff;border:none;
+    border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s;
+}
+.wp-ru-max-qs-submit:hover:not(:disabled){background:#005f8c;}
+.wp-ru-max-qs-submit:disabled{opacity:.6;cursor:not-allowed;}
+</style>
+
+<div id="wp-ru-max-qs-overlay" onclick="wpRuMaxQsClose()"></div>
+<div id="wp-ru-max-qs-drawer" role="dialog" aria-modal="true" aria-label="Поделиться">
+    <div class="wp-ru-max-qs-header">
+        <span style="font-size:24px;line-height:1;">🚀</span>
+        <div style="flex:1;min-width:0;">
+            <div style="font-size:17px;font-weight:700;margin-bottom:3px;">Поделиться</div>
+            <div id="wp-ru-max-qs-title" style="font-size:12px;opacity:.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+        </div>
+        <button class="wp-ru-max-qs-header-close" onclick="wpRuMaxQsClose()" title="Закрыть" aria-label="Закрыть панель">×</button>
+    </div>
+    <div class="wp-ru-max-qs-body">
+        <p style="margin:0 0 14px;color:#555;font-size:13px;">Выберите соцсети для публикации:</p>
+        <div class="wp-ru-max-qs-net-list">
+            <label class="wp-ru-max-qs-net-label">
+                <input type="checkbox" name="wp_ru_max_qs_net" value="max" checked />
+                <img src="<?php echo esc_url( $max_icon ); ?>" width="22" height="22" style="border-radius:4px;flex-shrink:0;" alt="" />
+                <span><strong>MAX</strong> <span style="color:#888;font-size:12px;">Мессенджер</span></span>
+            </label>
+            <?php if ( $has_tg ) : ?>
+            <label class="wp-ru-max-qs-net-label">
+                <input type="checkbox" name="wp_ru_max_qs_net" value="telegram" />
+                <span class="qs-net-icon">✈️</span>
+                <span><strong>Telegram</strong> <span style="color:#888;font-size:12px;"><?php echo (int) count( $tg_bots ); ?> бот(ов)</span></span>
+            </label>
+            <?php endif; ?>
+            <?php if ( $has_vk ) : ?>
+            <label class="wp-ru-max-qs-net-label">
+                <input type="checkbox" name="wp_ru_max_qs_net" value="vk" />
+                <span class="qs-net-icon" style="color:#0077ff;">&#9679;</span>
+                <span><strong>ВКонтакте</strong></span>
+            </label>
+            <?php endif; ?>
+            <?php if ( $has_ok ) : ?>
+            <label class="wp-ru-max-qs-net-label">
+                <input type="checkbox" name="wp_ru_max_qs_net" value="ok" />
+                <span class="qs-net-icon">🟠</span>
+                <span><strong>Одноклассники</strong></span>
+            </label>
+            <?php endif; ?>
+            <?php if ( $has_dzen ) : ?>
+            <label class="wp-ru-max-qs-net-label">
+                <input type="checkbox" name="wp_ru_max_qs_net" value="dzen" />
+                <span class="qs-net-icon">🟡</span>
+                <span><strong>Яндекс Дзен</strong></span>
+            </label>
+            <?php endif; ?>
+        </div>
+        <div id="wp-ru-max-qs-result" class="wp-ru-max-qs-result"></div>
+    </div>
+    <div class="wp-ru-max-qs-footer">
+        <button id="wp-ru-max-qs-submit" class="wp-ru-max-qs-submit">🚀 Поделиться</button>
+    </div>
+</div>
+<input type="hidden" id="wp-ru-max-qs-post-id" value="" />
+
+<script>
+(function(){
+    'use strict';
+    var AJAX  = '<?php echo $ajax_url; ?>';
+    var NONCE = '<?php echo $nonce; ?>';
+
+    /* Открыть панель */
+    document.addEventListener('click', function(e){
+        var btn = e.target.closest('.wp-ru-max-qs-btn');
+        if (!btn) return;
+        document.getElementById('wp-ru-max-qs-post-id').value = btn.dataset.postId;
+        document.getElementById('wp-ru-max-qs-title').textContent  = btn.dataset.title || '';
+        var res = document.getElementById('wp-ru-max-qs-result');
+        res.style.display = 'none';
+        res.textContent   = '';
+        document.getElementById('wp-ru-max-qs-overlay').style.display = 'block';
+        document.getElementById('wp-ru-max-qs-drawer').classList.add('open');
+        // Сбрасываем чекбоксы (кроме MAX)
+        document.querySelectorAll('input[name="wp_ru_max_qs_net"]').forEach(function(c){
+            c.checked = (c.value === 'max');
+        });
+    });
+
+    window.wpRuMaxQsClose = function(){
+        document.getElementById('wp-ru-max-qs-overlay').style.display = 'none';
+        document.getElementById('wp-ru-max-qs-drawer').classList.remove('open');
+    };
+
+    /* Закрытие по Esc */
+    document.addEventListener('keydown', function(e){
+        if (e.key === 'Escape') wpRuMaxQsClose();
+    });
+
+    /* Отправить */
+    document.getElementById('wp-ru-max-qs-submit').addEventListener('click', function(){
+        var postId = document.getElementById('wp-ru-max-qs-post-id').value;
+        if (!postId) return;
+        var checks = document.querySelectorAll('input[name="wp_ru_max_qs_net"]:checked');
+        var nets   = Array.from(checks).map(function(c){ return c.value; });
+        if (!nets.length){
+            wpRuMaxQsResult(false, 'Выберите хотя бы одну социальную сеть.');
+            return;
+        }
+        var btn = this;
+        btn.disabled    = true;
+        btn.textContent = 'Отправляю...';
+
+        var body = new URLSearchParams();
+        body.append('action',  'wp_ru_max_quick_share');
+        body.append('nonce',   NONCE);
+        body.append('post_id', postId);
+        nets.forEach(function(n){ body.append('networks[]', n); });
+
+        fetch(AJAX, {method:'POST', body:body, credentials:'same-origin'})
+            .then(function(r){ return r.json(); })
+            .then(function(resp){
+                wpRuMaxQsResult(resp.success, resp.data || (resp.success ? 'Опубликовано!' : 'Ошибка.'));
+                btn.disabled    = false;
+                btn.textContent = '🚀 Поделиться';
+            })
+            .catch(function(){
+                wpRuMaxQsResult(false, 'Ошибка сети. Попробуйте ещё раз.');
+                btn.disabled    = false;
+                btn.textContent = '🚀 Поделиться';
+            });
+    });
+
+    function wpRuMaxQsResult(ok, msg){
+        var el = document.getElementById('wp-ru-max-qs-result');
+        el.style.display    = 'block';
+        el.style.borderLeft = '4px solid ' + (ok ? '#00a32a' : '#d63638');
+        el.style.background = ok ? '#f0fdf4' : '#fef2f2';
+        el.style.color      = ok ? '#14532d' : '#7f1d1d';
+        el.textContent      = msg;
+    }
+})();
+</script>
+        <?php
+    }
+
+    /* =========================================================
+     * AJAX: быстрый шаринг из списка записей
+     * ========================================================= */
+    public function ajax_quick_share() {
+        check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
+        if ( ! current_user_can( 'edit_posts' ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
+        }
+
+        $post_id  = isset( $_POST['post_id'] ) ? intval( $_POST['post_id'] ) : 0;
+        $networks = isset( $_POST['networks'] ) && is_array( $_POST['networks'] )
+            ? array_map( 'sanitize_text_field', wp_unslash( $_POST['networks'] ) )
+            : array();
+
+        if ( ! $post_id ) {
+            wp_send_json_error( 'Не указан ID записи.' );
+        }
+        if ( empty( $networks ) ) {
+            wp_send_json_error( 'Выберите хотя бы одну соцсеть.' );
+        }
+
+        $post = get_post( $post_id );
+        if ( ! $post ) {
+            wp_send_json_error( 'Запись не найдена.' );
+        }
+
+        $results = array();
+        $errors  = array();
+        $social  = get_option( 'wp_ru_max_social', array() );
+
+        // ── MAX ────────────────────────────────────────────────────────────
+        if ( in_array( 'max', $networks, true ) ) {
+            $sender = WP_Ru_Max_Post_Sender::instance();
+            $res    = $sender->send_post_manually( $post );
+            if ( is_wp_error( $res ) ) {
+                $errors[] = 'MAX: ' . $res->get_error_message();
+                WP_Ru_Max_Logger::log( 'social', 'error',
+                    'Быстрый шаринг MAX — #' . $post_id . ': ' . $res->get_error_message() );
+            } else {
+                $results[] = 'MAX';
+                WP_Ru_Max_Logger::log( 'social', 'success',
+                    'Быстрый шаринг MAX — #' . $post_id . ' «' . $post->post_title . '»' );
+            }
+        }
+
+        // ── Telegram (социальные сети) ─────────────────────────────────────
+        // ВАЖНО: Telegram Bot API — api.telegram.org, НЕ MAX API (platform-api2.max.ru)
+        if ( in_array( 'telegram', $networks, true ) ) {
+            $bots = $social['telegram_bots'] ?? array();
+            $sent = 0;
+            $msg  = WP_Ru_Max_Social_Poster::build_message( $post, 'tg', $social );
+
+            foreach ( $bots as $bot ) {
+                if ( empty( $bot['token'] ) ) {
+                    continue;
+                }
+                $tg_api = new WP_Ru_Max_Telegram_API( $bot['token'] );
+                $chats  = $bot['chats'] ?? array();
+                foreach ( $chats as $chat ) {
+                    if ( empty( $chat['chat_id'] ) ) {
+                        continue;
+                    }
+
+                    // Миниатюра и настройки кнопки «Читать далее»
+                    $thumb_url        = get_the_post_thumbnail_url( $post->ID, 'large' );
+                    $readmore_enabled = ! empty( $social['social_readmore_tg'] );
+                    $readmore_text    = ! empty( $social['social_readmore_text_tg'] )
+                        ? $social['social_readmore_text_tg']
+                        : 'Читать далее';
+                    $post_url = WP_Ru_Max_Social_Poster::decorate_url( get_permalink( $post ), 'tg', $social );
+
+                    // Выбираем метод отправки в зависимости от наличия фото и кнопки.
+                    // Важно: все 4 комбинации покрыты явно.
+                    if ( $thumb_url && $readmore_enabled ) {
+                        // Фото + inline-кнопка «Читать далее»
+                        $res = $tg_api->send_photo_with_button(
+                            $chat['chat_id'], $thumb_url, $msg, $readmore_text, $post_url, 'HTML'
+                        );
+                    } elseif ( $thumb_url ) {
+                        // Только фото с подписью
+                        $res = $tg_api->send_photo( $chat['chat_id'], $thumb_url, $msg, 'HTML' );
+                    } elseif ( $readmore_enabled ) {
+                        // Только текст + inline-кнопка
+                        $res = $tg_api->send_message_with_button(
+                            $chat['chat_id'], $msg, $readmore_text, $post_url, 'HTML'
+                        );
+                    } else {
+                        // Только текст
+                        $res = $tg_api->send_message( $chat['chat_id'], $msg, 'HTML' );
+                    }
+
+                    if ( is_wp_error( $res ) ) {
+                        $errors[] = 'Telegram (' . esc_html( $chat['chat_id'] ) . '): ' . $res->get_error_message();
+                        WP_Ru_Max_Logger::log( 'social', 'error',
+                            'Быстрый шаринг Telegram — #' . $post_id . ' чат ' . $chat['chat_id'] . ': ' . $res->get_error_message() );
+                    } else {
+                        $sent++;
+                    }
+                }
+            }
+            if ( $sent > 0 ) {
+                $results[] = 'Telegram ×' . $sent;
+                WP_Ru_Max_Logger::log( 'social', 'success',
+                    'Быстрый шаринг Telegram — #' . $post_id . ' «' . $post->post_title . '» → ' . $sent . ' чат(ов)' );
+            }
+        }
+
+        // ── ВКонтакте ──────────────────────────────────────────────────────
+        if ( in_array( 'vk', $networks, true ) ) {
+            $res = WP_Ru_Max_Social_Poster::post_to_vk( $post );
+            if ( is_wp_error( $res ) ) {
+                $errors[] = 'ВКонтакте: ' . $res->get_error_message();
+            } else {
+                $results[] = 'ВКонтакте';
+                WP_Ru_Max_Logger::log( 'social', 'success',
+                    'Быстрый шаринг ВКонтакте — #' . $post_id . ' «' . $post->post_title . '»' );
+            }
+        }
+
+        // ── Одноклассники ──────────────────────────────────────────────────
+        if ( in_array( 'ok', $networks, true ) ) {
+            $res = WP_Ru_Max_Social_Poster::post_to_ok( $post );
+            if ( is_wp_error( $res ) ) {
+                $errors[] = 'Одноклассники: ' . $res->get_error_message();
+            } else {
+                $results[] = 'Одноклассники';
+                WP_Ru_Max_Logger::log( 'social', 'success',
+                    'Быстрый шаринг Одноклассники — #' . $post_id . ' «' . $post->post_title . '»' );
+            }
+        }
+
+        // ── Яндекс Дзен ────────────────────────────────────────────────────
+        if ( in_array( 'dzen', $networks, true ) ) {
+            $res = WP_Ru_Max_Social_Poster::post_to_dzen( $post );
+            if ( is_wp_error( $res ) ) {
+                $errors[] = 'Яндекс Дзен: ' . $res->get_error_message();
+            } else {
+                $results[] = 'Яндекс Дзен';
+                WP_Ru_Max_Logger::log( 'social', 'success',
+                    'Быстрый шаринг Яндекс Дзен — #' . $post_id . ' «' . $post->post_title . '»' );
+            }
+        }
+
+        // ── Формируем ответ ────────────────────────────────────────────────
+        if ( empty( $results ) && ! empty( $errors ) ) {
+            wp_send_json_error( 'Ошибки: ' . implode( '; ', $errors ) );
+        }
+
+        $reply = 'Опубликовано в: ' . implode( ', ', $results );
+        if ( ! empty( $errors ) ) {
+            $reply .= '. Ошибки: ' . implode( '; ', $errors );
+        }
+        wp_send_json_success( $reply );
     }
 }
