@@ -60,12 +60,14 @@ class WP_Ru_Max_Network_Admin {
     }
 
     private function get_network_admin_js() {
-        $nonce = wp_create_nonce( 'wp_ru_max_network_nonce' );
-        $ajax  = esc_url( admin_url( 'admin-ajax.php' ) );
+        // wp_json_encode гарантирует корректное экранирование для подстановки
+        // в JS-контекст — защита от XSS при нестандартных значениях nonce/URL.
+        $nonce_json = wp_json_encode( wp_create_nonce( 'wp_ru_max_network_nonce' ) );
+        $ajax_json  = wp_json_encode( esc_url( admin_url( 'admin-ajax.php' ) ) );
         return <<<JS
 (function($){
-    var ajaxUrl = '{$ajax}';
-    var nonce   = '{$nonce}';
+    var ajaxUrl = {$ajax_json};
+    var nonce   = {$nonce_json};
 
     function showResult(selector, success, msg){
         var el = $(selector);
@@ -73,7 +75,7 @@ class WP_Ru_Max_Network_Admin {
           .addClass(success ? 'notice-success' : 'notice-error')
           .css({ display:'block', padding:'12px 16px', background:'#fff',
                  borderLeft: success ? '4px solid #00a32a' : '4px solid #d63638', marginTop:'12px' })
-          .html(msg);
+          .text(msg); // .text() вместо .html() — защита от XSS в ответах сервера
     }
 
     // Активация сетевой лицензии
@@ -141,7 +143,7 @@ JS;
         $is_network_licensed = WP_Ru_Max_License::is_network_active();
         $network_license     = WP_Ru_Max_License::get_network_data();
         $network_domain      = WP_Ru_Max_License::get_network_domain();
-        $sites               = get_sites( array( 'number' => 50 ) );
+        $sites               = get_sites( array( 'number' => 500 ) );
         ?>
         <div class="wrap">
             <h1>
@@ -215,13 +217,18 @@ JS;
                     </thead>
                     <tbody>
                         <?php foreach ( $sites as $site ) :
+                            // try/finally гарантирует вызов restore_current_blog()
+                            // даже если внутри возникнет исключение.
                             switch_to_blog( $site->blog_id );
-                            $site_licensed = WP_Ru_Max_License::is_active();
-                            $per_site_data = WP_Ru_Max_License::get_data();
-                            $site_settings = get_option( 'wp_ru_max_settings', array() );
-                            $bot_token     = ! empty( $site_settings['bot_token'] ) ? '✓' : '—';
-                            $admin_url     = get_admin_url( null, 'admin.php?page=wp-ru-max' );
-                            restore_current_blog();
+                            try {
+                                $site_licensed = WP_Ru_Max_License::is_active();
+                                $per_site_data = WP_Ru_Max_License::get_data();
+                                $site_settings = get_option( 'wp_ru_max_settings', array() );
+                                $bot_token     = ! empty( $site_settings['bot_token'] ) ? '✓' : '—';
+                                $admin_url     = get_admin_url( null, 'admin.php?page=wp-ru-max' );
+                            } finally {
+                                restore_current_blog();
+                            }
                             $site_name = get_blog_option( $site->blog_id, 'blogname' );
                             $site_url  = get_blog_option( $site->blog_id, 'siteurl' );
                             $site_host = parse_url( $site_url, PHP_URL_HOST );
@@ -243,8 +250,8 @@ JS;
                         <?php endforeach; ?>
                     </tbody>
                 </table>
-                <?php if ( count( $sites ) >= 50 ) : ?>
-                    <p class="description">Показаны первые 50 подсайтов.</p>
+                <?php if ( count( $sites ) >= 500 ) : ?>
+                    <p class="description">Показаны первые 500 подсайтов.</p>
                 <?php endif; ?>
             </div>
 
