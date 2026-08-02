@@ -1,0 +1,572 @@
+<?php
+/**
+ * Постер в социальные сети: ВКонтакте, Одноклассники, Яндекс Дзен.
+ *
+ * Каждый метод читает настройки из get_option('wp_ru_max_social', []).
+ * MAX и Telegram реализованы в WP_Ru_Max_API и WP_Ru_Max_Telegram_API соответственно.
+ *
+ * ВНИМАНИЕ: не изменять код MAX API (platform-api2.max.ru) — он работает отдельно.
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
+class WP_Ru_Max_Social_Poster {
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  ВКОНТАКТЕ
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Опубликовать запись ВКонтакте через wall.post API (POST-запрос).
+     *
+     * Документация: https://dev.vk.com/ru/method/wall.post
+     *
+     * @param WP_Post $post WordPress-запись
+     * @return array|WP_Error
+     */
+    public static function post_to_vk( $post ) {
+        $social = get_option( 'wp_ru_max_social', array() );
+
+        if ( empty( $social['vk_enabled'] ) ) {
+            return new WP_Error( 'vk_disabled', 'Публикация ВКонтакте отключена.' );
+        }
+
+        // Извлечь токен (пользователь мог вставить полный URL после OAuth implicit flow)
+        $access_token = self::extract_vk_token( $social['vk_access_token'] ?? '' );
+        $owner_id     = trim( $social['vk_owner_id'] ?? '' );
+
+        if ( empty( $access_token ) ) {
+            return new WP_Error(
+                'vk_no_token',
+                'Не задан Access Token ВКонтакте. Нажмите «Авторизоваться ВКонтакте» и вставьте полученный токен в настройки.'
+            );
+        }
+
+        $message = self::build_message( $post, 'vk', $social );
+        $url     = self::decorate_url( get_permalink( $post ), 'vk', $social );
+
+        // Параметры wall.post
+        $params = array(
+            'message'      => $message,
+            'attachments'  => $url,   // превью ссылки на запись
+            'access_token' => $access_token,
+            'v'            => '5.199',
+        );
+
+        // owner_id < 0 → паблик/группа; > 0 → пользователь; 0 → не передаём (текущий пользователь)
+        if ( ! empty( $owner_id ) ) {
+            $params['owner_id'] = $owner_id;
+        }
+
+        // ВАЖНО: используем POST, а не GET.
+        // Причины: 1) токен не попадает в server logs / referer,
+        //          2) URL может превысить максимальную длину при длинных текстах.
+        $response = wp_remote_post( 'https://api.vk.com/method/wall.post', array(
+            'body'    => $params,
+            'timeout' => 20,
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            WP_Ru_Max_Logger::log( 'social', 'error',
+                '[VK] HTTP Error: ' . $response->get_error_message(),
+                array( 'post_id' => $post->ID )
+            );
+            return $response;
+        }
+
+        $data = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( isset( $data['error'] ) ) {
+            $err_msg  = $data['error']['error_msg'] ?? 'Неизвестная ошибка VK API';
+            $err_code = (int) ( $data['error']['error_code'] ?? 0 );
+
+            // Человекочитаемые подсказки к частым кодам ошибок VK
+            $hints = array(
+                5   => 'Токен устарел или недействителен — авторизуйтесь заново.',
+                7   => 'Нет прав на публикацию в стену (нужны права: wall, groups).',
+                15  => 'Нет доступа к стене (группа закрыта или требует разрешения).',
+                214 => 'Стена закрыта: в настройках группы разрешена запись только руководителям.',
+                220 => 'Нет прав на публикацию: для этого приложения стена ограничена.',
+            );
+            if ( isset( $hints[ $err_code ] ) ) {
+                $err_msg .= ' Подсказка: ' . $hints[ $err_code ];
+            }
+
+            WP_Ru_Max_Logger::log( 'social', 'error',
+                "[VK] Ошибка API (код $err_code): $err_msg",
+                array( 'post_id' => $post->ID, 'response' => $data )
+            );
+            return new WP_Error( 'vk_api_error', $err_msg );
+        }
+
+        $vk_post_id = $data['response']['post_id'] ?? '?';
+        WP_Ru_Max_Logger::log( 'social', 'success',
+            "[VK] Запись #{$post->ID} «{$post->post_title}» опубликована. VK post_id: $vk_post_id",
+            array( 'post_id' => $post->ID, 'vk_post_id' => $vk_post_id )
+        );
+        return $data;
+    }
+
+    /**
+     * Извлекает access_token из строки.
+     *
+     * После VK OAuth implicit flow пользователь получает URL вида:
+     *   https://oauth.vk.com/blank.html#access_token=TOKEN&expires_in=0&...
+     * Он может вставить полный URL — мы извлекаем только токен.
+     */
+    private static function extract_vk_token( $value ) {
+        $value = trim( $value );
+        if ( empty( $value ) ) {
+            return '';
+        }
+
+        // Если вставлен полный URL — ищем access_token в фрагменте (#) или query string (?)
+        if ( strpos( $value, 'access_token=' ) !== false ) {
+            // Пробуем фрагмент (#...)
+            if ( strpos( $value, '#' ) !== false ) {
+                $fragment = substr( $value, strpos( $value, '#' ) + 1 );
+            } elseif ( strpos( $value, '?' ) !== false ) {
+                // Пользователь мог убрать # и оставить ?
+                $fragment = substr( $value, strpos( $value, '?' ) + 1 );
+            } else {
+                $fragment = $value;
+            }
+            parse_str( $fragment, $parsed );
+            if ( ! empty( $parsed['access_token'] ) ) {
+                return $parsed['access_token'];
+            }
+        }
+
+        return $value; // Уже чистый токен
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  ОДНОКЛАССНИКИ
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Опубликовать запись в Одноклассниках через mediatopic.post API.
+     *
+     * Документация: https://apiok.ru/dev/methods/rest/mediatopic/mediatopic.post
+     *
+     * Что НЕ поддерживается в mediatopic.post:
+     *  - Внешние фото по URL в блоке «photo» (требует предварительной загрузки через photosV2)
+     *  - Произвольные URL-превью через блок «link» без предварительного scraping'а OK
+     * Поэтому используем только блок «text» со ссылкой, встроенной в текст.
+     *
+     * @param WP_Post $post WordPress-запись
+     * @return array|WP_Error
+     */
+    public static function post_to_ok( $post ) {
+        $social = get_option( 'wp_ru_max_social', array() );
+
+        if ( empty( $social['ok_enabled'] ) ) {
+            return new WP_Error( 'ok_disabled', 'Публикация в Одноклассниках отключена.' );
+        }
+
+        $app_id       = trim( $social['ok_app_id']       ?? '' );
+        $public_key   = trim( $social['ok_public_key']   ?? '' );
+        $secret_key   = trim( $social['ok_secret_key']   ?? '' );
+        $access_token = trim( $social['ok_access_token'] ?? '' );
+        $group_id     = trim( $social['ok_group_id']     ?? '' );
+
+        if ( empty( $app_id ) || empty( $public_key ) || empty( $secret_key ) ) {
+            return new WP_Error(
+                'ok_missing_keys',
+                'Не заданы App ID, Public Key или Secret Key Одноклассников. Заполните все три поля в настройках.'
+            );
+        }
+        if ( empty( $access_token ) ) {
+            return new WP_Error(
+                'ok_no_token',
+                'Не задан Access Token Одноклассников. Авторизуйтесь через OK OAuth и вставьте токен в настройки.'
+            );
+        }
+
+        $message = self::build_message( $post, 'ok', $social );
+        $url     = self::decorate_url( get_permalink( $post ), 'ok', $social );
+
+        // Вставляем ссылку в текст (OK API не принимает внешние фото по URL и не
+        // создаёт link-превью из произвольных URL без отдельного API-вызова).
+        $text_with_link = $message . "\n\n" . $url;
+
+        // Медиа-топик: только текстовый блок
+        $attachment = array(
+            'media' => array(
+                array(
+                    'type' => 'text',
+                    'text' => $text_with_link,
+                ),
+            ),
+        );
+
+        $attachment_json = wp_json_encode( $attachment, JSON_UNESCAPED_UNICODE );
+
+        // Базовые параметры запроса.
+        // ВАЖНО: access_token и application_key НЕ включаются в строку подписи.
+        $params = array(
+            'application_key' => $public_key,
+            'attachment'      => $attachment_json,
+            'format'          => 'json',
+            'method'          => 'mediatopic.post',
+        );
+
+        // type и gid зависят от того, публикуем в группу или в личный профиль
+        if ( ! empty( $group_id ) ) {
+            $params['type'] = 'GROUP_THEME';
+            $params['gid']  = $group_id;
+        } else {
+            $params['type'] = 'USER';
+        }
+
+        // Подпись OK API (RFC от Одноклассников):
+        //   1. session_secret  = md5( access_token + application_secret_key )   [нижний регистр]
+        //   2. Отсортировать все params по ключу (ksort)
+        //   3. Конкатенировать: key=value для каждого параметра, без разделителей
+        //   4. Добавить session_secret в конец строки
+        //   5. sig = md5( итоговая_строка )                                      [нижний регистр]
+        $session_secret = md5( $access_token . $secret_key );
+        ksort( $params );
+        $sig_str = '';
+        foreach ( $params as $k => $v ) {
+            $sig_str .= $k . '=' . $v;
+        }
+        $sig_str .= $session_secret;
+
+        $params['sig']          = md5( $sig_str );
+        $params['access_token'] = $access_token;
+
+        $response = wp_remote_post( 'https://api.ok.ru/fb.do', array(
+            'body'    => $params,
+            'timeout' => 20,
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            WP_Ru_Max_Logger::log( 'social', 'error',
+                '[OK] HTTP Error: ' . $response->get_error_message(),
+                array( 'post_id' => $post->ID )
+            );
+            return $response;
+        }
+
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        // OK API возвращает ошибку в виде { error_code: N, error_message: "..." }
+        if ( is_array( $data ) && array_key_exists( 'error_code', $data ) ) {
+            $err_code = (int) $data['error_code'];
+            $err_msg  = $data['error_message'] ?? "Ошибка OK API: код $err_code";
+
+            $hints = array(
+                100 => 'Передан некорректный параметр.',
+                102 => 'Токен устарел или отозван — авторизуйтесь заново.',
+                103 => 'Ошибка подписи — проверьте Secret Key и Public Key.',
+                104 => 'Доступ запрещён — нет прав на публикацию в группе.',
+                4   => 'Некорректный параметр запроса — проверьте ID группы.',
+            );
+            if ( isset( $hints[ $err_code ] ) ) {
+                $err_msg .= ' Подсказка: ' . $hints[ $err_code ];
+            }
+
+            WP_Ru_Max_Logger::log( 'social', 'error',
+                "[OK] Ошибка API (код $err_code): $err_msg",
+                array( 'post_id' => $post->ID, 'response_raw' => $body )
+            );
+            return new WP_Error( 'ok_api_error', $err_msg );
+        }
+
+        WP_Ru_Max_Logger::log( 'social', 'success',
+            "[OK] Запись #{$post->ID} «{$post->post_title}» опубликована.",
+            array( 'post_id' => $post->ID, 'response' => $data )
+        );
+        return $data;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  ЯНДЕКС ДЗЕН
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Опубликовать запись в Яндекс Дзен через Publisher API.
+     *
+     * Эндпоинт: POST https://api.zen.yandex.ru/v1.0/channel/createPost
+     * Authorization: OAuth <токен>
+     *
+     * Структура тела запроса:
+     * {
+     *   "channel_id": "...",
+     *   "content": {
+     *     "title": "...",
+     *     "blocks": [ { "type": "PARAGRAPH", "text": "..." }, ... ]
+     *   }
+     * }
+     *
+     * АЛЬТЕРНАТИВА: RSS-синдикация — добавьте URL фида в настройках канала Дзен
+     * («Настройки» → «Контент» → «Внешний источник») — это более надёжный способ
+     * для большинства блогов и не требует токена.
+     *
+     * @param WP_Post $post WordPress-запись
+     * @return array|WP_Error
+     */
+    public static function post_to_dzen( $post ) {
+        $social = get_option( 'wp_ru_max_social', array() );
+
+        if ( empty( $social['dzen_enabled'] ) ) {
+            return new WP_Error( 'dzen_disabled', 'Публикация в Яндекс Дзен отключена.' );
+        }
+
+        $oauth_token = trim( $social['dzen_oauth_token'] ?? '' );
+        $channel_id  = trim( $social['dzen_channel_id']  ?? '' );
+
+        if ( empty( $oauth_token ) ) {
+            return new WP_Error(
+                'dzen_no_token',
+                'Не задан OAuth-токен Яндекса. Получите его на https://oauth.yandex.ru/ и вставьте в настройки Дзена.'
+            );
+        }
+        if ( empty( $channel_id ) ) {
+            return new WP_Error(
+                'dzen_no_channel',
+                'Не задан ID канала Яндекс Дзен. Найдите его в настройках канала на dzen.ru (обычно — длинная строка цифр и букв в URL).'
+            );
+        }
+
+        $title = get_the_title( $post );
+        $url   = self::decorate_url( get_permalink( $post ), 'dzen', $social );
+
+        // Текст публикации: полный текст записи очищается от HTML-тегов
+        $content_raw  = ! empty( $post->post_content )
+            ? apply_filters( 'the_content', $post->post_content )
+            : get_the_excerpt( $post );
+        $content_text = wp_strip_all_tags( $content_raw );
+
+        // Строим блоки статьи согласно формату Dzen Publisher API
+        $blocks = array();
+
+        // Заглавное изображение
+        $thumb_url = get_the_post_thumbnail_url( $post->ID, 'large' );
+        if ( $thumb_url ) {
+            $blocks[] = array(
+                'type'     => 'IMAGE',
+                'imageUrl' => $thumb_url,
+            );
+        }
+
+        // Основной текст
+        if ( ! empty( $content_text ) ) {
+            $blocks[] = array(
+                'type' => 'PARAGRAPH',
+                'text' => $content_text,
+            );
+        }
+
+        // Ссылка на оригинальную запись
+        $blocks[] = array(
+            'type' => 'PARAGRAPH',
+            'text' => 'Читать полностью: ' . $url,
+        );
+
+        // ВАЖНО: Структура payload — title и blocks идут внутри ключа "content",
+        // а не на верхнем уровне JSON-объекта.
+        $payload = array(
+            'channel_id' => $channel_id,
+            'content'    => array(
+                'title'  => $title,
+                'blocks' => $blocks,
+            ),
+        );
+
+        $json_body = wp_json_encode( $payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+
+        $response = wp_remote_post( 'https://api.zen.yandex.ru/v1.0/channel/createPost', array(
+            'headers' => array(
+                'Authorization' => 'OAuth ' . $oauth_token,
+                'Content-Type'  => 'application/json; charset=UTF-8',
+            ),
+            'body'    => $json_body,
+            'timeout' => 30,
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            WP_Ru_Max_Logger::log( 'social', 'error',
+                '[Дзен] HTTP Error: ' . $response->get_error_message(),
+                array( 'post_id' => $post->ID )
+            );
+            return $response;
+        }
+
+        $http_code = wp_remote_retrieve_response_code( $response );
+        $body_raw  = wp_remote_retrieve_body( $response );
+        $data      = json_decode( $body_raw, true );
+
+        if ( $http_code < 200 || $http_code >= 300 ) {
+            $err_msg = '';
+            if ( is_array( $data ) ) {
+                $err_msg = $data['message'] ?? $data['error'] ?? $data['description'] ?? '';
+            }
+            if ( empty( $err_msg ) ) {
+                $err_msg = "HTTP $http_code";
+            }
+
+            $hints = array(
+                400 => 'Неверный формат запроса — проверьте ID канала.',
+                401 => 'OAuth-токен недействителен или истёк. Получите новый на oauth.yandex.ru.',
+                403 => 'Нет прав доступа к каналу — проверьте ID канала и права токена.',
+                404 => 'Канал не найден — проверьте ID канала в настройках.',
+                429 => 'Превышен лимит запросов — попробуйте позже.',
+            );
+            if ( isset( $hints[ $http_code ] ) ) {
+                $err_msg .= ' Подсказка: ' . $hints[ $http_code ];
+            }
+
+            WP_Ru_Max_Logger::log( 'social', 'error',
+                "[Дзен] Ошибка API (HTTP $http_code): $err_msg",
+                array( 'post_id' => $post->ID, 'response_raw' => $body_raw )
+            );
+            return new WP_Error( 'dzen_api_error', $err_msg );
+        }
+
+        $dzen_post_id = '';
+        if ( is_array( $data ) ) {
+            $dzen_post_id = $data['postId'] ?? $data['id'] ?? $data['post_id'] ?? '?';
+        }
+        WP_Ru_Max_Logger::log( 'social', 'success',
+            "[Дзен] Запись #{$post->ID} «{$post->post_title}» опубликована. Дзен post_id: $dzen_post_id",
+            array( 'post_id' => $post->ID, 'dzen_post_id' => $dzen_post_id )
+        );
+        return $data;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Строит текст публикации из шаблона для нужной соц. сети.
+     *
+     * Поддерживаемые плейсхолдеры:
+     *   {title}      — заголовок записи
+     *   {excerpt}    — анонс / первые слова текста
+     *   {url}        — ссылка на запись (с UTM, если настроено)
+     *   {author}     — имя автора
+     *   {date}       — дата публикации в формате дд.мм.гггг
+     *   {terms}      — хэштеги из таксономий (настраиваются в «Настройках»)
+     *   {categories} — категории через запятую
+     *   {tags}       — теги через запятую
+     *   {site_name}  — название сайта
+     *
+     * Для Telegram ({net}='tg') все вставляемые значения HTML-экранируются,
+     * чтобы заголовки/анонсы с символами <, >, & не вызывали ошибку 400
+     * при parse_mode=HTML.
+     *
+     * @param WP_Post    $post   WordPress-запись
+     * @param string     $net    Код сети: 'tg', 'vk', 'ok', 'dzen'
+     * @param array|null $social Настройки wp_ru_max_social (null = автозагрузка)
+     * @return string
+     */
+    public static function build_message( $post, $net, $social = null ) {
+        if ( null === $social ) {
+            $social = get_option( 'wp_ru_max_social', array() );
+        }
+
+        $tpl_key = 'social_template_' . $net;
+        $tpl     = ! empty( $social[ $tpl_key ] )
+            ? $social[ $tpl_key ]
+            : "{title}\n\n{excerpt}\n\n{url}";
+
+        $title   = get_the_title( $post );
+        $url     = self::decorate_url( get_permalink( $post ), $net, $social );
+        $excerpt = has_excerpt( $post )
+            ? get_the_excerpt( $post )
+            : wp_trim_words( strip_tags( $post->post_content ), 50 );
+        $excerpt = wp_strip_all_tags( $excerpt );
+        $author  = get_the_author_meta( 'display_name', $post->post_author );
+        $date    = get_the_date( 'd.m.Y', $post );
+        $site    = get_bloginfo( 'name' );
+
+        // Хэштеги из таксономий (только если плейсхолдер присутствует в шаблоне)
+        $terms_str = '';
+        if ( strpos( $tpl, '{terms}' ) !== false && ! empty( $social['social_hashtag_taxonomies'] ) ) {
+            foreach ( (array) $social['social_hashtag_taxonomies'] as $taxonomy ) {
+                $terms = get_the_terms( $post->ID, $taxonomy );
+                if ( $terms && ! is_wp_error( $terms ) ) {
+                    foreach ( $terms as $term ) {
+                        // Оставляем только буквы, цифры, нижнее подчёркивание
+                        $slug       = preg_replace( '/[^a-zA-Z0-9а-яёА-ЯЁ]/u', '_', $term->slug );
+                        $terms_str .= '#' . $slug . ' ';
+                    }
+                }
+            }
+            $terms_str = trim( $terms_str );
+        }
+
+        // Категории и теги WordPress
+        $categories = '';
+        $cats = get_the_category( $post->ID );
+        if ( $cats ) {
+            $categories = implode( ', ', array_map( static function ( $c ) { return $c->name; }, $cats ) );
+        }
+        $tags_str = '';
+        $tags = get_the_tags( $post->ID );
+        if ( $tags ) {
+            $tags_str = implode( ', ', array_map( static function ( $t ) { return $t->name; }, $tags ) );
+        }
+
+        // Для Telegram HTML-экранируем переменные, вставляемые в шаблон.
+        // Пользовательский шаблон может содержать валидные HTML-теги (<b>, <i>, <a> и т.д.),
+        // поэтому экранируем только ЗНАЧЕНИЯ, не сам шаблон.
+        if ( 'tg' === $net ) {
+            $esc = ENT_QUOTES | ENT_HTML5;
+            $enc = 'UTF-8';
+            $title      = htmlspecialchars( $title,      $esc, $enc );
+            $excerpt    = htmlspecialchars( $excerpt,    $esc, $enc );
+            $author     = htmlspecialchars( $author,     $esc, $enc );
+            $date       = htmlspecialchars( $date,       $esc, $enc );
+            $site       = htmlspecialchars( $site,       $esc, $enc );
+            $categories = htmlspecialchars( $categories, $esc, $enc );
+            $tags_str   = htmlspecialchars( $tags_str,   $esc, $enc );
+            $terms_str  = htmlspecialchars( $terms_str,  $esc, $enc );
+            // URL не экранируем — он может корректно использоваться в href=""
+        }
+
+        $msg = str_replace(
+            array( '{title}', '{excerpt}', '{url}', '{author}', '{date}', '{terms}', '{categories}', '{tags}', '{site_name}' ),
+            array(  $title,    $excerpt,    $url,    $author,    $date,    $terms_str, $categories,   $tags_str, $site        ),
+            $tpl
+        );
+
+        // Обрезать по лимиту платформы (если включено в «Настройках»)
+        $cut_key = 'social_cut_limit_' . $net;
+        if ( ! empty( $social[ $cut_key ] ) ) {
+            $limits = array( 'tg' => 4096, 'vk' => 16384, 'ok' => 32000, 'dzen' => 100000 );
+            $limit  = $limits[ $net ] ?? 4096;
+            if ( mb_strlen( $msg, 'UTF-8' ) > $limit ) {
+                $msg = mb_substr( $msg, 0, $limit - 3, 'UTF-8' ) . '...';
+            }
+        }
+
+        return $msg;
+    }
+
+    /**
+     * Добавляет UTM-параметры и/или уникальный суффикс к URL.
+     *
+     * @param string     $url    Исходный URL
+     * @param string     $net    Код сети
+     * @param array      $social Настройки wp_ru_max_social
+     * @return string
+     */
+    public static function decorate_url( $url, $net, $social ) {
+        if ( ! empty( $social['social_url_params'] ) ) {
+            $separator = strpos( $url, '?' ) !== false ? '&' : '?';
+            $url      .= $separator . ltrim( $social['social_url_params'], '?&' );
+        }
+        if ( ! empty( $social['social_unique_link'] ) ) {
+            $separator = strpos( $url, '?' ) !== false ? '&' : '?';
+            $url      .= $separator . '_wprumax=' . substr( md5( uniqid( '', true ) ), 0, 6 );
+        }
+        return $url;
+    }
+}
