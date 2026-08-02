@@ -26,9 +26,11 @@ class WP_Ru_Max_API {
     private function sanitize_utf8( $value, $truncate = false ) {
         if ( is_string( $value ) ) {
             $value = @mb_convert_encoding( $value, 'UTF-8', 'UTF-8' );
-            $value = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', (string) $value );
+            $original = (string) $value;
+            $value    = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $original );
             if ( null === $value ) {
-                $value = iconv( 'UTF-8', 'UTF-8//IGNORE', (string) $value );
+                // preg_replace вернул null (ошибка regex) — передаём оригинал, а не null.
+                $value = iconv( 'UTF-8', 'UTF-8//IGNORE', $original );
                 if ( false === $value ) {
                     $value = '';
                 }
@@ -68,7 +70,7 @@ class WP_Ru_Max_API {
 
         if ( $body ) {
             $body_clean = $this->sanitize_utf8( $body );
-            $json = json_encode( $body_clean, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+            $json = wp_json_encode( $body_clean, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 
             if ( false === $json ) {
                 return new WP_Error( 'json_encode', 'Не удалось закодировать тело запроса в JSON. Проверьте кодировку текста.' );
@@ -591,6 +593,10 @@ class WP_Ru_Max_API {
      * Отправить сообщение с автоматическим повтором при ошибке.
      */
     public function send_with_retry( $chat_id, $text, $format = 'html', $buttons = array(), $image_url = false, $max_retries = 2, $retry_delay = 30 ) {
+        // Ограничиваем диапазон, чтобы никто не передал отрицательное значение
+        // или бесконечный цикл через слишком большой max_retries.
+        $max_retries = max( 0, min( 10, (int) $max_retries ) );
+        $retry_delay = max( 1, min( 300, (int) $retry_delay ) );
         $attempt    = 0;
         $last_error = null;
 
