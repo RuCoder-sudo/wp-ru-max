@@ -220,7 +220,9 @@ class WP_Ru_Max_OAuth {
             wp_send_json_success( array( 'redirect' => home_url() ) );
         }
 
-        $raw = sanitize_text_field( wp_unslash( $_POST['init_data'] ?? '' ) );
+        // ВАЖНО: НЕ использовать sanitize_text_field — она портит HMAC-подпись (удаляет спецсимволы).
+        // Для криптографических данных достаточно только wp_unslash().
+        $raw = wp_unslash( $_POST['init_data'] ?? '' );
         if ( empty( $raw ) ) {
             wp_send_json_error( array( 'message' => 'init_data is empty' ), 400 );
         }
