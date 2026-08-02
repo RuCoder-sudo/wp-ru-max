@@ -308,7 +308,7 @@ class WP_Ru_Max_License {
                 'Content-Type'  => 'application/json',
                 'X-WPRM-Secret' => self::API_SECRET,
             ),
-            'body' => json_encode( array( 'key' => $key ) ),
+            'body' => wp_json_encode( array( 'key' => $key ) ),
         ) );
 
         if ( is_wp_error( $response ) ) {
