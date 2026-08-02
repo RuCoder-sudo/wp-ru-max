@@ -480,10 +480,13 @@ class WP_Ru_Max_Notifications {
             return;
         }
 
-        $site = get_bloginfo( 'name' );
-        $msg  = mb_substr( $error['message'], 0, 300, 'UTF-8' );
-        $file = basename( $error['file'] );
-        $text = "<b>Критическая ошибка сайта!</b>\n\nСайт: {$site}\nОшибка: {$msg}\nФайл: {$file}, строка {$error['line']}";
+        // Экранируем HTML-спецсимволы: сообщения об ошибках PHP и имена файлов
+        // могут содержать <, >, & которые сломают parse_mode=html в MAX.
+        $site = htmlspecialchars( get_bloginfo( 'name' ), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $msg  = htmlspecialchars( mb_substr( $error['message'], 0, 300, 'UTF-8' ), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $file = htmlspecialchars( basename( $error['file'] ), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $line = (int) $error['line'];
+        $text = "<b>Критическая ошибка сайта!</b>\n\nСайт: {$site}\nОшибка: {$msg}\nФайл: {$file}, строка {$line}";
 
         $api = new WP_Ru_Max_API();
         foreach ( $chat_ids as $chat_id ) {
