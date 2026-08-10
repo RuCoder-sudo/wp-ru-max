@@ -1155,6 +1155,14 @@ jQuery(function($){
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
 
+            <h4 style="margin-bottom:4px;">v1.0.44</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Исправлено (критично):</strong> в очереди отложенной автопубликации удалён вызов несуществующей функции WordPress <code>add_transient()</code>, который вызывал ошибку <code>Call to undefined function add_transient()</code> и останавливал загрузку сайта или панели WordPress.</li>
+                <li><strong>Исправлено:</strong> блокировка очереди переведена на атомарную <code>add_option()</code> с уникальным токеном, условным восстановлением устаревшей записи и продлением lease перед каждым заданием; обработчик WP-Cron и резервная проверка через <code>init</code> используют одну защиту от двойной отправки.</li>
+                <li><strong>Исправлено:</strong> блокировка снимается безопасно только владельцем и освобождается через <code>finally</code> после обработки очереди.</li>
+                <li><strong>Обновлено:</strong> версия плагина изменена с <code>1.0.43</code> на <code>1.0.44</code>.</li>
+            </ul>
+
             <h4 style="margin-bottom:4px;">v1.0.43</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
                 <li><strong>Добавлено:</strong> Новые вкладки интерфейса — <strong>«Настройки»</strong> (общие параметры публикации), <strong>«Социальные сети»</strong> (единый раздел управления всеми платформами), <strong>«Прямой доступ»</strong> (быстрый шаринг и ручная отправка push-уведомлений).</li>
