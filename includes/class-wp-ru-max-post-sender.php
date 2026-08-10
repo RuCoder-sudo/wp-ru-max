@@ -17,6 +17,7 @@ class WP_Ru_Max_Post_Sender {
 
     const QUEUE_OPTION = 'wp_ru_max_queue';
     const QUEUE_LOCK   = 'wp_ru_max_queue_lock';
+    const QUEUE_LOCK_TTL = 15 * MINUTE_IN_SECONDS;
 
     private function __construct() {
         $settings = get_option( 'wp_ru_max_settings', array() );
@@ -45,6 +46,116 @@ class WP_Ru_Max_Post_Sender {
 
     private function save_queue( $queue ) {
         update_option( self::QUEUE_OPTION, $queue, false );
+    }
+
+    /**
+     * Пытается установить блокировку очереди.
+     *
+     * В WordPress нет функции add_transient(). Для блокировки используется
+     * add_option(): добавление опции с уже существующим именем возвращает
+     * false, а уникальное имя опции защищено на уровне базы данных.
+     *
+     * В блокировке хранится срок действия, чтобы после аварийного завершения
+     * запроса очередь не осталась заблокированной навсегда.
+     */
+    private function acquire_queue_lock( &$lock_token ) {
+        $lock_token = wp_generate_uuid4();
+        $now        = time();
+        $lock_data  = array(
+            'token'   => $lock_token,
+            'expires' => $now + self::QUEUE_LOCK_TTL,
+        );
+
+        if ( add_option( self::QUEUE_LOCK, $lock_data, '', false ) ) {
+            return true;
+        }
+
+        // Восстанавливаемся после запроса, который завершился до снятия
+        // блокировки. Удаляем только то значение, которое прочитали:
+        // условный DELETE не позволит удалить уже заменённую блокировку.
+        global $wpdb;
+        $existing_lock = get_option( self::QUEUE_LOCK, array() );
+        $expires = is_array( $existing_lock ) && isset( $existing_lock['expires'] )
+            ? (int) $existing_lock['expires']
+            : 0;
+
+        if ( $expires <= 0 || $expires <= $now ) {
+            $existing_value = maybe_serialize( $existing_lock );
+            $deleted        = $wpdb->query(
+                $wpdb->prepare(
+                    "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s LIMIT 1",
+                    self::QUEUE_LOCK,
+                    $existing_value
+                )
+            );
+
+            if ( 1 === (int) $deleted ) {
+                wp_cache_delete( self::QUEUE_LOCK, 'options' );
+                // Если другой запрос уже занял имя, add_option() вернёт false.
+                return add_option( self::QUEUE_LOCK, $lock_data, '', false );
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Продлевает lease только для текущего владельца блокировки.
+     */
+    private function refresh_queue_lock( $lock_token ) {
+        global $wpdb;
+
+        $current_lock = get_option( self::QUEUE_LOCK, array() );
+        if (
+            ! is_array( $current_lock )
+            || empty( $current_lock['token'] )
+            || ! hash_equals( (string) $current_lock['token'], (string) $lock_token )
+        ) {
+            return false;
+        }
+
+        $refreshed_lock = array(
+            'token'   => (string) $lock_token,
+            'expires' => time() + self::QUEUE_LOCK_TTL,
+        );
+        $updated = $wpdb->query(
+            $wpdb->prepare(
+                "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value = %s LIMIT 1",
+                maybe_serialize( $refreshed_lock ),
+                self::QUEUE_LOCK,
+                maybe_serialize( $current_lock )
+            )
+        );
+
+        wp_cache_delete( self::QUEUE_LOCK, 'options' );
+        return 1 === (int) $updated;
+    }
+
+    /**
+     * Снимает только собственную блокировку очереди.
+     */
+    private function release_queue_lock( $lock_token ) {
+        global $wpdb;
+
+        $lock = get_option( self::QUEUE_LOCK, array() );
+        if (
+            is_array( $lock )
+            && isset( $lock['token'] )
+            && hash_equals( (string) $lock['token'], (string) $lock_token )
+        ) {
+            // Условное удаление защищает от ситуации, когда другой запрос
+            // успел заменить lease между get_option() и DELETE.
+            $deleted = $wpdb->query(
+                $wpdb->prepare(
+                    "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s LIMIT 1",
+                    self::QUEUE_LOCK,
+                    maybe_serialize( $lock )
+                )
+            );
+            if ( 1 === (int) $deleted ) {
+                wp_cache_delete( self::QUEUE_LOCK, 'options' );
+            }
+        }
     }
 
     private function queue_add( $job_key, $post_id, $is_new, $due ) {
@@ -87,28 +198,37 @@ class WP_Ru_Max_Post_Sender {
             return 0;
         }
 
-        // Атомарная блокировка: add_transient использует INSERT на уровне БД
-        // и вернёт false, если ключ уже существует — устраняет состояние гонки
-        // при одновременных запросах (check-then-set → atomic add).
-        if ( ! add_transient( self::QUEUE_LOCK, 1, 30 ) ) {
+        // Атомарная блокировка через add_option(). В WordPress функции
+        // add_transient() не существует.
+        $lock_token = '';
+        if ( ! $this->acquire_queue_lock( $lock_token ) ) {
             return 0;
         }
 
         $now       = time();
         $processed = 0;
 
-        foreach ( $queue as $job_key => $data ) {
-            $is_due = $force_all || ( isset( $data['due'] ) && $data['due'] <= $now );
-            if ( $is_due ) {
-                $this->process_job( $job_key );
-                // Снимаем оригинальное wp-cron событие, если оно ещё не сработало,
-                // чтобы запись не отправилась повторно позже.
-                wp_clear_scheduled_hook( 'wp_ru_max_delayed_send', array( $job_key ) );
-                $processed++;
+        try {
+            foreach ( $queue as $job_key => $data ) {
+                $is_due = $force_all || ( isset( $data['due'] ) && $data['due'] <= $now );
+                if ( $is_due ) {
+                    // Обработка поста включает сетевые запросы к MAX. Продлеваем
+                    // lease перед каждым заданием, чтобы длинная очередь не
+                    // стала доступна второму запросу во время работы первого.
+                    if ( ! $this->refresh_queue_lock( $lock_token ) ) {
+                        break;
+                    }
+                    $this->process_job( $job_key );
+                    // Снимаем оригинальное wp-cron событие, если оно ещё не сработало,
+                    // чтобы запись не отправилась повторно позже.
+                    wp_clear_scheduled_hook( 'wp_ru_max_delayed_send', array( $job_key ) );
+                    $processed++;
+                }
             }
+        } finally {
+            $this->release_queue_lock( $lock_token );
         }
 
-        delete_transient( self::QUEUE_LOCK );
         return $processed;
     }
 
@@ -233,7 +353,24 @@ class WP_Ru_Max_Post_Sender {
      * при следующем заходе на сайт (см. хук 'init' в конструкторе).
      */
     public function do_delayed_send( $job_key ) {
-        $this->process_job( $job_key );
+        // WP-Cron и резервный запуск через init могут прийти одновременно.
+        // Используем ту же блокировку, чтобы одно задание не ушло дважды.
+        $lock_token = '';
+        if ( ! $this->acquire_queue_lock( $lock_token ) ) {
+            return 0;
+        }
+
+        $processed = 0;
+        try {
+            if ( $this->refresh_queue_lock( $lock_token ) ) {
+                $this->process_job( $job_key );
+                $processed = 1;
+            }
+        } finally {
+            $this->release_queue_lock( $lock_token );
+        }
+
+        return $processed;
     }
 
     /**
