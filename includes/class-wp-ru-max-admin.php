@@ -687,6 +687,7 @@ jQuery(function($){
                 case 'enable_post_sender_log':
                 case 'delete_on_uninstall':
                 case 'chat_widget_enabled':
+                case 'chat_widget_message_enabled':
                 case 'notify_plugin_updates':
                 case 'notify_site_errors':
                 case 'share_button_enabled':
@@ -718,7 +719,7 @@ jQuery(function($){
         } else {
             $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages', 'max_oauth_bot_username', 'chat_widget_utm_source', 'chat_widget_utm_medium', 'chat_widget_utm_campaign', 'chat_widget_utm_content', 'chat_widget_ya_metrika_counter', 'chat_widget_ya_metrika_goal', 'hashtags_custom_mentions' );
             $allowed_textarea = array( 'notify_template', 'post_message_template', 'chat_widget_retention_message', 'chat_widget_sound_specific_pages' );
-            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled', 'multisite_enabled', 'woo_filter_enabled', 'chat_widget_ya_metrika_enabled', 'general_dedup_enabled', 'hashtags_enabled' );
+            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_message_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled', 'multisite_enabled', 'woo_filter_enabled', 'chat_widget_ya_metrika_enabled', 'general_dedup_enabled', 'hashtags_enabled' );
             $allowed_int      = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay', 'send_delay_seconds', 'retry_count', 'retry_delay_seconds', 'general_dedup_ttl' );
             $allowed_float    = array( 'image_size_limit_mb' );
             $allowed_color    = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
@@ -1154,6 +1155,13 @@ jQuery(function($){
 
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
+
+            <h4 style="margin-bottom:4px;">v1.0.45</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Исправлено:</strong> для приветственного сообщения чат-виджета MAX добавлен отдельный переключатель включения и выключения. При выключении на сайте отображается только значок MAX, без текстового сообщения.</li>
+                <li><strong>Исправлено:</strong> пустое поле приветственного сообщения больше не заменяется автоматически текстом по умолчанию.</li>
+                <li><strong>Обновлено:</strong> версия плагина изменена с <code>1.0.44</code> на <code>1.0.45</code>.</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.44</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -2370,7 +2378,8 @@ jQuery(function($){
         $enabled       = ! empty( $settings['chat_widget_enabled'] );
         $size          = $settings['chat_widget_size']        ?? 'medium';
         $url           = $settings['chat_widget_url']         ?? '';
-        $message       = $settings['chat_widget_message']     ?? 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!';
+         $message_enabled = array_key_exists( 'chat_widget_message_enabled', $settings ) ? ! empty( $settings['chat_widget_message_enabled'] ) : true;
+         $message          = $settings['chat_widget_message'] ?? 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!';
         $position      = $settings['chat_widget_position']    ?? 'right';
         $bottom_offset = isset( $settings['chat_widget_bottom_offset'] ) ? (int) $settings['chat_widget_bottom_offset'] : 20;
         $show_delay    = isset( $settings['chat_widget_show_delay'] )    ? (int) $settings['chat_widget_show_delay']    : 0;
@@ -2449,6 +2458,17 @@ jQuery(function($){
                         <th scope="row"><label for="chat_widget_url">Ссылка на чат *</label></th>
                         <td>
                             <input type="url" id="chat_widget_url" name="chat_widget_url" value="<?php echo esc_attr( $url ); ?>" class="large-text" placeholder="https://max.ru/YourBotName" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="chat_widget_message_enabled">Приветственное сообщение</label></th>
+                        <td>
+                            <label class="wp-ru-max-toggle">
+                                <input type="checkbox" id="chat_widget_message_enabled" <?php checked( $message_enabled ); ?> />
+                                <span class="wp-ru-max-toggle-slider"></span>
+                            </label>
+                            <span style="margin-left:10px;">Показывать приветственное сообщение рядом с иконкой</span>
+                            <p class="description">Если выключить, на сайте останется только плавающая иконка MAX.</p>
                         </td>
                     </tr>
                     <tr>
@@ -2757,7 +2777,7 @@ jQuery(function($){
                         <div style="background:#f0f0f0;height:100%;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#999;font-size:14px;">Ваш сайт</div>
                     </div>
                     <div class="wp-ru-max-preview-widget" id="widget_preview">
-                        <div class="preview-balloon">
+                        <div class="preview-balloon" id="preview_balloon" style="<?php echo $message_enabled ? '' : 'display:none;'; ?>">
                             <div id="preview_message"><?php echo esc_html( $message ); ?></div>
                         </div>
                         <div class="preview-icon">
