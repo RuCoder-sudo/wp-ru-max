@@ -1,9 +1,10 @@
-/* WP Ru-max Chat Widget v1.0.39 */
+/* WP Ru-max Chat Widget v1.0.45 */
 (function () {
     'use strict';
 
     var cfg        = (typeof window.wpRuMaxSettings !== 'undefined') ? window.wpRuMaxSettings : {};
-    var message    = cfg.message    || 'Здравствуйте! Мы всегда на связи. Кликните, чтобы написать!';
+    var message    = typeof cfg.message === 'string' ? cfg.message.trim() : '';
+    var welcomeEnabled = cfg.welcomeEnabled !== false && message.length > 0;
     var showDelay  = typeof cfg.showDelay  === 'number' ? cfg.showDelay  : 0;
     var sound      = cfg.sound      || 'none';
     var soundDelay = typeof cfg.soundDelay === 'number' ? cfg.soundDelay : 3000;
@@ -296,6 +297,7 @@
     /* BALLOON HELPERS                                                      */
     /* ================================================================== */
     function showBalloon() {
+        if (!welcomeEnabled) return;
         if (balloon.dataset.closed === '1') return;
         balloon.style.transition = '';
         balloon.style.opacity    = '1';
@@ -332,9 +334,11 @@
 
     function showWidgetCycle() {
         widget.style.display = 'block';
-        showBalloon();
-        startTyping();
-        scheduleAutoHide();
+        if (welcomeEnabled) {
+            showBalloon();
+            startTyping();
+            scheduleAutoHide();
+        }
 
         if (animation && animation !== 'none' && iconEl) {
             setTimeout(startAnimation, 13500);
@@ -368,7 +372,7 @@
     /* HOVER — restore balloon unless manually closed                       */
     /* ================================================================== */
     widget.addEventListener('mouseenter', function () {
-        showBalloon();
+        if (welcomeEnabled) showBalloon();
     });
 
     /* ================================================================== */
