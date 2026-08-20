@@ -61,7 +61,8 @@ class WP_Ru_Max_Chat_Widget {
 
         $size          = isset( $settings['chat_widget_size'] )          ? $settings['chat_widget_size']                  : 'medium';
         $url           = isset( $settings['chat_widget_url'] )           ? trim( $settings['chat_widget_url'] )           : '';
-        $message       = isset( $settings['chat_widget_message'] )       ? $settings['chat_widget_message']               : 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!';
+        $message_enabled = array_key_exists( 'chat_widget_message_enabled', $settings ) ? ! empty( $settings['chat_widget_message_enabled'] ) : true;
+        $message          = isset( $settings['chat_widget_message'] ) ? $settings['chat_widget_message'] : 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!';
 
         // UTM-метки
         $utm_source   = isset( $settings['chat_widget_utm_source'] )   ? trim( $settings['chat_widget_utm_source'] )   : '';
@@ -151,7 +152,7 @@ class WP_Ru_Max_Chat_Widget {
         $anim_class  = ! empty( $animation ) && $animation !== 'none' ? ' wp-ru-max-anim-' . esc_attr( $animation ) : '';
         ?>
 <div id="wp-ru-max-widget" style="position:fixed;bottom:<?php echo (int) $bottom_offset; ?>px;<?php echo esc_attr( $side_css ); ?>z-index:99999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:none;">
-    <div id="wp-ru-max-balloon" style="position:absolute;bottom:<?php echo ( $px + 14 ); ?>px;<?php echo esc_attr( $balloon_css ); ?>background:#fff;border:1px solid #e0e0e0;border-radius:14px;padding:12px 16px 12px 16px;max-width:265px;min-width:265px;box-shadow:0 4px 24px rgba(0,0,0,0.15);display:none;word-break:break-word;">
+     <div id="wp-ru-max-balloon" style="position:absolute;bottom:<?php echo ( $px + 14 ); ?>px;<?php echo esc_attr( $balloon_css ); ?>background:#fff;border:1px solid #e0e0e0;border-radius:14px;padding:12px 16px 12px 16px;max-width:265px;min-width:265px;box-shadow:0 4px 24px rgba(0,0,0,0.15);display:none;word-break:break-word;">
         <button id="wp-ru-max-close" type="button" style="position:absolute;top:6px;right:8px;background:none;border:none;cursor:pointer;color:#aaa;font-size:18px;line-height:1;padding:0 2px;" title="Закрыть" aria-label="Закрыть">&times;</button>
         <div id="wp-ru-max-typing" style="color:#222;font-size:14px;line-height:1.5;padding-right:18px;"></div>
         <div style="position:absolute;bottom:-8px;<?php echo esc_attr( $arrow_css ); ?>width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:8px solid #fff;"></div>
@@ -171,7 +172,8 @@ class WP_Ru_Max_Chat_Widget {
     </a>
     <script>
     window.wpRuMaxSettings = <?php echo wp_json_encode( array(
-        'message'              => $message,
+         'message'              => (string) $message,
+         'welcomeEnabled'       => (bool) $message_enabled,
         'showDelay'            => $show_delay * 1000,
         'sound'                => $sound,
         'soundDelay'           => $sound_delay * 1000,
