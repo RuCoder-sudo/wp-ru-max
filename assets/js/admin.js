@@ -377,6 +377,10 @@
         $('#preview_message').text($(this).val());
     });
 
+    $('#chat_widget_message_enabled').on('change', function () {
+        $('#preview_balloon').toggle(this.checked);
+    });
+
     $('input[name="chat_widget_animation"]').on('change', function () {
         var $icon = $('.wp-ru-max-preview-widget .preview-icon');
         $icon.removeClass('wp-ru-max-anim-pulse wp-ru-max-anim-ripple wp-ru-max-anim-bounce wp-ru-max-anim-shake wp-ru-max-anim-glow wp-ru-max-anim-rotate');
@@ -410,6 +414,7 @@
             chat_widget_enabled:       $('#chat_widget_enabled').is(':checked') ? '1' : '0',
             chat_widget_size:          $('input[name="chat_widget_size"]:checked').val() || 'medium',
             chat_widget_url:           chatUrl,
+            chat_widget_message_enabled: $('#chat_widget_message_enabled').is(':checked') ? '1' : '0',
             chat_widget_message:       $('#chat_widget_message').val(),
             chat_widget_position:      $('input[name="chat_widget_position"]:checked').val() || 'right',
             chat_widget_bottom_offset: parseInt($('#chat_widget_bottom_offset').val(), 10) || 20,
