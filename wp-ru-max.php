@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name:       WP Ru-max
- * Plugin URI:        https://рукодер.рф/wp-ru-max/
+ * Plugin URI:        https://fixcoder.ru/wp-ru-max/
  * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Jetpack / Elementor и настраиваемый чат-виджет с анимацией и звуком. Поддерживает WordPress Multisite (мультисайт) и поддомены.
- * Version:           1.0.45
+ * Version:           1.0.46
  * Author:            Сергей Солошенко (RuCoder)
- * Author URI:        https://рукодер.рф/
+ * Author URI:        https://fixcoder.ru/
  * License:           GPL v2 or later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       wp-ru-max
@@ -21,9 +21,9 @@
  * Принцип работы:     «Сайт — как для себя»
  * -----------------------------------------------------------------------
  * Телефон / WhatsApp: +7 (985) 985-53-97
- * Email:              support@рукодер.рф
+ * Email:              support@fixcoder.ru
  * Telegram:           @RussCoder
- * Портфолио:          https://рукодер.рф
+ * Портфолио:          https://fixcoder.ru
  * GitHub:             https://github.com/RuCoder-sudo
  * -----------------------------------------------------------------------
  *
@@ -73,7 +73,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'WP_RU_MAX_VERSION', '1.0.45' );
+define( 'WP_RU_MAX_VERSION', '1.0.46' );
 define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
 define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -98,6 +98,40 @@ function wp_ru_max() {
     return WP_Ru_Max::instance();
 }
 
+/**
+ * VK ID requires a trusted redirect URL without an action query parameter.
+ * Keep the callback on a normal WordPress path and let VK append only its
+ * response parameters (code, state and device_id).
+ */
+function wp_ru_max_register_vk_callback_route() {
+    add_rewrite_rule(
+        '^wp-ru-max-vk-callback/?$',
+        'index.php?wp_ru_max_vk_callback=1',
+        'top'
+    );
+}
+add_action( 'init', 'wp_ru_max_register_vk_callback_route', 1 );
+
+function wp_ru_max_register_vk_callback_query_var( $vars ) {
+    $vars[] = 'wp_ru_max_vk_callback';
+    return $vars;
+}
+add_filter( 'query_vars', 'wp_ru_max_register_vk_callback_query_var' );
+
+function wp_ru_max_handle_vk_callback_route() {
+    $is_callback = '1' === (string) get_query_var( 'wp_ru_max_vk_callback' );
+    if ( ! $is_callback && ! empty( $_SERVER['REQUEST_URI'] ) ) {
+        $request_path = (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH );
+        $callback_path = (string) wp_parse_url( home_url( '/wp-ru-max-vk-callback/' ), PHP_URL_PATH );
+        $is_callback = untrailingslashit( $request_path ) === untrailingslashit( $callback_path );
+    }
+    if ( ! $is_callback ) {
+        return;
+    }
+    WP_Ru_Max_Admin::instance()->vk_oauth_callback();
+}
+add_action( 'template_redirect', 'wp_ru_max_handle_vk_callback_route', 1 );
+
 wp_ru_max();
 
 // Инициализируем апдейтер только в контексте wp-admin, иначе он добавляет
@@ -115,3 +149,13 @@ if ( function_exists( 'is_multisite' ) && is_multisite() ) {
     require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-network-admin.php';
     WP_Ru_Max_Network_Admin::instance();
 }
+
+// Existing installations need one rewrite flush after upgrading to the
+// clean VK callback route. The flag keeps this from running on every request.
+add_action( 'admin_init', function() {
+    if ( '1' === (string) get_option( 'wp_ru_max_vk_callback_rewrite_v1' ) ) {
+        return;
+    }
+    flush_rewrite_rules( false );
+    update_option( 'wp_ru_max_vk_callback_rewrite_v1', '1' );
+} );
