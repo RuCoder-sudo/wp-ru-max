@@ -16,7 +16,7 @@ class WP_Ru_Max_License {
     const RECHECK_DAYS       = 160;
     const RECHECK_SECONDS    = 13824000;
 
-    const VERIFY_URL  = 'https://xn--d1acnqieq.xn--p1ai/wp-json/wp-ru-max-km/v1/verify';
+    const VERIFY_URL  = 'https://fixcoder.ru/wp-json/wp-ru-max-km/v1/verify';
     const API_SECRET  = 'd0563fa8f8fce6879cdf697eed0460a82fa7977897fd364ec911c93ed8bb25b3';
     const OWNER_EMAIL = 'rucoder.rf@yandex.ru';
 
@@ -211,7 +211,7 @@ class WP_Ru_Max_License {
         $body .= "Согласие на рассылку: " . ( $mailing ? 'Да' : 'Нет' ) . "\n";
         $body .= "Подтверждение о боте (ИП/ООО): " . ( $bot_confirmed ? 'Да' : 'Нет' ) . "\n";
         $body .= "Дата запроса: " . current_time( 'd.m.Y H:i:s' ) . "\n\n";
-        $body .= "=== Выдайте ключ на https://рукодер.рф/wp-admin/admin.php?page=wp-ru-max-keys ===\n";
+        $body .= "=== Выдайте ключ на https://fixcoder.ru/wp-admin/admin.php?page=rclm-keys ===\n";
 
         $headers = array(
             'Content-Type: text/plain; charset=UTF-8',
