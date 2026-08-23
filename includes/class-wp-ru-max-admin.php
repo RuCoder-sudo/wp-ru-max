@@ -35,6 +35,8 @@ class WP_Ru_Max_Admin {
         add_action( 'wp_ajax_wp_ru_max_send_push',       array( $this, 'ajax_send_push' ) );
         add_action( 'wp_ajax_wp_ru_max_direct_social',   array( $this, 'ajax_direct_social' ) );
         add_action( 'wp_ajax_wp_ru_max_save_social',      array( $this, 'ajax_save_social_settings' ) );
+        add_action( 'admin_post_wp_ru_max_vk_start',     array( $this, 'vk_oauth_start' ) );
+        add_action( 'admin_post_wp_ru_max_vk_callback',  array( $this, 'vk_oauth_callback' ) );
         add_action( 'wp_ajax_wp_ru_max_flush_queue',     array( $this, 'ajax_flush_queue' ) );
         add_action( 'save_post',                         array( $this, 'persist_skip_meta_on_save' ), 10, 2 );
         add_action( 'post_submitbox_misc_actions',       array( $this, 'render_classic_editor_panel' ) );
@@ -1155,6 +1157,15 @@ jQuery(function($){
 
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
+            <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
+
+            <h4 style="margin-bottom:4px;">v1.0.46</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Обновлено:</strong> сервер проверки лицензии перенесён на <code>fixcoder.ru</code>. Перед отключением старого домена установите эту версию на сайтах клиентов.</li>
+                <li><strong>Исправлено:</strong> публикация во ВКонтакте переведена на официальный Community OAuth без сервисного токена приложения.</li>
+                <li><strong>Исправлено:</strong> нормализация ID сообщества, сохранение токенов, публикация изображений и обработка ссылок во ВКонтакте.</li>
+                <li><strong>Обновлено:</strong> встроенная инструкция подключения MAX и ВКонтакте дополнена пошаговыми примерами и диагностикой частых ошибок.</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.45</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -1187,6 +1198,8 @@ jQuery(function($){
                 <li><strong>Исправлено:</strong> <code>ajax_send_push</code> — исправлен порядок выбора токена Telegram: <code>direct_telegram_token</code> теперь учитывается корректно.</li>
             </ul>
 
+            <?php /* Старые версии оставлены в исходниках для справки, но в плагине показываются только 1.0.43–1.0.46. */ ?>
+            <?php if ( false ) : ?>
             <h4 style="margin-bottom:4px;">v1.0.42</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
                 <li>Исправлено: email-адреса в личных уведомлениях MAX (заявки с форм, письма WooCommerce и т.д.) отображались с заменой символа «@» на «[at]» (например, «12[at]mail.ru» вместо «12@mail.ru»). Теперь адрес показывается полностью и без искажений, а MAX по-прежнему не превращает его в кликабельную ссылку mailto: — вместо видимой замены текста используется невидимый разделяющий символ.</li>
@@ -1318,6 +1331,7 @@ jQuery(function($){
                 <li>Сворачиваемые списки категорий и тегов (>8 элементов).</li>
             </ul>
 
+            <?php endif; ?>
             <p style="margin-top:8px;"><a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=history' ) ); ?>">→ Открыть журнал событий</a></p>
         </div>
         <?php
@@ -2250,7 +2264,7 @@ jQuery(function($){
             <ul>
                 <li><a href="https://business.max.ru" target="_blank" rel="noopener">Платформа MAX для партнёров</a></li>
                 <li><a href="https://dev.max.ru" target="_blank" rel="noopener">Документация MAX API</a></li>
-                <li><a href="https://рукодер.рф/" target="_blank" rel="noopener">Разработка сайтов под ключ</a></li>
+                <li><a href="https://fixcoder.ru/" target="_blank" rel="noopener">Разработка сайтов под ключ</a></li>
             </ul>
         </div>
         <div class="wp-ru-max-card">
@@ -2330,7 +2344,7 @@ jQuery(function($){
                 <li>Перейдите на <a href="https://dev.vk.ru/ru/api/open-api/getting-started" target="_blank" rel="noopener"><strong>https://dev.vk.ru/ru/api/open-api/getting-started</strong></a>.</li>
                 <li>Нажмите <strong>«Создать приложение»</strong>. Выберите тип <strong>«Веб-сайт»</strong>.</li>
                 <li>Заполните название и укажите адрес вашего сайта в поле <strong>«Адрес сайта»</strong>.</li>
-                <li>Скопируйте <strong>ID приложения</strong> и <strong>Защищённый ключ</strong>.</li>
+                <li>Скопируйте <strong>ID приложения</strong> и <strong>Защищённый ключ / сервисный ключ</strong> из настроек приложения.</li>
             </ol>
         </div>
         <div class="wp-ru-max-card">
@@ -2338,9 +2352,9 @@ jQuery(function($){
             <ol>
                 <li>Перейдите на вкладку <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=social_networks' ) ); ?>"><strong>«Социальные сети»</strong></a>.</li>
                 <li>В разделе <strong>«ВКонтакте»</strong> нажмите <strong>«Добавить аккаунт»</strong>.</li>
-                <li>Нажмите кнопку <strong>«Авторизоваться через ВКонтакте»</strong> — откроется окно авторизации VK.</li>
-                <li>После авторизации скопируйте URL из адресной строки браузера и вставьте в поле <strong>«URL»</strong>.</li>
-                <li>Нажмите <strong>«Сохранить»</strong>. Выберите группу или страницу для публикаций.</li>
+                <li>В настройках приложения укажите Authorized redirect URL без параметров: <code><?php echo esc_html( home_url( '/wp-ru-max-vk-callback/' ) ); ?></code>.</li>
+                <li>Введите ID приложения, защищённый ключ и ID группы/паблика, затем нажмите <strong>«Авторизоваться через VK ID»</strong>.</li>
+                <li>Пройдите авторизацию VK ID и подтвердите доступ к выбранному сообществу. Access Token сохранится автоматически — копировать URL из адресной строки не нужно.</li>
             </ol>
             <p><strong>Документация:</strong> <a href="https://dev.vk.com/ru/reference" target="_blank" rel="noopener">https://dev.vk.com/ru/reference</a></p>
         </div>
@@ -2959,7 +2973,7 @@ jQuery(function($){
                                 </label>
                                 <label class="wp-ru-max-checkbox-label">
                                     <input type="checkbox" id="consent_personal" name="consent_personal" value="1" />
-                                    Даю своё согласие на <a href="https://рукодер.рф/privacy-policy/" target="_blank" rel="noopener">обработку персональных данных</a>.
+                                    Даю своё согласие на <a href="https://fixcoder.ru/privacy-policy/" target="_blank" rel="noopener">обработку персональных данных</a>.
                                 </label>
                                 <br /><br />
                                 <label class="wp-ru-max-checkbox-label">
@@ -3136,10 +3150,26 @@ jQuery(function($){
 
         // --- ВКонтакте ---
         if ( isset( $_POST['vk_app_id'] ) ) {
-            $social['vk_app_id']      = sanitize_text_field( wp_unslash( $_POST['vk_app_id'] ) );
-            $social['vk_secret_key']  = sanitize_text_field( wp_unslash( $_POST['vk_secret_key'] ?? '' ) );
-            $social['vk_access_token'] = sanitize_text_field( wp_unslash( $_POST['vk_access_token'] ?? '' ) );
-            $social['vk_owner_id']    = sanitize_text_field( wp_unslash( $_POST['vk_owner_id'] ?? '' ) );
+            $vk_app_id               = $this->normalize_vk_app_id( wp_unslash( $_POST['vk_app_id'] ) );
+            $social['vk_app_id']      = $vk_app_id;
+            $social['vk_secret_key']  = sanitize_text_field( wp_unslash( $_POST['vk_secret_key'] ?? $_POST['vk_service_token'] ?? '' ) );
+            // Новое имя поля оставляем как алиас для установок, где оно уже появилось.
+            $social['vk_service_token'] = $social['vk_secret_key'];
+            /*
+             * Пустое значение из формы не должно затирать токен,
+             * который уже получил Community OAuth.
+             */
+            $posted_vk_token = sanitize_text_field( wp_unslash( $_POST['vk_access_token'] ?? '' ) );
+            if ( '' !== $posted_vk_token ) {
+                $social['vk_access_token'] = $posted_vk_token;
+            } elseif ( ! isset( $social['vk_access_token'] ) ) {
+                $social['vk_access_token'] = '';
+            }
+            $vk_owner_id = sanitize_text_field( wp_unslash( $_POST['vk_owner_id'] ?? '' ) );
+            if ( preg_match( '/^\d+$/', $vk_owner_id ) && 0 !== (int) $vk_owner_id ) {
+                $vk_owner_id = '-' . absint( $vk_owner_id );
+            }
+            $social['vk_owner_id']    = $vk_owner_id;
             $social['vk_enabled']     = ! empty( $_POST['vk_enabled'] );
         }
 
@@ -3196,6 +3226,315 @@ jQuery(function($){
         update_option( 'wp_ru_max_social', $social );
         WP_Ru_Max_Logger::log( 'social', 'info', 'Настройки социальных сетей обновлены.' );
         wp_send_json_success( 'Настройки сохранены.' );
+    }
+
+    /**
+     * Начинает официальную авторизацию токена сообщества VK.
+     *
+     * Для wall.post нужен именно Community Access Token. VK получает его
+     * через oauth.vk.com/authorize с group_ids, а не через service token
+     * приложения и не через обычный VK ID access_token пользователя.
+     */
+    public function vk_oauth_start() {
+        check_admin_referer( 'wp_ru_max_vk_oauth' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Недостаточно прав.', 'Ошибка авторизации VK', array( 'response' => 403 ) );
+        }
+
+        $social = get_option( 'wp_ru_max_social', array() );
+        $app_id = $this->normalize_vk_app_id( $social['vk_app_id'] ?? '' );
+        $secret = trim( (string) ( $social['vk_secret_key'] ?? $social['vk_service_token'] ?? '' ) );
+        $owner  = trim( (string) ( $social['vk_owner_id'] ?? '' ) );
+
+        if ( '' === $app_id ) {
+            $this->redirect_vk_oauth_error( 'Укажите числовой ID приложения VK или ссылку вида https://vk.ru/app12345678.' );
+        }
+        if ( '' === $secret ) {
+            $this->redirect_vk_oauth_error( 'Сначала укажите защищённый ключ приложения VK.' );
+        }
+        if ( '' === $owner || ! preg_match( '/^-?\d+$/', $owner ) || 0 === (int) $owner ) {
+            $this->redirect_vk_oauth_error( 'Сначала укажите ID группы/паблика для авторизации, например -123456789.' );
+        }
+
+        // Исправляем ранее сохранённую ссылку вида /app12345678 до начала
+        // OAuth, чтобы оба callback-этапа отправляли VK только client_id.
+        if ( (string) ( $social['vk_app_id'] ?? '' ) !== $app_id ) {
+            $social['vk_app_id'] = $app_id;
+        }
+
+        /*
+         * Не оставляем старый service token активным во время новой
+         * авторизации. Иначе фоновой WP-Cron может продолжать отправлять
+         * его в wall.post, пока администратор ещё не получил токен группы.
+         */
+        $social['vk_access_token'] = '';
+        $social['vk_group_tokens'] = array();
+        update_option( 'wp_ru_max_social', $social );
+
+        $state = $this->vk_random_string( 32 );
+        $redirect_uri = home_url( '/wp-ru-max-vk-callback/' );
+        $group_id     = ltrim( $owner, '-' );
+
+        set_transient(
+            'wp_ru_max_vk_oauth_' . md5( $state ),
+            array(
+                'stage'         => 'community',
+                'user_id'      => get_current_user_id(),
+                'redirect_uri' => $redirect_uri,
+                'secret'      => $secret,
+                'group_id'    => $group_id,
+            ),
+            10 * MINUTE_IN_SECONDS
+        );
+
+        $auth_url = add_query_arg(
+            array(
+                'client_id'     => $app_id,
+                'display'       => 'page',
+                'redirect_uri'  => $redirect_uri,
+                'group_ids'     => $group_id,
+                'scope'         => 'manage',
+                'response_type' => 'code',
+                'v'             => '5.199',
+                'state'         => $state,
+            ),
+            'https://oauth.vk.com/authorize'
+        );
+
+        wp_safe_redirect( $auth_url );
+        exit;
+    }
+
+    /**
+     * Обменивает authorization code Community OAuth VK на токен сообщества.
+     */
+    public function vk_oauth_callback() {
+        if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Сессия администратора недействительна.', 'Ошибка авторизации VK', array( 'response' => 403 ) );
+        }
+
+        $state = sanitize_text_field( wp_unslash( $_GET['state'] ?? '' ) );
+        $code  = sanitize_text_field( wp_unslash( $_GET['code'] ?? '' ) );
+        $error = sanitize_text_field( wp_unslash( $_GET['error_description'] ?? $_GET['error'] ?? '' ) );
+
+        if ( '' !== $error ) {
+            $this->redirect_vk_oauth_error( $error );
+        }
+        if ( '' === $state || '' === $code ) {
+            $this->redirect_vk_oauth_error( 'VK не вернул код авторизации. Попробуйте ещё раз.' );
+        }
+
+        $pending = get_transient( 'wp_ru_max_vk_oauth_' . md5( $state ) );
+        delete_transient( 'wp_ru_max_vk_oauth_' . md5( $state ) );
+        if ( ! is_array( $pending ) || (int) ( $pending['user_id'] ?? 0 ) !== get_current_user_id() ) {
+            $this->redirect_vk_oauth_error( 'Сессия авторизации VK истекла. Запустите авторизацию заново.' );
+        }
+
+        $social = get_option( 'wp_ru_max_social', array() );
+
+        /*
+         * Первый callback — от VK ID. Получаем пользовательский токен с
+         * правом groups, затем официально запрашиваем токен сообщества.
+         * Второй шаг через oauth.vk.com нужен именно для публикации в группе
+         * и является частью актуального Authorization Code Flow VK.
+         */
+        if ( 'vk_id' === ( $pending['stage'] ?? '' ) ) {
+            $device_id = sanitize_text_field( wp_unslash( $_GET['device_id'] ?? '' ) );
+            if ( '' === $device_id ) {
+                $this->redirect_vk_oauth_error( 'VK ID не вернул device_id. Запустите авторизацию заново.' );
+            }
+
+            $token_body = array(
+                'grant_type'    => 'authorization_code',
+                'code_verifier' => (string) ( $pending['code_verifier'] ?? '' ),
+                'redirect_uri'  => (string) $pending['redirect_uri'],
+                'code'          => $code,
+                'client_id'     => trim( (string) ( $social['vk_app_id'] ?? '' ) ),
+                'device_id'     => $device_id,
+                'state'         => $state,
+            );
+            if ( ! empty( $pending['secret'] ) ) {
+                // Для конфиденциального VK ID-приложения это service_token.
+                $token_body['service_token'] = (string) $pending['secret'];
+            }
+
+            $token_response = wp_remote_post(
+                'https://id.vk.ru/oauth2/auth',
+                array(
+                    'timeout' => 20,
+                    'headers' => array( 'Content-Type' => 'application/x-www-form-urlencoded' ),
+                    'body'    => $token_body,
+                )
+            );
+            if ( is_wp_error( $token_response ) ) {
+                $this->redirect_vk_oauth_error( 'Не удалось связаться с VK ID: ' . $token_response->get_error_message() );
+            }
+
+            $token_data = json_decode( wp_remote_retrieve_body( $token_response ), true );
+            if ( ! is_array( $token_data ) || empty( $token_data['access_token'] ) ) {
+                $description = $token_data['error_description'] ?? $token_data['error'] ?? 'VK ID не выдал Access Token.';
+                $this->redirect_vk_oauth_error( (string) $description );
+            }
+
+            // Сохраняем пользовательскую пару VK ID для refresh и диагностики.
+            $social['vk_user_access_token']  = sanitize_text_field( $token_data['access_token'] );
+            $social['vk_user_refresh_token'] = sanitize_text_field( $token_data['refresh_token'] ?? '' );
+            $social['vk_device_id']          = $device_id;
+            $social['vk_user_expires_at']    = time() + max( 0, (int) ( $token_data['expires_in'] ?? 0 ) );
+            update_option( 'wp_ru_max_social', $social );
+
+            // Второй этап: токен администратора сообщества.
+            $community_state = $this->vk_random_string( 32 );
+            set_transient(
+                'wp_ru_max_vk_oauth_' . md5( $community_state ),
+                array(
+                    'stage'         => 'community',
+                    'user_id'       => get_current_user_id(),
+                    'redirect_uri'  => (string) $pending['redirect_uri'],
+                    'secret'        => (string) ( $pending['secret'] ?? '' ),
+                    'group_id'      => (string) $pending['group_id'],
+                ),
+                10 * MINUTE_IN_SECONDS
+            );
+
+            $community_auth_url = add_query_arg(
+                array(
+                    'client_id'     => trim( (string) ( $social['vk_app_id'] ?? '' ) ),
+                    'display'       => 'page',
+                    'redirect_uri'  => (string) $pending['redirect_uri'],
+                    'group_ids'     => (string) $pending['group_id'],
+                    'scope'         => 'manage',
+                    'response_type' => 'code',
+                    'v'             => '5.199',
+                    'state'         => $community_state,
+                ),
+                'https://oauth.vk.com/authorize'
+            );
+            wp_safe_redirect( $community_auth_url );
+            exit;
+        }
+
+        if ( 'community' !== ( $pending['stage'] ?? '' ) ) {
+            $this->redirect_vk_oauth_error( 'Некорректное состояние авторизации VK.' );
+        }
+
+        $body = array(
+            'redirect_uri'  => $pending['redirect_uri'],
+            'client_id'     => trim( (string) ( $social['vk_app_id'] ?? '' ) ),
+            'client_secret' => $pending['secret'],
+            'code'          => $code,
+        );
+
+        $response = wp_remote_post(
+            'https://oauth.vk.com/access_token',
+            array(
+                'timeout' => 20,
+                'headers' => array( 'Content-Type' => 'application/x-www-form-urlencoded' ),
+                'body'    => $body,
+            )
+        );
+        if ( is_wp_error( $response ) ) {
+            $this->redirect_vk_oauth_error( 'Не удалось связаться с VK: ' . $response->get_error_message() );
+        }
+
+        $data = json_decode( wp_remote_retrieve_body( $response ), true );
+        $has_group_tokens = is_array( $data ) && ! empty( $data['groups'] ) && is_array( $data['groups'] );
+        if ( ! is_array( $data ) || ( empty( $data['access_token'] ) && ! $has_group_tokens ) ) {
+            $description = $data['error_description'] ?? $data['error'] ?? 'VK не выдал Access Token.';
+            $this->redirect_vk_oauth_error( (string) $description );
+        }
+
+        $group_tokens = is_array( $social['vk_group_tokens'] ?? null )
+            ? $social['vk_group_tokens']
+            : array();
+        if ( ! empty( $data['groups'] ) && is_array( $data['groups'] ) ) {
+            foreach ( $data['groups'] as $group ) {
+                $group_id = (string) absint( $group['group_id'] ?? 0 );
+                $token    = sanitize_text_field( $group['access_token'] ?? '' );
+                if ( '' !== $group_id && '' !== $token ) {
+                    $group_tokens[ $group_id ] = $token;
+                }
+            }
+        }
+        // Совместимость с форматом ответа, где токен группы приходит отдельным ключом.
+        $group_key = 'access_token_' . absint( $pending['group_id'] );
+        if ( empty( $group_tokens[ $pending['group_id'] ] ) && ! empty( $data[ $group_key ] ) ) {
+            $group_tokens[ $pending['group_id'] ] = sanitize_text_field( $data[ $group_key ] );
+        }
+        /*
+         * В зависимости от типа приложения VK возвращает токен сообщества
+         * либо в массиве groups, либо обычным полем access_token. Раньше
+         * второй вариант не сохранялся, и плагин продолжал использовать
+         * защищённый ключ/service token из настроек приложения. Такой токен
+         * нельзя передавать в wall.post.
+         */
+        if ( empty( $group_tokens[ $pending['group_id'] ] ) && ! empty( $data['access_token'] ) ) {
+            $group_tokens[ $pending['group_id'] ] = sanitize_text_field( $data['access_token'] );
+        }
+        $social['vk_group_tokens'] = $group_tokens;
+        if ( ! empty( $group_tokens[ $pending['group_id'] ] ) ) {
+            $social['vk_access_token'] = $group_tokens[ $pending['group_id'] ];
+        }
+        $social['vk_expires_at'] = 0;
+        update_option( 'wp_ru_max_social', $social );
+
+        WP_Ru_Max_Logger::log( 'social', 'success', 'Авторизация ВКонтакте и получение токена сообщества успешно завершены.' );
+        wp_safe_redirect(
+            add_query_arg(
+                array(
+                    'page'      => 'wp-ru-max',
+                    'tab'       => 'social_networks',
+                    'vk_oauth'  => 'success',
+                ),
+                admin_url( 'admin.php' )
+            )
+        );
+        exit;
+    }
+
+    /**
+     * Безопасная строка для state/code_verifier в формате base64url.
+     */
+    private function vk_random_string( $bytes ) {
+        return $this->vk_base64url_encode( random_bytes( (int) $bytes ) );
+    }
+
+    /**
+     * Принимает как числовой client_id, так и ссылку VK вида
+     * https://vk.ru/app12345678 или https://vk.com/app12345678.
+     */
+    private function normalize_vk_app_id( $value ) {
+        $value = trim( (string) $value );
+        if ( '' === $value ) {
+            return '';
+        }
+        if ( preg_match( '/^\d+$/', $value ) ) {
+            return $value;
+        }
+        // Используем ~ как разделитель: символ # разрешён внутри класса
+        // URL-фрагмента и не должен завершать регулярное выражение.
+        if ( preg_match( '~/(?:app)(\d+)(?:[/?#]|$)~i', $value, $matches ) ) {
+            return $matches[1];
+        }
+        return '';
+    }
+
+    private function vk_base64url_encode( $value ) {
+        return rtrim( strtr( base64_encode( $value ), '+/', '-_' ), '=' );
+    }
+
+    private function redirect_vk_oauth_error( $message ) {
+        wp_safe_redirect(
+            add_query_arg(
+                array(
+                    'page'         => 'wp-ru-max',
+                    'tab'          => 'social_networks',
+                    'vk_oauth_error'=> rawurlencode( wp_strip_all_tags( $message ) ),
+                ),
+                admin_url( 'admin.php' )
+            )
+        );
+        exit;
     }
 
     /* =========================================================
@@ -3320,7 +3659,12 @@ jQuery(function($){
             <h2 style="display:flex;align-items:center;gap:10px;">
                 ВКонтакте
             </h2>
-            <p>Для публикации ВКонтакте создайте приложение на <a href="https://dev.vk.ru/ru/api/open-api/getting-started" target="_blank" rel="noopener">https://dev.vk.ru</a> и введите данные ниже.</p>
+            <?php if ( isset( $_GET['vk_oauth'] ) && 'success' === $_GET['vk_oauth'] ) : ?>
+                <div class="notice notice-success inline"><p>ВКонтакте успешно авторизован. Access Token сохранён.</p></div>
+            <?php elseif ( ! empty( $_GET['vk_oauth_error'] ) ) : ?>
+                <div class="notice notice-error inline"><p>Ошибка VK: <?php echo esc_html( rawurldecode( sanitize_text_field( wp_unslash( $_GET['vk_oauth_error'] ) ) ) ); ?></p></div>
+            <?php endif; ?>
+            <p>Для публикации создайте приложение в <a href="https://dev.vk.ru/ru/admin/apps-list" target="_blank" rel="noopener">кабинете разработчика VK</a>, добавьте чистый redirect URL ниже и введите ID приложения и защищённый ключ.</p>
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
                 <label class="wp-ru-max-toggle">
                     <input type="checkbox" id="vk_enabled" <?php checked( ! empty( $social['vk_enabled'] ) ); ?> />
@@ -3332,19 +3676,22 @@ jQuery(function($){
                 <tr>
                     <th><label for="vk_app_id">ID приложения <span style="color:#d63638;">*</span></label></th>
                     <td>
-                        <input type="text" id="vk_app_id" class="regular-text" value="<?php echo esc_attr( $social['vk_app_id'] ?? '' ); ?>" placeholder="12345678" />
-                        <p class="description">ID из настроек вашего VK-приложения.</p>
+                        <input type="text" id="vk_app_id" class="regular-text" value="<?php echo esc_attr( $social['vk_app_id'] ?? '' ); ?>" placeholder="12345678 или https://vk.ru/app12345678" />
+                        <p class="description">Можно указать числовой ID или ссылку приложения вида <code>https://vk.ru/app12345678</code>. При сохранении будет оставлен только ID.</p>
                     </td>
                 </tr>
                 <tr>
                     <th><label for="vk_secret_key">Защищённый ключ</label></th>
-                    <td><input type="password" id="vk_secret_key" class="regular-text" value="<?php echo esc_attr( $social['vk_secret_key'] ?? '' ); ?>" placeholder="Secret key из настроек приложения VK" autocomplete="new-password" /></td>
+                    <td>
+                        <input type="password" id="vk_secret_key" class="regular-text" value="<?php echo esc_attr( $social['vk_secret_key'] ?? ( $social['vk_service_token'] ?? '' ) ); ?>" placeholder="Защищённый ключ из настроек приложения VK" autocomplete="new-password" />
+                        <p class="description">Укажите «Защищённый ключ» из настроек приложения VK. Не вставляйте сюда «Сервисный ключ»: это другой ключ и он не подходит для публикации.</p>
+                    </td>
                 </tr>
                 <tr>
                     <th><label for="vk_access_token">Access Token</label></th>
                     <td>
-                        <input type="text" id="vk_access_token" class="large-text" value="<?php echo esc_attr( $social['vk_access_token'] ?? '' ); ?>" placeholder="Вставьте скопированный токен из URL после авторизации" />
-                        <p class="description">Получается после нажатия «Авторизоваться» ниже — скопируйте URL и вставьте его полностью в поле.</p>
+                        <input type="text" id="vk_access_token" class="large-text" value="<?php echo esc_attr( $social['vk_access_token'] ?? '' ); ?>" placeholder="Заполняется автоматически после авторизации" />
+                        <p class="description">Заполняется автоматически после авторизации сообщества. Сервисный ключ приложения сюда вставлять нельзя.</p>
                     </td>
                 </tr>
                 <tr>
@@ -3355,20 +3702,10 @@ jQuery(function($){
                     </td>
                 </tr>
             </table>
-            <?php
-            $vk_auth_url = add_query_arg( array(
-                'client_id'     => $social['vk_app_id'] ?? '',
-                'scope'         => 'wall,groups,offline',
-                'redirect_uri'  => 'https://oauth.vk.com/blank.html',
-                'display'       => 'page',
-                'response_type' => 'token',
-                'v'             => '5.199',
-            ), 'https://oauth.vk.com/authorize' );
-            ?>
             <div class="wp-ru-max-actions" style="margin-top:10px;">
-                <a href="<?php echo esc_url( $vk_auth_url ); ?>" target="_blank" class="button button-secondary">Авторизоваться ВКонтакте</a>
+                <a id="vk_authorize_btn" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=wp_ru_max_vk_start' ), 'wp_ru_max_vk_oauth' ) ); ?>" class="button button-secondary">Авторизовать сообщество VK</a>
             </div>
-            <p class="description" style="margin-top:6px;">После авторизации скопируйте полный URL из адресной строки браузера и вставьте в поле «Access Token» выше.</p>
+            <p class="description" style="margin-top:6px;">В настройках приложения VK укажите Authorized redirect URL <strong>ровно без параметров</strong>: <code><?php echo esc_html( home_url( '/wp-ru-max-vk-callback/' ) ); ?></code>. Авторизация запрашивает официальный токен выбранного сообщества, необходимый для публикации.</p>
         </div>
 
         <?php /* ---- ЯНДЕКС ДЗЕН ---- */ ?>
@@ -3415,6 +3752,46 @@ jQuery(function($){
 
         <script>
         (function($){
+            /*
+             * OAuth-старт читает настройки из wp_options. Поэтому сначала
+             * сохраняем текущие значения полей, даже если пользователь не
+             * нажал отдельную кнопку «Сохранить настройки».
+             */
+            $('#vk_authorize_btn').on('click', function(e){
+                e.preventDefault();
+                var $btn = $(this);
+                var authUrl = $btn.attr('href');
+                $btn.addClass('disabled').css('pointer-events', 'none').text('Сохраняем и открываем VK...');
+
+                $.post(wpRuMax.ajaxUrl, {
+                    action: 'wp_ru_max_save_social',
+                    nonce: wpRuMax.nonce,
+                    vk_enabled: $('#vk_enabled').is(':checked') ? 1 : 0,
+                    vk_app_id: $('#vk_app_id').val(),
+                    vk_secret_key: $('#vk_secret_key').val(),
+                    vk_access_token: $('#vk_access_token').val(),
+                    vk_owner_id: $('#vk_owner_id').val()
+                }).done(function(resp){
+                    if (resp && resp.success) {
+                        window.location.href = authUrl;
+                        return;
+                    }
+                    $btn.removeClass('disabled').css('pointer-events', '').text('Авторизовать сообщество VK');
+                    $('#social_networks_result')
+                        .removeClass('notice-success').addClass('notice-error')
+                        .css({display:'block',padding:'12px 16px',background:'#fff',
+                              borderLeft:'4px solid #d63638',marginTop:'12px'})
+                        .text((resp && resp.data) || 'Не удалось сохранить настройки VK.');
+                }).fail(function(){
+                    $btn.removeClass('disabled').css('pointer-events', '').text('Авторизовать сообщество VK');
+                    $('#social_networks_result')
+                        .removeClass('notice-success').addClass('notice-error')
+                        .css({display:'block',padding:'12px 16px',background:'#fff',
+                              borderLeft:'4px solid #d63638',marginTop:'12px'})
+                        .text('Ошибка сети при сохранении настроек VK.');
+                });
+            });
+
             /* --- Добавить нового бота --- */
             var botTemplate = function(idx){
                 return '<div class="wp-ru-max-sn-bot-card" data-bot-index="'+idx+'" style="border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:12px;background:#fafbfc;">'
@@ -3524,7 +3901,8 @@ jQuery(function($){
         $tg_bots  = $social['telegram_bots'] ?? array();
         $has_max  = ! empty( $settings['bot_token'] );
         $has_tg   = ! empty( $tg_bots );
-        $has_vk   = ! empty( $social['vk_enabled'] ) && ! empty( $social['vk_access_token'] );
+        $has_vk   = ! empty( $social['vk_enabled'] )
+            && '' !== WP_Ru_Max_Social_Poster::get_vk_access_token( $social );
         $has_ok   = ! empty( $social['ok_enabled'] ) && ! empty( $social['ok_access_token'] );
         $has_dzen = ! empty( $social['dzen_enabled'] );
         $max_icon = esc_url( WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png' );
@@ -3835,8 +4213,11 @@ jQuery(function($){
 
             /* ---- ВКонтакте ---- */
             case 'vk':
-                $access_token = $social['vk_access_token'] ?? '';
+                $access_token = WP_Ru_Max_Social_Poster::get_vk_access_token( $social );
                 $owner_id     = $social['vk_owner_id']     ?? '';
+                if ( preg_match( '/^\d+$/', (string) $owner_id ) && 0 !== (int) $owner_id ) {
+                    $owner_id = '-' . absint( $owner_id );
+                }
                 if ( empty( $access_token ) ) {
                     wp_send_json_error( 'Не настроен Access Token ВКонтакте.' );
                 }
@@ -3847,7 +4228,11 @@ jQuery(function($){
                     'v'            => '5.199',
                 );
                 if ( ! empty( $url ) ) {
-                    $params['attachments'] = $url;
+                    // Обычный URL в attachments вызывает VK error 100
+                    // link_photo_sizing_rule. Передаём ссылку в тексте.
+                    if ( false === strpos( $message, $url ) ) {
+                        $params['message'] .= "\n\n" . $url;
+                    }
                 }
                 $resp = wp_remote_post( 'https://api.vk.com/method/wall.post', array(
                     'timeout' => 20,
