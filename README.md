@@ -17,11 +17,11 @@
 
 **Интеграция WordPress с российским мессенджером MAX (max.ru)**
 
-<a href="https://rucoder-sudo.github.io/wp-ru-max/">
-  <img src="https://img.shields.io/badge/🌐_Открыть_сайт-rucoder--sudo.github.io%2Fwp--ru--max-d63347?style=for-the-badge&labelColor=1a0d12" alt="Открыть сайт" height="42">
+<a href="https://fixcoder.ru/">
+  <img src="https://img.shields.io/badge/🌐_Открыть_сайт-fixcoder.ru-d63347?style=for-the-badge&labelColor=1a0d12" alt="Открыть сайт" height="42">
 </a>
 
-[Получить лицензию](https://рукодер.рф) · [Установка](#установка) · [Настройка](#настройка) · [Поддержка](#поддержка) · [Лицензия использования](https://github.com/RuCoder-sudo/wp-ru-max/blob/main/ICENSE.md)
+[Получить лицензию](https://fixcoder.ru) · [Установка](#установка) · [Настройка](#настройка) · [Поддержка](#поддержка) · [Лицензия использования](https://github.com/RuCoder-sudo/wp-ru-max/blob/main/ICENSE.md)
 
 </div>
 
