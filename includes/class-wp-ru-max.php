@@ -173,6 +173,10 @@ class WP_Ru_Max {
             self::create_table();
             self::maybe_add_default_options();
         }
+        if ( function_exists( 'wp_ru_max_register_vk_callback_route' ) ) {
+            wp_ru_max_register_vk_callback_route();
+        }
+        flush_rewrite_rules( false );
     }
 
     public static function deactivate() {
