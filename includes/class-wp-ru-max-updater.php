@@ -156,7 +156,7 @@ class WP_Ru_Max_Updater {
             'name'          => 'WP Ru-max',
             'slug'          => dirname( $this->plugin_slug ),
             'version'       => $latest_version,
-            'author'        => '<a href="https://рукодер.рф/" target="_blank">RuCoder</a>',
+            'author'        => '<a href="https://fixcoder.ru/" target="_blank">RuCoder</a>',
             'homepage'      => "https://github.com/{$this->github_user}/{$this->github_repo}",
             'requires'      => '5.8',
             'tested'        => '6.7',
