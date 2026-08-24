@@ -55,7 +55,11 @@ class WP_Ru_Max_Admin {
                 'callback'            => array( $this, 'rest_get_skip' ),
                 'permission_callback' => array( $this, 'rest_skip_permission' ),
                 'args'                => array(
-                    'post_id' => array( 'validate_callback' => 'is_numeric' ),
+                    'post_id' => array(
+                        'validate_callback' => function ( $value ) {
+                            return is_numeric( $value );
+                        },
+                    ),
                 ),
             ),
             array(
@@ -63,7 +67,11 @@ class WP_Ru_Max_Admin {
                 'callback'            => array( $this, 'rest_set_skip' ),
                 'permission_callback' => array( $this, 'rest_skip_permission' ),
                 'args'                => array(
-                    'post_id' => array( 'validate_callback' => 'is_numeric' ),
+                    'post_id' => array(
+                        'validate_callback' => function ( $value ) {
+                            return is_numeric( $value );
+                        },
+                    ),
                     'on'      => array( 'required' => true ),
                 ),
             ),
@@ -856,8 +864,21 @@ jQuery(function($){
         }
 
         if ( is_wp_error( $result ) ) {
-            WP_Ru_Max_Logger::log( 'test', 'error', 'Тест сообщения НЕУДАЧЕН в ' . $chat_id . ': ' . $result->get_error_message() );
-            wp_send_json_error( $result->get_error_message() );
+            $error_message = $result->get_error_message();
+            $error_data    = $result->get_error_data();
+
+            if (
+                is_array( $error_data )
+                && isset( $error_data['body']['code'] )
+                && 'chat.denied' === $error_data['body']['code']
+            ) {
+                $error_message = 'MAX не разрешил боту отправить сообщение в этот чат. '
+                    . 'Проверьте, что указан правильный ID чата, бот добавлен в группу/канал '
+                    . 'и ему выданы права на отправку сообщений.';
+            }
+
+            WP_Ru_Max_Logger::log( 'test', 'error', 'Тест сообщения НЕУДАЧЕН в ' . $chat_id . ': ' . $error_message );
+            wp_send_json_error( $error_message );
         } else {
             WP_Ru_Max_Logger::log( 'test', 'success', 'Тестовое сообщение успешно отправлено в ' . $chat_id );
             wp_send_json_success( 'Тестовое сообщение отправлено!' );
@@ -1159,6 +1180,13 @@ jQuery(function($){
             <h3>История версий</h3>
             <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
 
+            <h4 style="margin-bottom:4px;">v1.0.47</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Исправлено:</strong> callback проверки REST API больше не вызывает критическую ошибку <code>is_numeric() expects exactly 1 argument, 3 given</code>.</li>
+                <li><strong>Исправлено:</strong> неудачные задания очереди не теряются и получают до трёх повторных попыток.</li>
+                <li><strong>Обновлено:</strong> ошибка MAX <code>chat.denied</code> при тестовой отправке теперь сопровождается понятной подсказкой по ID чата и правам бота.</li>
+            </ul>
+
             <h4 style="margin-bottom:4px;">v1.0.46</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
                 <li><strong>Обновлено:</strong> сервер проверки лицензии перенесён на <code>fixcoder.ru</code>. Перед отключением старого домена установите эту версию на сайтах клиентов.</li>
@@ -1198,7 +1226,7 @@ jQuery(function($){
                 <li><strong>Исправлено:</strong> <code>ajax_send_push</code> — исправлен порядок выбора токена Telegram: <code>direct_telegram_token</code> теперь учитывается корректно.</li>
             </ul>
 
-            <?php /* Старые версии оставлены в исходниках для справки, но в плагине показываются только 1.0.43–1.0.46. */ ?>
+            <?php /* Старые версии оставлены в исходниках для справки, но в плагине показываются только 1.0.43–1.0.47. */ ?>
             <?php if ( false ) : ?>
             <h4 style="margin-bottom:4px;">v1.0.42</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
