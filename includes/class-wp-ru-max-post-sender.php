@@ -34,6 +34,10 @@ class WP_Ru_Max_Post_Sender {
         // проверяем очередь на каждом заходе (фронт и админка) — это не зависит
         // от того, срабатывает ли сам WP-Cron.
         add_action( 'init', array( $this, 'maybe_process_due_queue' ), 20 );
+        // Некоторые cron-обработчики и плагины добавляют задания после init.
+        // Повторная проверка после полной загрузки WordPress закрывает это окно;
+        // блокировка очереди не допускает двойную отправку.
+        add_action( 'wp_loaded', array( $this, 'maybe_process_due_queue' ), 999 );
     }
 
     /**
@@ -220,8 +224,18 @@ class WP_Ru_Max_Post_Sender {
                     }
                     $this->process_job( $job_key );
                     // Снимаем оригинальное wp-cron событие, если оно ещё не сработало,
-                    // чтобы запись не отправилась повторно позже.
+                    // чтобы успешно обработанная запись не отправилась повторно позже.
+                    // Если отправка не удалась, process_job() оставляет задание
+                    // в очереди и планирует повтор — его удалять нельзя.
+                    $remaining_queue = $this->get_queue();
                     wp_clear_scheduled_hook( 'wp_ru_max_delayed_send', array( $job_key ) );
+                    if ( isset( $remaining_queue[ $job_key ]['due'] ) ) {
+                        wp_schedule_single_event(
+                            (int) $remaining_queue[ $job_key ]['due'],
+                            'wp_ru_max_delayed_send',
+                            array( $job_key )
+                        );
+                    }
                     $processed++;
                 }
             }
@@ -243,17 +257,52 @@ class WP_Ru_Max_Post_Sender {
             return; // Уже обработано.
         }
         $data = $queue[ $job_key ];
-        unset( $queue[ $job_key ] );
-        $this->save_queue( $queue );
 
         $post = get_post( $data['post_id'] );
         if ( ! $post || $post->post_status !== 'publish' ) {
-            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Отложенная отправка: запись #{$data['post_id']} не найдена или снята с публикации." );
+            unset( $queue[ $job_key ] );
+            $this->save_queue( $queue );
+            $status = $post ? $post->post_status : 'не найдена';
+            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Отложенная отправка: запись #{$data['post_id']} не отправлена — текущий статус: {$status}. Задание удалено из очереди.", array(
+                'post_id' => $data['post_id'],
+                'status'  => $status,
+            ) );
             return;
         }
 
         $settings = get_option( 'wp_ru_max_settings', array() );
-        $this->send_post( $post, ! empty( $data['is_new'] ), $settings );
+        $sent = $this->send_post( $post, ! empty( $data['is_new'] ), $settings );
+
+        if ( $sent ) {
+            unset( $queue[ $job_key ] );
+            $this->save_queue( $queue );
+            return;
+        }
+
+        // Не теряем задание при временном отказе API, сетевой ошибке или
+        // сбое WP-Cron. Даём до трёх повторных попыток с интервалом 5 минут.
+        $attempts = isset( $data['attempts'] ) ? (int) $data['attempts'] : 0;
+        if ( $attempts < 3 ) {
+            $attempts++;
+            $retry_delay = 5 * MINUTE_IN_SECONDS;
+            $data['attempts'] = $attempts;
+            $data['due']      = time() + $retry_delay;
+            $queue[ $job_key ] = $data;
+            $this->save_queue( $queue );
+            wp_schedule_single_event( $data['due'], 'wp_ru_max_delayed_send', array( $job_key ) );
+            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Отправка записи #{$post->ID} не завершена. Повторная попытка {$attempts}/3 запланирована через 5 минут.", array(
+                'post_id'  => $post->ID,
+                'job_key'  => $job_key,
+                'attempts' => $attempts,
+            ) );
+        } else {
+            unset( $queue[ $job_key ] );
+            $this->save_queue( $queue );
+            WP_Ru_Max_Logger::log( 'post_sender', 'error', "Отправка записи #{$post->ID} не удалась после 3 повторных попыток. Задание удалено из очереди.", array(
+                'post_id' => $post->ID,
+                'job_key' => $job_key,
+            ) );
+        }
     }
 
     public function on_post_status_change( $new_status, $old_status, $post ) {
@@ -333,12 +382,25 @@ class WP_Ru_Max_Post_Sender {
             if ( ! wp_next_scheduled( 'wp_ru_max_delayed_send', array( $job_key ) ) ) {
                 wp_schedule_single_event( $due, 'wp_ru_max_delayed_send', array( $job_key ) );
             }
+            $scheduled_event = wp_next_scheduled( 'wp_ru_max_delayed_send', array( $job_key ) );
 
             WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} поставлена в очередь на отправку через {$delay} сек.", array(
-                'post_id' => $post->ID,
-                'delay'   => $delay,
-                'job_key' => $job_key,
+                'post_id'         => $post->ID,
+                'delay'           => $delay,
+                'job_key'         => $job_key,
+                'published_at'    => $post->post_date,
+                'published_at_gmt'=> $post->post_date_gmt,
+                'queue_due_gmt'   => gmdate( 'Y-m-d H:i:s', $due ),
+                'cron_event_time' => $scheduled_event ? gmdate( 'Y-m-d H:i:s', $scheduled_event ) : null,
+                'cron_scheduled'  => (bool) $scheduled_event,
             ) );
+            if ( ! $scheduled_event ) {
+                WP_Ru_Max_Logger::log( 'post_sender', 'error', "Не удалось запланировать WP-Cron для записи #{$post->ID}. Задание сохранено в очереди и будет обработано при следующем запуске сайта.", array(
+                    'post_id' => $post->ID,
+                    'job_key' => $job_key,
+                    'due'     => $due,
+                ) );
+            }
             return;
         }
 
@@ -386,6 +448,7 @@ class WP_Ru_Max_Post_Sender {
         // Настройки retry
         $max_retries = isset( $settings['retry_count'] ) ? (int) $settings['retry_count'] : 2;
         $retry_delay = isset( $settings['retry_delay_seconds'] ) ? (int) $settings['retry_delay_seconds'] : 5;
+        $all_sent = true;
 
         foreach ( $channels as $channel ) {
             $chat_id = trim( $channel );
@@ -419,6 +482,7 @@ class WP_Ru_Max_Post_Sender {
             }
 
             if ( is_wp_error( $result ) ) {
+                $all_sent = false;
                 WP_Ru_Max_Logger::log( 'post_sender', 'error', "Ошибка отправки записи #{$post->ID} в канал $chat_id: " . $result->get_error_message(), array(
                     'post_id' => $post->ID,
                     'chat_id' => $chat_id,
@@ -432,6 +496,8 @@ class WP_Ru_Max_Post_Sender {
                 ) );
             }
         }
+
+        return $all_sent && ! empty( $channels );
     }
 
     /**
