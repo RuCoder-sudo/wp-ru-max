@@ -9,7 +9,7 @@
   
 **WP Ru-max** Плагин для WordPress, который подключает ваш сайт к российскому мессенджеру **MAX (max.ru)**. Автоматическая публикация записей, личные уведомления с любых форм и красивый чат-виджет.
 
-![Version](https://img.shields.io/badge/version-1.0.46-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.47-blue?style=flat-square)
 ![WordPress](https://img.shields.io/badge/WordPress-5.8%2B-21759b?style=flat-square&logo=wordpress)
 ![WooCommerce](https://img.shields.io/badge/WooCommerce-4.0%2B-96588a?style=flat-square)
 ![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4?style=flat-square&logo=php)
@@ -75,6 +75,11 @@
 | Задержка появления | 0 / 5 / 8 / 10 / 15 секунд |
 | Отступ от края | Слайдер 0–200 px |
 
+### Новое в v1.0.47
+
+- Исправлена критическая ошибка WordPress REST API `is_numeric() expects exactly 1 argument, 3 given`.
+- Очередь отложенной публикации сохраняет неудачные задания и повторяет отправку до трёх раз.
+- Улучшена диагностика ошибки MAX `chat.denied` при проверке отправки сообщения.
 
 ### Новое в v1.0.46
 
@@ -136,6 +141,16 @@
 ---
 
 ## Changelog
+
+### 1.0.47
+* Исправлена критическая ошибка WordPress REST API `is_numeric() expects exactly 1 argument, 3 given`.
+* Изменено: Очередь отложенной публикации сохраняет неудачные задания и повторяет отправку до трёх раз.
+* Улучшена диагностика ошибки MAX `chat.denied` при проверке отправки сообщения.
+  
+### 1.0.46
+* Исправлено: обычная ссылка не отправляется как фото-вложение, поэтому устранена ошибка `link_photo_sizing_rule`;
+* Изменено: ID группы нормализуется в отрицательный `owner_id
+* Исправлено: исправлена ошибка API 28: service token больше не используется для `wall.post`;- добавлен официальный Community OAuth для получения токена сообщества;
 
 ### 1.0.45
 * Добавлено: отдельный переключатель приветственного сообщения в чат-виджете MAX.
