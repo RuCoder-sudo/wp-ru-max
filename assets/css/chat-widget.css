@@ -293,6 +293,7 @@
 #wp-ru-max-widget #wp-ru-max-contacts-menu.wprmp-position-right .wprmp-panel{right:0}
 #wp-ru-max-widget #wp-ru-max-contacts-menu.wprmp-position-left .wprmp-panel{left:0}
 #wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-panel.is-open{display:block}
+ #wp-ru-max-widget #wp-ru-max-contacts-menu.is-open{pointer-events:auto}
 #wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-panel *{max-width:100%;box-sizing:border-box;overflow-wrap:anywhere}
 #wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-panel-brand{display:flex;align-items:center;gap:9px;padding-right:20px}
 #wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-brand-symbol{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--wprmp-bg);color:var(--wprmp-color);font-size:10px;font-weight:800}
