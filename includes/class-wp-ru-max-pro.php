@@ -74,6 +74,9 @@ function wp_ru_max_pro_settings() {
             'attention' => 'pulse',
         ),
         'chat' => array(
+            // Версия 1.0.51: живой чат можно отключить независимо от MAX и
+            // остальных каналов связи. По умолчанию сохраняем прежнее поведение.
+            'live_chat_enabled' => true,
             'target' => '',
             'title' => 'Живой чат',
             'welcome' => 'Здравствуйте! Чем можем помочь?',
@@ -130,7 +133,7 @@ function wp_ru_max_pro_settings() {
         $settings['style']['backdrop_blur'] ?? $defaults['style']['backdrop_blur'],
         $defaults['style']['backdrop_blur']
     );
-    foreach ( array( 'manager_online', 'bot_enabled', 'schedule_enabled', 'faq_enabled', 'contact_form_enabled' ) as $bool_key ) {
+    foreach ( array( 'live_chat_enabled', 'manager_online', 'bot_enabled', 'schedule_enabled', 'faq_enabled', 'contact_form_enabled' ) as $bool_key ) {
         $settings['chat'][ $bool_key ] = wp_ru_max_pro_bool(
             $settings['chat'][ $bool_key ] ?? $defaults['chat'][ $bool_key ],
             $defaults['chat'][ $bool_key ]
