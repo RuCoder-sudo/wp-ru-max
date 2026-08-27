@@ -466,6 +466,17 @@
     icon.setAttribute('aria-haspopup', 'dialog');
     icon.setAttribute('aria-expanded', 'false');
     if (close) close.addEventListener('click', closeMenu);
+    /*
+     * Preserve the browser's default navigation for all external, tel: and
+     * mailto: channel links while preventing theme scripts from treating the
+     * click as a click on the launcher or an outside click.
+     */
+    menu.addEventListener('click', function (event) {
+        var link = event.target.closest ? event.target.closest('a.wprmp-channel') : null;
+        if (link && link.getAttribute('href') && link.getAttribute('href') !== '#') {
+            event.stopPropagation();
+        }
+    });
     menu.querySelectorAll('.wprmp-open-chat,.wprmp-open-live-chat').forEach(function (button) {
         button.addEventListener('click', function () { showPanel(button.dataset.mode || (button.classList.contains('wprmp-open-chat') ? 'contact_form' : 'live_chat')); });
     });
