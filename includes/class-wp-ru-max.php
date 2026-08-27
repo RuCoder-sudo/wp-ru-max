@@ -119,6 +119,9 @@ class WP_Ru_Max {
                 'retry_delay_seconds'    => 5,
                 'image_size_limit_mb'    => 5,
                 'notifications_enabled'  => false,
+                // Независимые правила для системных и клиентских писем.
+                'notify_user_registration' => true,
+                'notify_customer_order' => true,
                 'notify_from_email'      => 'any',
                 'notify_chat_ids'        => array(),
                 'notify_template'        => "<b>{email_subject}</b>\n{email_message}",
