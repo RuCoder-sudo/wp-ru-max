@@ -699,6 +699,8 @@ jQuery(function($){
                 case 'show_author_date':
                 case 'send_post_image':
                 case 'notifications_enabled':
+                case 'notify_user_registration':
+                case 'notify_customer_order':
                 case 'send_files_by_url':
                 case 'enable_bot_api_log':
                 case 'enable_post_sender_log':
@@ -736,7 +738,7 @@ jQuery(function($){
         } else {
             $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages', 'max_oauth_bot_username', 'chat_widget_utm_source', 'chat_widget_utm_medium', 'chat_widget_utm_campaign', 'chat_widget_utm_content', 'chat_widget_ya_metrika_counter', 'chat_widget_ya_metrika_goal', 'hashtags_custom_mentions' );
             $allowed_textarea = array( 'notify_template', 'post_message_template', 'chat_widget_retention_message', 'chat_widget_sound_specific_pages' );
-            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_message_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled', 'multisite_enabled', 'woo_filter_enabled', 'chat_widget_ya_metrika_enabled', 'general_dedup_enabled', 'hashtags_enabled' );
+            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'notify_user_registration', 'notify_customer_order', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_message_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled', 'multisite_enabled', 'woo_filter_enabled', 'chat_widget_ya_metrika_enabled', 'general_dedup_enabled', 'hashtags_enabled' );
             $allowed_int      = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay', 'send_delay_seconds', 'retry_count', 'retry_delay_seconds', 'general_dedup_ttl' );
             $allowed_float    = array( 'image_size_limit_mb' );
             $allowed_color    = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
@@ -1205,6 +1207,14 @@ jQuery(function($){
                 <li><strong>Исправлено:</strong> настройка «Эффект размытия фона иконок» теперь применяется к виджету и отображается в живом preview.</li>
                 <li><strong>Исправлено:</strong> блок «ЖИВОЙ ПРОСМОТР» теперь загружается со стилями и реагирует на клики по «Написать нам» и «Живой чат».</li>
                 <li><strong>Добавлено:</strong> синхронизация цветов, CTA, текста сайта, приветствия, размера, положения и анимации в реальном времени.</li>
+            </ul>
+
+            <h4 style="margin-bottom:4px;">v1.0.51</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Исправлено:</strong> значок «Живой чат» теперь отключается отдельным переключателем.</li>
+                <li><strong>Добавлено:</strong> компоновки значков «Столбиком», «Веером», «В два ряда» и «Полукругом» с обновлением preview.</li>
+                <li><strong>Добавлено:</strong> независимое отключение уведомления о регистрации пользователя и клиентского письма о заказе WooCommerce.</li>
+                <li><strong>Изменено:</strong> исходные письма WordPress и WooCommerce клиентам не блокируются при отключении их копий в MAX.</li>
             </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.47</h4>
@@ -1907,7 +1917,17 @@ jQuery(function($){
                                 <strong>Уведомление ошибок сайта</strong>
                                 <span class="description"> — уведомление в MAX при критических PHP-ошибках (fatal error)</span>
                             </label>
-                            <p class="description" style="margin-top:10px;">Если ничего не включено — модуль работает как прежде: перехватывает все письма и доставляет их в MAX.</p>
+                            <label style="display:block;margin-top:10px;">
+                                <input type="checkbox" id="notify_user_registration" name="notify_user_registration" value="1" <?php checked( ! empty( $settings['notify_user_registration'] ?? true ) ); ?> />
+                                <strong>Регистрация нового пользователя</strong>
+                                <span class="description"> — дублировать в MAX уведомление WordPress о регистрации пользователя</span>
+                            </label>
+                            <label style="display:block;margin-top:10px;">
+                                <input type="checkbox" id="notify_customer_order" name="notify_customer_order" value="1" <?php checked( ! empty( $settings['notify_customer_order'] ?? true ) ); ?> />
+                                <strong>Клиентское уведомление о заказе</strong>
+                                <span class="description"> — дублировать в MAX письмо клиенту «Спасибо за ваш заказ» и другие письма customer_*</span>
+                            </label>
+                            <p class="description" style="margin-top:10px;">Эти правила влияют только на дублирование писем в MAX. Отправка исходных писем WordPress и WooCommerce клиентам не изменяется.</p>
                         </td>
                     </tr>
                 </table>
