@@ -15,6 +15,9 @@ class WP_Ru_Max_License {
     const BLOCK_MINUTES      = 60;
     const RECHECK_DAYS       = 160;
     const RECHECK_SECONDS    = 13824000;
+    const RECHECK_RETRY_SECONDS = 3600;
+    const RECHECK_START_GUARD_SECONDS = 60;
+    const INVALID_CONFIRMATIONS_REQUIRED = 3;
 
     const VERIFY_URL  = 'https://fixcoder.ru/wp-json/wp-ru-max-km/v1/verify';
     const API_SECRET  = 'd0563fa8f8fce6879cdf697eed0460a82fa7977897fd364ec911c93ed8bb25b3';
@@ -43,13 +46,13 @@ class WP_Ru_Max_License {
     }
 
     public static function is_active() {
-        $data = get_option( self::OPTION_KEY, array() );
+        $data = self::get_data();
         if ( ! empty( $data['status'] ) && $data['status'] === 'active' ) {
             return true;
         }
 
         if ( is_multisite() ) {
-            $net_data = get_site_option( self::NETWORK_OPTION_KEY, array() );
+            $net_data = self::get_network_data();
             if ( ! empty( $net_data['status'] ) && $net_data['status'] === 'active' ) {
                 $scope = $net_data['scope'] ?? 'network';
                 if ( $scope === 'network' ) {
@@ -73,16 +76,46 @@ class WP_Ru_Max_License {
         if ( ! is_multisite() ) {
             return false;
         }
-        $data = get_site_option( self::NETWORK_OPTION_KEY, array() );
+        $data = self::get_network_data();
         return ! empty( $data['status'] ) && $data['status'] === 'active';
     }
 
     public static function get_data() {
-        return get_option( self::OPTION_KEY, array() );
+        $data = get_option( self::OPTION_KEY, array() );
+        return self::normalize_legacy_suspension( $data, false );
     }
 
     public static function get_network_data() {
-        return get_site_option( self::NETWORK_OPTION_KEY, array() );
+        $data = get_site_option( self::NETWORK_OPTION_KEY, array() );
+        return self::normalize_legacy_suspension( $data, true );
+    }
+
+    /**
+     * До версии 1.0.48 три быстрых открытия вкладки лицензии могли записать
+     * статус suspended. Это было неотличимо от подтверждённого отзыва и
+     * блокировало уже настроенный токен MAX. Переводим такой старый статус в
+     * состояние «требует проверки», сохраняя сам факт ответа сервера.
+     */
+    private static function normalize_legacy_suspension( $data, $network ) {
+        if ( ! is_array( $data ) || ( $data['status'] ?? '' ) !== 'suspended' ) {
+            return is_array( $data ) ? $data : array();
+        }
+
+        if ( ! empty( $data['verification_status'] ) ) {
+            return $data;
+        }
+
+        $data['status']              = 'active';
+        $data['verification_status'] = 'revoked';
+        $data['legacy_suspension']   = true;
+
+        if ( $network ) {
+            update_site_option( self::NETWORK_OPTION_KEY, $data );
+        } else {
+            update_option( self::OPTION_KEY, $data );
+        }
+
+        return $data;
     }
 
     public function show_activation_notice() {
@@ -242,10 +275,13 @@ class WP_Ru_Max_License {
             wp_send_json_error( 'Нет прав доступа.' );
         }
         $data = self::force_recheck();
+        if ( ! empty( $data['verification_status'] ) && 'revoked' === $data['verification_status'] ) {
+            wp_send_json_error( 'Сервер сообщил о возможном отзыве ключа после повторной проверки. Плагин и уже настроенная автоматическая отправка не остановлены; проверьте ключ у владельца лицензии.' );
+        }
         if ( ! empty( $data['status'] ) && $data['status'] === 'active' ) {
             wp_send_json_success( array( 'status' => 'active', 'message' => 'Лицензия действительна.' ) );
         }
-        wp_send_json_error( 'Лицензия отозвана или недействительна. Плагин деактивирован.' );
+        wp_send_json_error( 'Лицензия не подтверждена. Уже настроенная автоматическая отправка не остановлена.' );
     }
 
     public function ajax_activate_network_license() {
@@ -294,6 +330,9 @@ class WP_Ru_Max_License {
             wp_send_json_error( 'Требуются права суперадминистратора сети.' );
         }
         $data = self::force_recheck_network();
+        if ( ! empty( $data['verification_status'] ) && 'revoked' === $data['verification_status'] ) {
+            wp_send_json_error( 'Сервер сообщил о возможном отзыве сетевого ключа после повторной проверки. Плагин и уже настроенная автоматическая отправка не остановлены; проверьте ключ у владельца лицензии.' );
+        }
         if ( ! empty( $data['status'] ) && $data['status'] === 'active' ) {
             wp_send_json_success( array( 'status' => 'active', 'message' => 'Сетевая лицензия действительна.' ) );
         }
@@ -327,17 +366,53 @@ class WP_Ru_Max_License {
         if ( $code === 403 ) {
             return new WP_Error( 'auth_error', 'Ошибка авторизации. Обратитесь к разработчику.' );
         }
-        if ( ! empty( $body['valid'] ) ) {
+        if ( $code < 200 || $code >= 300 ) {
+            return new WP_Error( 'server_error', 'Сервер активации временно недоступен. Лицензия оставлена активной.' );
+        }
+        if ( ! is_array( $body ) ) {
+            return new WP_Error( 'server_error', 'Сервер активации вернул некорректный ответ. Лицензия оставлена активной.' );
+        }
+        // Сервер лицензий поддерживает несколько форматов ответа. Старый
+        // формат использует valid=true, новые ответы могут возвращать
+        // status=active или оборачивать данные в data. Не считать любой
+        // неизвестный/неполный ответ отзывом лицензии.
+        $license_body = isset( $body['data'] ) && is_array( $body['data'] ) ? $body['data'] : $body;
+        $valid_value  = $license_body['valid'] ?? null;
+        $status_value = strtolower( trim( (string) ( $license_body['status'] ?? $license_body['license_status'] ?? '' ) ) );
+
+        if ( true === $valid_value || 1 === $valid_value || '1' === $valid_value || 'true' === strtolower( (string) $valid_value ) ) {
             return true;
         }
-        return new WP_Error( 'invalid_key', 'Неверный лицензионный ключ. Проверьте правильность ввода.' );
+
+        if ( in_array( $status_value, array( 'active', 'valid', 'ok' ), true ) ) {
+            return true;
+        }
+
+        if (
+            false === $valid_value
+            || 0 === $valid_value
+            || '0' === $valid_value
+            || 'false' === strtolower( (string) $valid_value )
+            || in_array( $status_value, array( 'revoked', 'suspended', 'invalid', 'expired', 'inactive', 'blocked' ), true )
+        ) {
+            return new WP_Error( 'invalid_key', 'Неверный или отозванный лицензионный ключ.' );
+        }
+
+        return new WP_Error( 'server_error', 'Сервер активации вернул неполный ответ. Лицензия оставлена активной.' );
     }
 
     public static function recheck_if_needed() {
         if ( self::is_multisite_feature_enabled() && is_multisite() && self::is_network_active() ) {
             $data = self::get_network_data();
-            $last = strtotime( $data['last_verified'] ?? '2000-01-01' );
-            if ( ( time() - $last ) >= self::RECHECK_SECONDS ) {
+            $last_verified = strtotime( $data['last_verified'] ?? '2000-01-01' );
+            $last_attempt  = strtotime( $data['last_recheck_attempt'] ?? $data['last_verified'] ?? '2000-01-01' );
+            if ( ( time() - $last_attempt ) < self::RECHECK_RETRY_SECONDS ) {
+                return;
+            }
+            if ( self::recheck_started_recently( $data ) ) {
+                return;
+            }
+            if ( ( time() - $last_verified ) >= self::RECHECK_SECONDS ) {
                 self::do_recheck_network( $data );
             }
             return;
@@ -347,8 +422,15 @@ class WP_Ru_Max_License {
             return;
         }
         $data = self::get_data();
-        $last = strtotime( $data['last_verified'] ?? '2000-01-01' );
-        if ( ( time() - $last ) < self::RECHECK_SECONDS ) {
+        $last_verified = strtotime( $data['last_verified'] ?? '2000-01-01' );
+        $last_attempt  = strtotime( $data['last_recheck_attempt'] ?? $data['last_verified'] ?? '2000-01-01' );
+        if ( ( time() - $last_attempt ) < self::RECHECK_RETRY_SECONDS ) {
+            return;
+        }
+        if ( self::recheck_started_recently( $data ) ) {
+            return;
+        }
+        if ( ( time() - $last_verified ) < self::RECHECK_SECONDS ) {
             return;
         }
         self::do_recheck( $data );
@@ -359,6 +441,12 @@ class WP_Ru_Max_License {
         if ( empty( $data['key'] ) ) {
             return $data;
         }
+        // Не допускаем несколько параллельных AJAX-проверок. В частности,
+        // три быстрых обновления вкладки не должны считаться тремя
+        // независимыми ответами сервера лицензий.
+        if ( self::recheck_started_recently( $data ) ) {
+            return $data;
+        }
         return self::do_recheck( $data );
     }
 
@@ -367,28 +455,62 @@ class WP_Ru_Max_License {
         if ( empty( $data['key'] ) ) {
             return $data;
         }
+        if ( self::recheck_started_recently( $data ) ) {
+            return $data;
+        }
         return self::do_recheck_network( $data );
+    }
+
+    private static function recheck_started_recently( $data ) {
+        $started_at = isset( $data['last_recheck_started_at'] ) ? (int) $data['last_recheck_started_at'] : 0;
+        return $started_at > 0 && ( time() - $started_at ) < self::RECHECK_START_GUARD_SECONDS;
     }
 
     private static function do_recheck( $data ) {
         $instance = self::instance();
+        // Записываем маркер до сетевого запроса: другой одновременно
+        // открытый запрос увидит его и не отправит второй verify-запрос.
+        $data['last_recheck_started_at'] = time();
+        update_option( self::OPTION_KEY, $data, false );
         $result   = $instance->verify_key( $data['key'] ?? '' );
+        $data['last_recheck_attempt'] = current_time( 'mysql' );
 
         if ( is_wp_error( $result ) ) {
             $error_code = $result->get_error_code();
             if ( $error_code === 'invalid_key' ) {
-                $data['status']         = 'suspended';
-                $data['recheck_failed'] = 0;
-                WP_Ru_Max_Logger::log( 'license', 'error', 'Лицензия отозвана сервером — плагин деактивирован.' );
+                $last_invalid_at = (int) ( $data['last_invalid_recheck_at'] ?? 0 );
+                // Не считаем несколько ручных проверок в течение одного
+                // часа независимыми подтверждениями отзыва.
+                if ( $last_invalid_at <= 0 || ( time() - $last_invalid_at ) >= self::RECHECK_RETRY_SECONDS ) {
+                    $data['invalid_recheck_count'] = (int) ( $data['invalid_recheck_count'] ?? 0 ) + 1;
+                    $data['last_invalid_recheck_at'] = time();
+                }
+                $data['verification_status'] = 'invalid';
+                if ( $data['invalid_recheck_count'] >= self::INVALID_CONFIRMATIONS_REQUIRED ) {
+                    // Не переводим рабочий плагин в suspended автоматически:
+                    // ответ сервера может быть устаревшим или ошибочным.
+                    // Факт возможного отзыва хранится и показывается админу,
+                    // а очередь и существующий токен продолжают работать.
+                    $data['verification_status'] = 'revoked';
+                    $data['recheck_failed'] = 0;
+                    WP_Ru_Max_Logger::log( 'license', 'error', 'Сервер несколько раз сообщил о возможном отзыве лицензии; статус сохранён для проверки администратором, автоматическая отправка не остановлена.' );
+                } else {
+                    WP_Ru_Max_Logger::log( 'license', 'warning', 'Сервер вернул недействительный статус лицензии; активный статус и автоматическая отправка сохранены до независимого подтверждения.' );
+                }
+            } elseif ( in_array( $error_code, array( 'network_error', 'server_error' ), true ) ) {
+                $data['recheck_failed'] = ( $data['recheck_failed'] ?? 0 ) + 1;
+                $data['verification_status'] = 'unavailable';
+                WP_Ru_Max_Logger::log( 'license', 'warning', 'Временная ошибка проверки лицензии; активный статус сохранён.' );
             } else {
                 $data['recheck_failed'] = ( $data['recheck_failed'] ?? 0 ) + 1;
-                if ( $data['recheck_failed'] >= 3 ) {
-                    $data['status'] = 'suspended';
-                }
+                $data['verification_status'] = 'unavailable';
             }
         } else {
             $data['status']         = 'active';
             $data['recheck_failed'] = 0;
+            $data['invalid_recheck_count'] = 0;
+            $data['last_invalid_recheck_at'] = 0;
+            $data['verification_status'] = 'verified';
             $data['last_verified']  = current_time( 'mysql' );
         }
         update_option( self::OPTION_KEY, $data );
@@ -397,22 +519,37 @@ class WP_Ru_Max_License {
 
     private static function do_recheck_network( $data ) {
         $instance = self::instance();
+        $data['last_recheck_started_at'] = time();
+        update_site_option( self::NETWORK_OPTION_KEY, $data );
         $result   = $instance->verify_key( $data['key'] ?? '' );
+        $data['last_recheck_attempt'] = current_time( 'mysql' );
 
         if ( is_wp_error( $result ) ) {
             $error_code = $result->get_error_code();
             if ( $error_code === 'invalid_key' ) {
-                $data['status']         = 'suspended';
-                $data['recheck_failed'] = 0;
+                $last_invalid_at = (int) ( $data['last_invalid_recheck_at'] ?? 0 );
+                if ( $last_invalid_at <= 0 || ( time() - $last_invalid_at ) >= self::RECHECK_RETRY_SECONDS ) {
+                    $data['invalid_recheck_count'] = (int) ( $data['invalid_recheck_count'] ?? 0 ) + 1;
+                    $data['last_invalid_recheck_at'] = time();
+                }
+                $data['verification_status'] = 'invalid';
+                if ( $data['invalid_recheck_count'] >= self::INVALID_CONFIRMATIONS_REQUIRED ) {
+                    $data['verification_status'] = 'revoked';
+                    $data['recheck_failed'] = 0;
+                }
+            } elseif ( in_array( $error_code, array( 'network_error', 'server_error' ), true ) ) {
+                $data['recheck_failed'] = ( $data['recheck_failed'] ?? 0 ) + 1;
+                $data['verification_status'] = 'unavailable';
             } else {
                 $data['recheck_failed'] = ( $data['recheck_failed'] ?? 0 ) + 1;
-                if ( $data['recheck_failed'] >= 3 ) {
-                    $data['status'] = 'suspended';
-                }
+                $data['verification_status'] = 'unavailable';
             }
         } else {
             $data['status']         = 'active';
             $data['recheck_failed'] = 0;
+            $data['invalid_recheck_count'] = 0;
+            $data['last_invalid_recheck_at'] = 0;
+            $data['verification_status'] = 'verified';
             $data['last_verified']  = current_time( 'mysql' );
         }
         update_site_option( self::NETWORK_OPTION_KEY, $data );
