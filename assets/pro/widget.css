@@ -1,0 +1,72 @@
+/* PRO extends the existing WP Ru-max widget. It must never create a second launcher. */
+#wp-ru-max-widget #wp-ru-max-pro-menu{position:absolute;left:0;right:0;bottom:0;height:1px;z-index:2;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;pointer-events:none}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel{position:absolute;bottom:calc(var(--wprmp-size) + 14px);width:min(430px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:min(74vh,620px);box-sizing:border-box;overflow-y:auto;background:#fff;border:1px solid rgba(255,255,255,.7);border-radius:18px;box-shadow:0 10px 35px rgba(15,23,42,.22);padding:18px;display:none;pointer-events:auto}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-position-right .wprmp-panel{right:0}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-position-left .wprmp-panel{left:0}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel.is-open{display:block}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel h3{margin:0 0 2px;color:#222;font-size:16px;line-height:1.2}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel-brand{display:flex;align-items:center;gap:8px;padding-right:20px}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel-brand img{width:34px;height:34px;border-radius:10px}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel-brand small{display:block;color:#16a05d;font-size:11px;line-height:1.25}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-welcome{margin:9px 0}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel *{max-width:100%;box-sizing:border-box;overflow-wrap:anywhere;word-break:break-word}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel .wprmp-live-only{display:block}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel[data-mode="contact_form"] .wprmp-thread-live,#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel[data-mode="contact_form"] .wprmp-welcome,#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel[data-mode="contact_form"] .wprmp-faq,#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel[data-mode="contact_form"] .wprmp-quick-buttons{display:none}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-thread-live{display:flex;flex-direction:column;gap:7px;max-height:180px;overflow-y:auto;margin:10px 0}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-live-bubble{max-width:88%;padding:8px 10px;border-radius:12px;background:#f1f5f9;color:#334155;font-size:12px;line-height:1.45}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-live-bubble.visitor{align-self:flex-end;background:#e0e7ff}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-live-bubble.manager{align-self:flex-start;background:#dcfce7}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-live-bubble b,#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-live-bubble span{display:block}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-live-bubble b{font-size:10px;margin-bottom:2px;color:#64748b}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-bot-reply{background:#f0fdf4;border-radius:10px;padding:9px 11px;margin-bottom:10px;font-size:12px;color:#315b42}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-faq{margin-top:15px;border-top:1px solid #edf1f5;padding-top:12px}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-faq>strong{font-size:12px;color:#475569}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-faq-item{display:block;width:100%;padding:8px 0;text-align:left;border:0;background:none;color:#334155;font-size:12px;cursor:pointer}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-faq-item i{display:none;color:#64748b;font-style:normal;font-size:11px;padding-top:5px}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-faq-item.is-expanded i{display:block}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-quick-buttons{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-quick-buttons button{border:1px solid #dbe3ed;background:#fff;color:#475569;border-radius:15px;padding:6px 9px;font-size:11px;cursor:pointer}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel p{font-size:13px;line-height:1.5;color:#64748b}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-close{position:absolute;right:10px;top:8px;border:0;background:none;font-size:24px;line-height:1;color:#64748b;cursor:pointer}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-form{display:grid;gap:7px}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-form input,#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-form textarea{width:100%;box-sizing:border-box;border:1px solid #dbe3ed;border-radius:8px;padding:8px 9px;font:13px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-width:0}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-form textarea{min-height:64px;resize:vertical}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-consents{display:grid;gap:9px;margin:2px 0 1px}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-consents[hidden]{display:none}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-consents label{display:grid;grid-template-columns:18px minmax(0,1fr);align-items:start;gap:8px;color:#64748b;font-size:10px;line-height:1.4;cursor:pointer}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-identity{display:grid;gap:7px}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-consents input{width:16px;height:16px;margin:1px 0;accent-color:var(--wprmp-bg)}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-form button{border:0;border-radius:8px;padding:10px 11px;background:var(--wprmp-form-bg,#4f46e5);color:var(--wprmp-form-color,#fff);cursor:pointer}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-form-status{font-size:12px;color:#166534}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-faq-item span,#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-faq-item i{white-space:normal;overflow-wrap:anywhere}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-channels{position:absolute;bottom:calc(var(--wprmp-size) + 14px);display:none;flex-direction:column;gap:10px;pointer-events:auto;z-index:3}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-grid .wprmp-channels{display:none;grid-template-columns:repeat(2,44px);flex-direction:initial;gap:8px}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-grid .wprmp-channels.is-open{display:grid!important}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-menu .wprmp-channels{flex-direction:row;bottom:calc(var(--wprmp-size) + 12px)}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-corner .wprmp-channels{transform:rotate(-32deg);transform-origin:bottom right}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-corner .wprmp-channel{transform:rotate(32deg)}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-position-right .wprmp-channels{right:4px}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-position-left .wprmp-channels{left:4px}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-channels.is-open{display:flex!important;visibility:visible!important;opacity:1!important}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-channel{position:relative;display:flex;width:44px;height:44px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.62);border-radius:50%;background:var(--wprmp-bg,#4f46e5);box-shadow:0 8px 24px rgba(15,23,42,.2);cursor:pointer;text-decoration:none;transition:transform .2s ease,box-shadow .2s ease}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-channel img{display:block;width:28px;height:28px;max-width:28px;max-height:28px;object-fit:contain}
+#wp-ru-max-widget #wp-ru-max-pro-menu.is-open{pointer-events:none}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-channel:hover,#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-channel:focus-visible{transform:scale(1.08);filter:brightness(1.08);outline:0}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-channel-label{position:absolute;right:56px;top:50%;transform:translateY(-50%) translateX(5px);padding:6px 9px;border-radius:9px;background:rgba(15,23,42,.86);color:#fff;font-size:11px;line-height:1.2;white-space:nowrap;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .18s ease,transform .18s ease}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-position-left .wprmp-channel-label{left:56px;right:auto;transform:translateY(-50%) translateX(-5px)}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-channel:hover .wprmp-channel-label,#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-channel:focus-visible .wprmp-channel-label{opacity:1;visibility:visible;transform:translateY(-50%) translateX(0)}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-has-blur .wprmp-channel{background:var(--wprmp-bg-glass,rgba(255,255,255,.28));backdrop-filter:blur(18px) saturate(150%);-webkit-backdrop-filter:blur(18px) saturate(150%);border-color:rgba(255,255,255,.75)}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-has-blur .wprmp-panel{background:rgba(255,255,255,.72);backdrop-filter:blur(18px) saturate(125%);-webkit-backdrop-filter:blur(18px) saturate(125%)}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-open-live-chat{animation:wprmp-manager-pulse 5.5s ease-in-out infinite}
+@keyframes wprmp-manager-pulse{0%,78%,100%{box-shadow:0 8px 24px rgba(15,23,42,.2),0 0 0 0 rgba(34,197,94,.28)}88%{box-shadow:0 8px 24px rgba(15,23,42,.2),0 0 0 7px rgba(34,197,94,0)}}
+#wp-ru-max-widget #wp-ru-max-icon.wp-ru-max-pro-trigger{cursor:pointer}
+#wp-ru-max-widget:has(#wp-ru-max-pro-menu.is-open) #wp-ru-max-balloon{display:none!important}
+#wp-ru-max-widget:has(#wp-ru-max-pro-menu) #wp-ru-max-icon{width:var(--wprmp-size)!important;height:var(--wprmp-size)!important}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel[data-mode="contact_form"] .wprmp-live-only{display:none}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel[data-mode="live_chat"] .wprmp-form-only{display:none}
+#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-mode-note{margin:0 0 12px;padding:8px 10px;border-radius:9px;background:rgba(99,102,241,.08);color:#586174;font-size:11px;line-height:1.4}
+@media(max-width:600px){#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel{position:fixed;inset:max(10px,env(safe-area-inset-top)) 10px max(10px,env(safe-area-inset-bottom)) 10px;width:auto;max-width:none;max-height:none;height:auto;min-height:0;padding:16px;border-radius:16px;overflow-y:auto}#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-form-row{grid-template-columns:1fr}#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-channel-label{display:none}}
+@media(prefers-reduced-motion:reduce){#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-channel,#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-channel-label{transition:none}#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-open-live-chat{animation:none}}
+@media(min-width:481px){#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-hide-desktop{display:none!important}}
+@media(max-width:480px){#wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-hide-mobile{display:none!important}}
