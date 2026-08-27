@@ -1,4 +1,4 @@
-/* WP Ru-max Admin JavaScript — v1.0.25 */
+/* WP Ru-max Admin JavaScript — v1.0.51 */
 (function ($) {
     'use strict';
 
@@ -255,6 +255,11 @@
     $('#notifications_enabled').on('change', function () {
         $('#notifications_settings').toggle(this.checked);
         doAjax('wp_ru_max_save_settings', { field: 'notifications_enabled', value: this.checked ? '1' : '0' }, function () {});
+    });
+
+    /* Independent notification rules: unchecked boxes must be saved as false. */
+    $('#notify_user_registration, #notify_customer_order').on('change', function () {
+        doAjax('wp_ru_max_save_settings', { field: this.name, value: this.checked ? '1' : '0' }, function () {});
     });
 
     /* WooCommerce filter toggle */
