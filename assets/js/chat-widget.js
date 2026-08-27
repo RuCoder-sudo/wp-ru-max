@@ -411,3 +411,131 @@
     }
 
 })();
+
+/* Unified contacts menu and live chat. Loaded by the main widget only. */
+(function () {
+    'use strict';
+    var menu = document.getElementById('wp-ru-max-contacts-menu');
+    var icon = document.getElementById('wp-ru-max-icon');
+    var cfg = window.wpRuMaxContacts || {};
+    if (!menu || !icon || !cfg.ajaxUrl || !cfg.nonce) return;
+    var panel = menu.querySelector('.wprmp-panel');
+    var channels = menu.querySelector('.wprmp-channels');
+    var close = menu.querySelector('.wprmp-close');
+    function closeMenu() {
+        menu.classList.remove('is-open');
+        if (panel) { panel.classList.remove('is-open'); panel.setAttribute('aria-hidden', 'true'); }
+        if (channels) { channels.classList.remove('is-open'); channels.setAttribute('aria-hidden', 'true'); }
+        icon.setAttribute('aria-expanded', 'false');
+    }
+    function openMenu() {
+        menu.classList.add('is-open');
+        var balloon = document.getElementById('wp-ru-max-balloon');
+        if (balloon) { balloon.style.display = 'none'; balloon.dataset.closed = '1'; }
+        if (panel) { panel.classList.remove('is-open'); panel.setAttribute('aria-hidden', 'true'); }
+        if (channels) { channels.classList.add('is-open'); channels.setAttribute('aria-hidden', 'false'); }
+        icon.setAttribute('aria-expanded', 'true');
+    }
+    function showPanel(mode) {
+        if (!panel) return;
+        mode = mode || 'live_chat';
+        panel.dataset.mode = mode;
+        var title = panel.querySelector('.wprmp-panel-brand h3');
+        var status = panel.querySelector('.wprmp-panel-brand small');
+        if (title) title.textContent = mode === 'contact_form' ? 'Форма обратной связи' : 'Живой чат';
+        if (status) status.textContent = mode === 'contact_form' ? 'Обычная заявка без переписки' : (cfg.managerOnline ? 'Менеджер онлайн' : 'Сообщение попадёт менеджеру');
+        var channel = panel.querySelector('input[name="channel"]');
+        if (channel) channel.value = mode;
+        var consent = panel.querySelector('.wprmp-consents');
+        if (consent) {
+            var existing = '';
+            try { existing = sessionStorage.getItem('wpRuMaxContactsConversation') || ''; } catch (e) {}
+            var required = mode === 'contact_form' || !existing;
+            consent.style.display = required ? '' : 'none';
+            consent.querySelectorAll('input').forEach(function (field) { field.required = required; });
+        }
+        panel.classList.add('is-open');
+        panel.setAttribute('aria-hidden', 'false');
+        if (channels) { channels.classList.remove('is-open'); channels.setAttribute('aria-hidden', 'true'); }
+    }
+    icon.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        menu.classList.contains('is-open') ? closeMenu() : openMenu();
+    }, true);
+    icon.setAttribute('aria-haspopup', 'dialog');
+    icon.setAttribute('aria-expanded', 'false');
+    if (close) close.addEventListener('click', closeMenu);
+    menu.querySelectorAll('.wprmp-open-chat,.wprmp-open-live-chat').forEach(function (button) {
+        button.addEventListener('click', function () { showPanel(button.dataset.mode || (button.classList.contains('wprmp-open-chat') ? 'contact_form' : 'live_chat')); });
+    });
+    menu.querySelectorAll('.wprmp-faq-item').forEach(function (button) {
+        button.addEventListener('click', function () { button.classList.toggle('is-expanded'); });
+    });
+    menu.querySelectorAll('.wprmp-quick-buttons button').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var textarea = menu.querySelector('textarea[name="message"]');
+            if (textarea) { textarea.value = button.getAttribute('data-message') || ''; textarea.focus(); }
+        });
+    });
+    document.addEventListener('click', function (event) {
+        if (menu.classList.contains('is-open') && !menu.contains(event.target) && event.target !== icon) closeMenu();
+    });
+    function renderThread(items) {
+        var thread = menu.querySelector('.wprmp-thread-live');
+        if (!thread) return;
+        thread.textContent = '';
+        (items || []).forEach(function (item) {
+            var bubble = document.createElement('div');
+            bubble.className = 'wprmp-live-bubble ' + (item.role || 'bot');
+            var name = document.createElement('b');
+            name.textContent = item.role === 'manager' ? 'Менеджер' : (item.name || (item.role === 'bot' ? 'Помощник' : 'Вы'));
+            var text = document.createElement('span');
+            text.textContent = item.text || '';
+            bubble.appendChild(name); bubble.appendChild(text); thread.appendChild(bubble);
+        });
+        thread.scrollTop = thread.scrollHeight;
+    }
+    var form = menu.querySelector('.wprmp-form');
+    if (form) form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var data = new FormData(form);
+        var status = form.querySelector('.wprmp-form-status');
+        var contact = data.get('channel') === 'contact_form';
+        var id = '';
+        if (!contact) { try { id = sessionStorage.getItem('wpRuMaxContactsConversation') || ''; } catch (e) {} }
+        if (id) data.append('conversation_id', id);
+        data.append('action', 'wp_ru_max_contacts_message');
+        data.append('nonce', cfg.nonce);
+        if (status) status.textContent = 'Отправляем…';
+        fetch(cfg.ajaxUrl, { method: 'POST', body: data, credentials: 'same-origin' })
+            .then(function (response) { return response.json(); })
+            .then(function (result) {
+                if (!result.success) throw new Error(result.data || 'Не удалось отправить сообщение.');
+                if (status) status.textContent = result.data.message || 'Сообщение отправлено.';
+                if (result.data.conversation_id && !contact) {
+                    try { sessionStorage.setItem('wpRuMaxContactsConversation', result.data.conversation_id); } catch (e) {}
+                }
+                var identity = form.querySelector('.wprmp-identity');
+                var consent = form.querySelector('.wprmp-consents');
+                if (identity) identity.style.display = 'none';
+                if (consent) consent.style.display = 'none';
+                form.querySelectorAll('.wprmp-identity input').forEach(function (field) { field.disabled = true; field.required = false; });
+                form.reset();
+                renderThread(result.data.messages || []);
+            })
+            .catch(function (error) { if (status) status.textContent = error.message || 'Не удалось отправить сообщение.'; });
+    });
+    function poll() {
+        var id = '';
+        try { id = sessionStorage.getItem('wpRuMaxContactsConversation') || ''; } catch (e) {}
+        if (!id) return;
+        var data = new FormData();
+        data.append('action', 'wp_ru_max_contacts_history'); data.append('nonce', cfg.nonce); data.append('conversation_id', id);
+        fetch(cfg.ajaxUrl, { method: 'POST', body: data, credentials: 'same-origin' })
+            .then(function (response) { return response.json(); })
+            .then(function (result) { if (result.success && result.data) renderThread(result.data.messages || []); })
+            .catch(function () {});
+    }
+    window.setInterval(poll, 4000);
+})();
