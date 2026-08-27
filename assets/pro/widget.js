@@ -42,6 +42,17 @@
   icon.addEventListener('click', function (event) { event.preventDefault(); event.stopImmediatePropagation(); menu.classList.contains('is-open') ? shut() : open(); }, true);
   icon.classList.add('wp-ru-max-pro-trigger');
   if (close) close.addEventListener('click', shut);
+  /*
+   * Keep channel navigation isolated from the launcher and the outside-click
+   * handler. The default action is deliberately preserved so regular links,
+   * tel: and mailto: links work in every theme.
+   */
+  menu.addEventListener('click', function (event) {
+    var link = event.target.closest ? event.target.closest('a.wprmp-channel') : null;
+    if (link && link.getAttribute('href') && link.getAttribute('href') !== '#') {
+      event.stopPropagation();
+    }
+  });
   menu.querySelectorAll('.wprmp-open-chat,.wprmp-open-live-chat').forEach(function (button) { button.addEventListener('click', function () { showPanel(button.dataset.mode || 'contact_form'); }); });
   menu.querySelectorAll('.wprmp-faq-item').forEach(function (button) { button.addEventListener('click', function () { button.classList.toggle('is-expanded'); }); });
   menu.querySelectorAll('.wprmp-quick-buttons button').forEach(function (button) { button.addEventListener('click', function () { var textarea = menu.querySelector('textarea[name="message"]'); if (textarea) { textarea.value = button.getAttribute('data-message') || ''; textarea.focus(); } }); });
