@@ -1,3 +1,4 @@
+/* WP Ru-max PRO admin v1.0.51. */
 jQuery(function ($) {
   var liveChatPane = $('.wprmp-pane[data-wprmp-pane="livechat"]');
   if (liveChatPane.length && !liveChatPane.find('.wprmp-livechat-conversations').length) liveChatPane.append('<div class="wprmp-livechat-conversations"></div>');
@@ -52,7 +53,7 @@ jQuery(function ($) {
     if (!channelPreview.length) { channelPreview = $('<div class="wprmp-preview-channels" aria-hidden="true"></div>'); w.append(channelPreview); }
     channelPreview.empty();
     var assetsUrl = window.wpRuMaxPro && wpRuMaxPro.assetsUrl ? wpRuMaxPro.assetsUrl : '';
-    channelPreview.append($('<button type="button" class="wprmp-preview-channel" data-preview-mode="chat" title="Открыть живой чат"></button>').append($('<img>').attr('src', assetsUrl + 'roboform.svg').attr('alt', '')).append($('<b>').text('Живой чат')));
+    if (s.chat.live_chat_enabled !== false && s.chat.live_chat_enabled !== '0') channelPreview.append($('<button type="button" class="wprmp-preview-channel" data-preview-mode="chat" title="Открыть живой чат"></button>').append($('<img>').attr('src', assetsUrl + 'roboform.svg').attr('alt', '')).append($('<b>').text('Живой чат')));
     channelPreview.append($('<button type="button" class="wprmp-preview-channel" data-preview-mode="external" title="MAX"></button>').append($('<img>').attr('src', assetsUrl + 'MAX.svg').attr('alt', '')).append($('<b>').text('MAX')));
     $('.wprmp-channel-order [data-channel-item]').each(function () {
       var card = $(this);
@@ -84,12 +85,10 @@ jQuery(function ($) {
     widget.toggleClass('is-open-chat', isChat).find('.wprmp-preview-chat').toggleClass('is-visible', isChat && $('[data-style="mode"]').val() === 'chat');
   });
   $(document).on('input change', '.wprmp-admin input,.wprmp-admin select,.wprmp-admin textarea', preview);
-  $(document).on('click', '.wprmp-channel-top > label', function (event) {
-    var target = $(event.target), checkbox = $(this).find('.wprmp-enabled').first();
-    if (!checkbox.length || target.is('.wprmp-enabled')) return;
-    event.preventDefault();
-    if (target.closest('.wprmp-drag-handle').length) return;
-    checkbox.prop('checked', !checkbox.prop('checked')).trigger('change');
+  $(document).on('click', '.wprmp-enabled', function (event) {
+    // Let the browser perform the native checkbox toggle. Do not let the
+    // card/label click handlers cancel it or toggle it a second time.
+    event.stopImmediatePropagation();
   });
   $(document).on('click', '.wprmp-channel-top', function (event) {
     var target = $(event.target), checkbox = $(this).find('.wprmp-enabled').first();
