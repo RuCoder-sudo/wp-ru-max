@@ -1,3 +1,4 @@
+/* WP Ru-max PRO widget v1.0.51. */
 /* PRO extends the existing WP Ru-max widget. It must never create a second launcher. */
 #wp-ru-max-widget #wp-ru-max-pro-menu{position:absolute;left:0;right:0;bottom:0;height:1px;z-index:2;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;pointer-events:none}
 #wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel{position:absolute;bottom:calc(var(--wprmp-size) + 14px);width:min(430px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:min(74vh,620px);box-sizing:border-box;overflow-y:auto;background:#fff;border:1px solid rgba(255,255,255,.7);border-radius:18px;box-shadow:0 10px 35px rgba(15,23,42,.22);padding:18px;display:none;pointer-events:auto}
@@ -46,6 +47,17 @@
 #wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-menu .wprmp-channels{flex-direction:row;bottom:calc(var(--wprmp-size) + 12px)}
 #wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-corner .wprmp-channels{transform:rotate(-32deg);transform-origin:bottom right}
 #wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-corner .wprmp-channel{transform:rotate(32deg)}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-stack .wprmp-channels{gap:6px}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-fan .wprmp-channels{flex-direction:row;align-items:flex-end;gap:8px;bottom:calc(var(--wprmp-size) + 12px);transform:rotate(-18deg);transform-origin:right bottom}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-fan .wprmp-channel{transform:rotate(18deg)}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-position-left.wprmp-layout-fan .wprmp-channels{transform:rotate(18deg);transform-origin:left bottom}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-position-left.wprmp-layout-fan .wprmp-channel{transform:rotate(-18deg)}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-rows .wprmp-channels{display:none;grid-template-columns:repeat(3,44px);flex-direction:initial;gap:8px}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-rows .wprmp-channels.is-open{display:grid!important}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-arc .wprmp-channels{flex-direction:row;align-items:flex-end;gap:8px;bottom:calc(var(--wprmp-size) + 12px);transform:rotate(-24deg);transform-origin:right bottom}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-layout-arc .wprmp-channel{transform:rotate(24deg)}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-position-left.wprmp-layout-arc .wprmp-channels{transform:rotate(24deg);transform-origin:left bottom}
+#wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-position-left.wprmp-layout-arc .wprmp-channel{transform:rotate(-24deg)}
 #wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-position-right .wprmp-channels{right:4px}
 #wp-ru-max-widget #wp-ru-max-pro-menu.wprmp-position-left .wprmp-channels{left:4px}
 #wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-channels.is-open{display:flex!important;visibility:visible!important;opacity:1!important}
