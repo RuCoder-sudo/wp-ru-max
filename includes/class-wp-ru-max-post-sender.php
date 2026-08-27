@@ -18,14 +18,19 @@ class WP_Ru_Max_Post_Sender {
     const QUEUE_OPTION = 'wp_ru_max_queue';
     const QUEUE_LOCK   = 'wp_ru_max_queue_lock';
     const QUEUE_LOCK_TTL = 15 * MINUTE_IN_SECONDS;
+    const QUEUE_WORKER_HOOK = 'wp_ru_max_queue_worker';
+    const QUEUE_WORKER_SCHEDULE = 'wp_ru_max_every_minute';
+    const MAX_RETRY_ATTEMPTS = 6;
 
     private function __construct() {
-        $settings = get_option( 'wp_ru_max_settings', array() );
-        if ( ! empty( $settings['post_sender_enabled'] ) ) {
-            add_action( 'transition_post_status', array( $this, 'on_post_status_change' ), 10, 3 );
-        }
+        // Регистрируем хук всегда, а настройку проверяем внутри обработчика.
+        // Иначе состояние, прочитанное при создании singleton, могло оставить
+        // автопостинг без хука до следующего полного запроса WordPress.
+        add_action( 'transition_post_status', array( $this, 'on_post_status_change' ), 10, 3 );
         // Хук для отложенной отправки через WP-Cron (основной путь)
         add_action( 'wp_ru_max_delayed_send', array( $this, 'do_delayed_send' ), 10, 1 );
+        add_action( self::QUEUE_WORKER_HOOK, array( $this, 'run_queue_worker' ) );
+        add_filter( 'cron_schedules', array( $this, 'add_cron_schedule' ) );
 
         // Подстраховка: WP-Cron запускается только при заходе посетителя на сайт
         // (page-load триггер), поэтому на сайтах с низким ночным трафиком
@@ -38,6 +43,51 @@ class WP_Ru_Max_Post_Sender {
         // Повторная проверка после полной загрузки WordPress закрывает это окно;
         // блокировка очереди не допускает двойную отправку.
         add_action( 'wp_loaded', array( $this, 'maybe_process_due_queue' ), 999 );
+        // В административных запросах дополнительно проверяем очередь после
+        // загрузки админской части. Это помогает сайтам, где фронтенд-запросы
+        // редкие, а WP-Cron/loopback отключён или работает с задержкой.
+        add_action( 'admin_init', array( $this, 'maybe_process_due_queue' ), 999 );
+        add_action( 'init', array( $this, 'ensure_queue_worker' ), 21 );
+    }
+
+    public function add_cron_schedule( $schedules ) {
+        if ( ! isset( $schedules[ self::QUEUE_WORKER_SCHEDULE ] ) ) {
+            $schedules[ self::QUEUE_WORKER_SCHEDULE ] = array(
+                'interval' => MINUTE_IN_SECONDS,
+                'display'  => 'WP Ru-max: каждую минуту',
+            );
+        }
+        return $schedules;
+    }
+
+    public function ensure_queue_worker() {
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        if ( empty( $settings['post_sender_enabled'] ) ) {
+            return;
+        }
+        $next = wp_next_scheduled( self::QUEUE_WORKER_HOOK );
+        if ( ! $next ) {
+            wp_schedule_event( time() + MINUTE_IN_SECONDS, self::QUEUE_WORKER_SCHEDULE, self::QUEUE_WORKER_HOOK );
+            return;
+        }
+
+        // После обновления плагина заменить старое пятиминутное расписание
+        // на минутное, иначе уже существующее событие не изменится само.
+        $event = function_exists( 'wp_get_scheduled_event' )
+            ? wp_get_scheduled_event( self::QUEUE_WORKER_HOOK )
+            : false;
+        if ( $event && isset( $event->schedule ) && $event->schedule !== self::QUEUE_WORKER_SCHEDULE ) {
+            wp_clear_scheduled_hook( self::QUEUE_WORKER_HOOK );
+            wp_schedule_event( time() + MINUTE_IN_SECONDS, self::QUEUE_WORKER_SCHEDULE, self::QUEUE_WORKER_HOOK );
+        }
+    }
+
+    public function run_queue_worker() {
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        if ( empty( $settings['post_sender_enabled'] ) ) {
+            return;
+        }
+        $this->maybe_process_due_queue();
     }
 
     /**
@@ -197,6 +247,11 @@ class WP_Ru_Max_Post_Sender {
      * а также вручную из админки («Обработать очередь сейчас»).
      */
     public function maybe_process_due_queue( $force_all = false ) {
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        if ( ! $force_all && empty( $settings['post_sender_enabled'] ) ) {
+            return 0;
+        }
+
         $queue = $this->get_queue();
         if ( empty( $queue ) ) {
             return 0;
@@ -259,13 +314,50 @@ class WP_Ru_Max_Post_Sender {
         $data = $queue[ $job_key ];
 
         $post = get_post( $data['post_id'] );
-        if ( ! $post || $post->post_status !== 'publish' ) {
+        if ( ! $post ) {
             unset( $queue[ $job_key ] );
             $this->save_queue( $queue );
-            $status = $post ? $post->post_status : 'не найдена';
-            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Отложенная отправка: запись #{$data['post_id']} не отправлена — текущий статус: {$status}. Задание удалено из очереди.", array(
+            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Отложенная отправка: запись #{$data['post_id']} не найдена. Задание удалено из очереди.", array(
                 'post_id' => $data['post_id'],
-                'status'  => $status,
+            ) );
+            return;
+        }
+
+        // WordPress может запустить наше задание чуть раньше собственного
+        // cron-события публикации записи. Раньше такая запись удалялась
+        // навсегда со статусом future, поэтому автоматическая отправка
+        // терялась, хотя ручная отправка продолжала работать.
+        if ( 'future' === $post->post_status ) {
+            $settings       = get_option( 'wp_ru_max_settings', array() );
+            $send_delay     = isset( $settings['send_delay_seconds'] ) ? max( 0, (int) $settings['send_delay_seconds'] ) : 0;
+            $publish_time   = ! empty( $post->post_date_gmt ) && '0000-00-00 00:00:00' !== $post->post_date_gmt
+                ? strtotime( $post->post_date_gmt . ' UTC' )
+                : false;
+            $next_attempt   = max(
+                time() + MINUTE_IN_SECONDS,
+                $publish_time ? $publish_time + $send_delay + 15 : time() + MINUTE_IN_SECONDS
+            );
+            $data['due']    = $next_attempt;
+            $data['attempts'] = 0;
+            $queue[ $job_key ] = $data;
+            $this->save_queue( $queue );
+            wp_schedule_single_event( $next_attempt, 'wp_ru_max_delayed_send', array( $job_key ) );
+
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Отложенная отправка: запись #{$post->ID} ещё не опубликована (future). Задание перенесено до публикации.", array(
+                'post_id'          => $post->ID,
+                'job_key'          => $job_key,
+                'post_date_gmt'    => $post->post_date_gmt,
+                'next_attempt_gmt' => gmdate( 'Y-m-d H:i:s', $next_attempt ),
+            ) );
+            return;
+        }
+
+        if ( 'publish' !== $post->post_status ) {
+            unset( $queue[ $job_key ] );
+            $this->save_queue( $queue );
+            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Отложенная отправка: запись #{$post->ID} не отправлена — текущий статус: {$post->post_status}. Задание удалено из очереди.", array(
+                'post_id' => $post->ID,
+                'status'  => $post->post_status,
             ) );
             return;
         }
@@ -280,9 +372,9 @@ class WP_Ru_Max_Post_Sender {
         }
 
         // Не теряем задание при временном отказе API, сетевой ошибке или
-        // сбое WP-Cron. Даём до трёх повторных попыток с интервалом 5 минут.
+        // сбое WP-Cron. Даём несколько повторных попыток с интервалом 5 минут.
         $attempts = isset( $data['attempts'] ) ? (int) $data['attempts'] : 0;
-        if ( $attempts < 3 ) {
+        if ( $attempts < self::MAX_RETRY_ATTEMPTS ) {
             $attempts++;
             $retry_delay = 5 * MINUTE_IN_SECONDS;
             $data['attempts'] = $attempts;
@@ -290,15 +382,23 @@ class WP_Ru_Max_Post_Sender {
             $queue[ $job_key ] = $data;
             $this->save_queue( $queue );
             wp_schedule_single_event( $data['due'], 'wp_ru_max_delayed_send', array( $job_key ) );
-            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Отправка записи #{$post->ID} не завершена. Повторная попытка {$attempts}/3 запланирована через 5 минут.", array(
+            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Отправка записи #{$post->ID} не завершена. Повторная попытка {$attempts}/" . self::MAX_RETRY_ATTEMPTS . " запланирована через 5 минут.", array(
                 'post_id'  => $post->ID,
                 'job_key'  => $job_key,
                 'attempts' => $attempts,
             ) );
         } else {
-            unset( $queue[ $job_key ] );
+            // Не теряем публикацию из-за временного сбоя API/WP-Cron после
+            // последней быстрой попытки. Оставляем её в постоянной очереди и
+            // проверяем раз в час — после исправления токена/сети она уйдёт
+            // автоматически, а администратор может также нажать flush.
+            $data['attempts']      = 0;
+            $data['due']           = time() + HOUR_IN_SECONDS;
+            $data['last_error_at'] = current_time( 'mysql' );
+            $queue[ $job_key ] = $data;
             $this->save_queue( $queue );
-            WP_Ru_Max_Logger::log( 'post_sender', 'error', "Отправка записи #{$post->ID} не удалась после 3 повторных попыток. Задание удалено из очереди.", array(
+            wp_schedule_single_event( $data['due'], 'wp_ru_max_delayed_send', array( $job_key ) );
+            WP_Ru_Max_Logger::log( 'post_sender', 'error', "Отправка записи #{$post->ID} не удалась после " . self::MAX_RETRY_ATTEMPTS . " попыток. Задание оставлено в очереди и будет проверено через час.", array(
                 'post_id' => $post->ID,
                 'job_key' => $job_key,
             ) );
@@ -373,13 +473,17 @@ class WP_Ru_Max_Post_Sender {
             // Запись данных для отложенного запуска. Храним задание в постоянной
             // опции (а не только в transient), чтобы её можно было перебрать и
             // обработать даже если само wp-cron событие не сработает вовремя.
-            $job_key = 'wp_ru_max_delayed_' . $post->ID . '_' . time();
+            $job_key = $this->get_or_create_job_key( $post->ID, $is_new );
             $due     = time() + $delay;
             $this->queue_add( $job_key, $post->ID, $is_new, $due );
 
-            // Проверяем, не запланировано ли уже аналогичное событие, чтобы
-            // избежать дублирования задания при повторных вызовах хука save_post.
-            if ( ! wp_next_scheduled( 'wp_ru_max_delayed_send', array( $job_key ) ) ) {
+            // Стабильный ключ не допускает накопления одинаковых заданий при
+            // повторном переходе записи в publish или повторном сохранении.
+            $scheduled_event = wp_next_scheduled( 'wp_ru_max_delayed_send', array( $job_key ) );
+            if ( ! $scheduled_event || (int) $scheduled_event !== (int) $due ) {
+                if ( $scheduled_event ) {
+                    wp_clear_scheduled_hook( 'wp_ru_max_delayed_send', array( $job_key ) );
+                }
                 wp_schedule_single_event( $due, 'wp_ru_max_delayed_send', array( $job_key ) );
             }
             $scheduled_event = wp_next_scheduled( 'wp_ru_max_delayed_send', array( $job_key ) );
@@ -404,8 +508,41 @@ class WP_Ru_Max_Post_Sender {
             return;
         }
 
-        // Немедленная отправка
-        $this->send_post( $post, $is_new, $settings );
+        // Немедленная отправка. Не теряем публикацию при единичной ошибке
+        // API: сохраняем её в той же постоянной очереди, что и отложенные
+        // задания, и передаём WP-Cron несколько попыток.
+        $sent = $this->send_post( $post, $is_new, $settings );
+        if ( ! $sent ) {
+            $job_key = $this->get_or_create_job_key( $post->ID, $is_new );
+            $due     = time() + 5 * MINUTE_IN_SECONDS;
+            $this->queue_add( $job_key, $post->ID, $is_new, $due );
+            wp_schedule_single_event( $due, 'wp_ru_max_delayed_send', array( $job_key ) );
+            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Автоматическая отправка записи #{$post->ID} не завершена. Задание сохранено для повторной попытки через 5 минут.", array(
+                'post_id' => $post->ID,
+                'job_key' => $job_key,
+                'due'     => gmdate( 'Y-m-d H:i:s', $due ),
+            ) );
+        }
+    }
+
+    /**
+     * Возвращает существующее задание этой записи или создаёт стабильный ключ.
+     * Это устраняет дубли после повторного transition_post_status и позволяет
+     * новому переходу future → publish восстановить задание, удалённое старой
+     * версией плагина.
+     */
+    private function get_or_create_job_key( $post_id, $is_new ) {
+        $queue = $this->get_queue();
+        foreach ( $queue as $job_key => $job ) {
+            if (
+                isset( $job['post_id'] ) && (int) $job['post_id'] === (int) $post_id
+                && ! empty( $job['is_new'] ) === ! empty( $is_new )
+            ) {
+                return $job_key;
+            }
+        }
+
+        return 'wp_ru_max_post_' . (int) $post_id . '_' . ( $is_new ? 'new' : 'update' );
     }
 
     /**
@@ -415,6 +552,11 @@ class WP_Ru_Max_Post_Sender {
      * при следующем заходе на сайт (см. хук 'init' в конструкторе).
      */
     public function do_delayed_send( $job_key ) {
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        if ( empty( $settings['post_sender_enabled'] ) ) {
+            return 0;
+        }
+
         // WP-Cron и резервный запуск через init могут прийти одновременно.
         // Используем ту же блокировку, чтобы одно задание не ушло дважды.
         $lock_token = '';
