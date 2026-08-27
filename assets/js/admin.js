@@ -62,10 +62,15 @@
     /* -- Main Tab -- */
     $('#save_main_settings').on('click', function () {
         var $btn = $(this).prop('disabled', true).text('Сохранение...');
-        doAjax('wp_ru_max_save_settings', {
-            bot_token: $('#bot_token').val(),
-            bot_name:  $('#bot_name').val(),
-        }, function (res) {
+        var data = {
+            bot_name: $('#bot_name').val()
+        };
+        // Не отправляем пустое значение заблокированного поля: сервер
+        // сохранит уже существующий токен без риска случайного затирания.
+        if ($('#bot_token').length && !$('#bot_token').prop('disabled')) {
+            data.bot_token = $('#bot_token').val();
+        }
+        doAjax('wp_ru_max_save_settings', data, function (res) {
             $btn.prop('disabled', false).text('Сохранить настройки');
             showNotice($('#connection_result'), res.success ? 'success' : 'error', res.success ? res.data : res.data);
         });
