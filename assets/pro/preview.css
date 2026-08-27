@@ -233,6 +233,16 @@
     transform: rotate(-28deg);
     transform-origin: bottom right;
 }
+.wprmp-admin .wprmp-channel-top > label {
+    cursor: pointer;
+}
+.wprmp-admin .wprmp-channel-top .wprmp-enabled {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    cursor: pointer;
+    flex: 0 0 16px;
+}
 @media (max-width: 800px) {
     .wprmp-preview .wprmp-browser {
         min-height: 320px;
