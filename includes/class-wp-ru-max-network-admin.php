@@ -163,6 +163,16 @@ JS;
                 </h2>
 
                 <?php if ( $is_network_licensed ) : ?>
+                    <?php if ( 'revoked' === ( $network_license['verification_status'] ?? '' ) ) : ?>
+                    <div style="background:#fff8e1;border-left:4px solid #dba617;padding:12px 16px;margin:12px 0;">
+                        <strong>Сервер проверки сообщил о возможном отзыве сетевой лицензии.</strong><br />
+                        Статус сохранён для проверки администратором; уже настроенная автоматическая отправка на подсайтах не остановлена.
+                    </div>
+                    <?php elseif ( 'unavailable' === ( $network_license['verification_status'] ?? '' ) ) : ?>
+                    <div style="background:#f0f6fc;border-left:4px solid #72aee6;padding:12px 16px;margin:12px 0;">
+                        Сервер проверки временно недоступен. Сетевая лицензия и автоматическая отправка сохранены.
+                    </div>
+                    <?php endif; ?>
                     <table class="form-table" style="max-width:500px;">
                         <tr><th>Домен сети:</th><td><code><?php echo esc_html( $network_license['domain'] ?? '—' ); ?></code></td></tr>
                         <tr><th>Дата активации:</th><td><?php echo esc_html( $network_license['activated_at'] ?? '—' ); ?></td></tr>
