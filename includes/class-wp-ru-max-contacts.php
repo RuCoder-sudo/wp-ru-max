@@ -183,9 +183,21 @@ class WP_Ru_Max_Contacts {
     private function channel_link( $item, $type ) {
         $value = trim( $item['value'] ?? '' );
         if ( '' === $value ) return '#';
-        if ( 'email' === $type ) return 'mailto:' . sanitize_email( $value );
-        if ( 'phone' === $type ) return 'tel:' . preg_replace( '/[^0-9+]/', '', $value );
-        if ( false === strpos( $value, '://' ) && false !== strpos( $value, '@' ) ) return 'https://t.me/' . ltrim( $value, '@' );
+        if ( 'email' === $type ) {
+            $email = sanitize_email( $value );
+            return '' !== $email ? 'mailto:' . $email : '#';
+        }
+        if ( 'phone' === $type ) {
+            $phone = preg_replace( '/[^0-9+]/', '', $value );
+            return '' !== $phone ? 'tel:' . $phone : '#';
+        }
+        if ( 'telegram' === $type && preg_match( '/^@?[A-Za-z0-9_]{3,}$/', $value ) ) {
+            $value = 'https://t.me/' . ltrim( $value, '@' );
+        } elseif ( 'vkontakte' === $type && preg_match( '/^@?[A-Za-z0-9_.-]{2,}$/', $value ) ) {
+            $value = 'https://vk.com/' . ltrim( $value, '@' );
+        } elseif ( ! preg_match( '#^[a-z][a-z0-9+.-]*://#i', $value ) && 0 !== strpos( $value, '//' ) ) {
+            $value = 'https://' . ltrim( $value, '/' );
+        }
         return esc_url( $value );
     }
     public function save() {
