@@ -533,6 +533,7 @@ class WP_Ru_Max_Admin {
             array( 'История',                   'manage_options', 'admin.php?page=wp-ru-max&tab=history' ),
             array( 'Инструкция',                'manage_options', 'admin.php?page=wp-ru-max&tab=instructions' ),
             array( 'Обновления',                'manage_options', 'admin.php?page=wp-ru-max&tab=updates' ),
+            array( 'Связь с клиентами',         'manage_options', 'admin.php?page=wp-ru-max&tab=contacts' ),
             array( $is_licensed ? 'Активирован ✓' : '⚠ Активация', 'manage_options', 'admin.php?page=wp-ru-max&tab=activation' ),
         );
     }
@@ -616,7 +617,6 @@ jQuery(function($){
             $value = isset( $_POST['value'] ) ? wp_unslash( $_POST['value'] ) : '';
 
             switch ( $field ) {
-                case 'bot_token':
                 case 'bot_name':
                 case 'notify_from_email':
                 case 'notify_format':
@@ -636,6 +636,13 @@ jQuery(function($){
                 case 'chat_widget_ya_metrika_counter':
                 case 'chat_widget_ya_metrika_goal':
                     $settings[ $field ] = sanitize_text_field( $value );
+                    break;
+                case 'bot_token':
+                    // Пустое значение от заблокированного/автозаполненного
+                    // поля не должно затирать рабочий токен.
+                    if ( '' !== trim( (string) $value ) || empty( $settings['bot_token'] ) ) {
+                        $settings[ $field ] = sanitize_text_field( $value );
+                    }
                     break;
                 case 'chat_widget_retention_message':
                     $settings[ $field ] = sanitize_textarea_field( $value );
@@ -737,7 +744,13 @@ jQuery(function($){
 
             foreach ( $allowed_text as $key ) {
                 if ( isset( $_POST[ $key ] ) ) {
-                    $settings[ $key ] = sanitize_text_field( wp_unslash( $_POST[ $key ] ) );
+                    $value = sanitize_text_field( wp_unslash( $_POST[ $key ] ) );
+                    // Некоторые браузеры и старые экраны настроек отправляют
+                    // скрытое поле токена пустым. Никогда не затираем уже
+                    // сохранённый токен таким значением.
+                    if ( 'bot_token' !== $key || '' !== trim( $value ) || empty( $settings['bot_token'] ) ) {
+                        $settings[ $key ] = $value;
+                    }
                 }
             }
             foreach ( $allowed_int as $key ) {
@@ -1049,7 +1062,7 @@ jQuery(function($){
 
                 <nav class="wp-ru-max-tabs">
                     <?php
-                    $tabs = array(
+                    $tabs = apply_filters( 'wp_ru_max_admin_tabs', array(
                         'main'            => 'Главная',
                         'post_sender'     => 'Отправка публикаций',
                         'notifications'   => 'Личные уведомления',
@@ -1061,9 +1074,12 @@ jQuery(function($){
                         'history'         => 'История',
                         'instructions'    => 'Инструкция',
                         'updates'         => 'Обновления',
+                        'contacts'        => 'Связь с клиентами',
                         'activation'      => WP_Ru_Max_License::is_active() ? 'Активирован' : 'Активация',
-                    );
+                    ) );
+                    $tab_keys = apply_filters( 'wp_ru_max_admin_tab_keys', array_keys( $tabs ) );
                     foreach ( $tabs as $tab_key => $tab_label ) {
+                        if ( ! in_array( $tab_key, $tab_keys, true ) ) continue;
                         $class = ( $active_tab === $tab_key ) ? 'wp-ru-max-tab nav-tab-active' : 'wp-ru-max-tab';
                         if ( $tab_key === 'activation' && ! WP_Ru_Max_License::is_active() ) {
                             $class .= ' wp-ru-max-tab-activation-alert';
@@ -1075,7 +1091,10 @@ jQuery(function($){
 
                 <div class="wp-ru-max-content">
                     <?php
-                    $all_tabs = array( 'main', 'post_sender', 'notifications', 'chat', 'advanced', 'social_networks', 'direct_access', 'settings_social', 'history', 'instructions', 'updates', 'activation' );
+                    // Фильтры расширений добавляют вкладки в навигацию. Они
+                    // должны также присутствовать среди выводимых панелей,
+                    // иначе ссылка открывается с пустым содержимым.
+                    $all_tabs = array( 'main', 'post_sender', 'notifications', 'chat', 'advanced', 'social_networks', 'direct_access', 'settings_social', 'history', 'instructions', 'updates', 'activation', 'contacts' );
                     foreach ( $all_tabs as $tab_key ) :
                         $is_active = ( $active_tab === $tab_key );
                     ?>
@@ -1094,6 +1113,7 @@ jQuery(function($){
                             case 'social_networks': $this->render_tab_social_networks( $settings ); break;
                             case 'direct_access':   $this->render_tab_direct_access( $settings );   break;
                             case 'settings_social': $this->render_tab_settings_social( $settings );  break;
+                            default: do_action( 'wp_ru_max_render_admin_tab_' . sanitize_key( $tab_key ), $settings ); break;
                         }
                         ?>
                     </div>
@@ -1179,6 +1199,13 @@ jQuery(function($){
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
             <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
+
+            <h4 style="margin-bottom:4px;">v1.0.49</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Исправлено:</strong> настройка «Эффект размытия фона иконок» теперь применяется к виджету и отображается в живом preview.</li>
+                <li><strong>Исправлено:</strong> блок «ЖИВОЙ ПРОСМОТР» теперь загружается со стилями и реагирует на клики по «Написать нам» и «Живой чат».</li>
+                <li><strong>Добавлено:</strong> синхронизация цветов, CTA, текста сайта, приветствия, размера, положения и анимации в реальном времени.</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.47</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -1367,12 +1394,13 @@ jQuery(function($){
 
     private function render_tab_main( $settings ) {
         $is_licensed = WP_Ru_Max_License::is_active();
+        $has_saved_token = ! empty( $settings['bot_token'] );
         ?>
         <div class="wp-ru-max-card">
             <h2>Настройки бота MAX</h2>
             <p>Введите токен вашего бота из мессенджера MAX. Для получения токена перейдите на <a href="https://business.max.ru" target="_blank" rel="noopener">платформу MAX для партнёров</a>.</p>
 
-            <?php if ( ! $is_licensed ) : ?>
+            <?php if ( ! $is_licensed && ! $has_saved_token ) : ?>
             <div class="wp-ru-max-license-banner">
                 <span class="dashicons dashicons-lock"></span>
                 <strong>Плагин не активирован.</strong>
@@ -1386,7 +1414,7 @@ jQuery(function($){
                 <tr>
                     <th scope="row"><label for="bot_token">Токен бота *</label></th>
                     <td>
-                        <?php if ( $is_licensed ) : ?>
+                        <?php if ( $is_licensed || $has_saved_token ) : ?>
                         <div class="wp-ru-max-token-row">
                             <input type="password" id="bot_token" name="bot_token"
                                 value="<?php echo esc_attr( $settings['bot_token'] ?? '' ); ?>"
@@ -1396,7 +1424,7 @@ jQuery(function($){
                                 data-token="<?php echo esc_attr( $settings['bot_token'] ?? '' ); ?>" />
                             <button type="button" class="button" id="toggle_token_visibility">Показать</button>
                         </div>
-                        <p class="description">Токен находится в разделе «Интеграция» в личном кабинете MAX для партнёров.</p>
+                        <p class="description">Токен находится в разделе «Интеграция» в личном кабинете MAX для партнёров. Сохранённый токен не удаляется при временной проблеме проверки лицензии.</p>
                         <?php else : ?>
                         <div class="wp-ru-max-token-row">
                             <input type="password" id="bot_token" name="bot_token" value="" class="regular-text wp-ru-max-locked-field" placeholder="Заблокировано — активируйте плагин" autocomplete="off" disabled readonly />
@@ -2157,7 +2185,7 @@ jQuery(function($){
             <p class="description" style="margin-top:0;">
                 Отложенная отправка публикаций опирается на планировщик WordPress (WP-Cron), который запускается только когда кто-то заходит на сайт.
                 На сайтах с низким ночным трафиком (или если хостинг блокирует внутренние loopback-запросы) событие может не сработать вовремя.
-                Плагин дополнительно проверяет очередь на каждом заходе на сайт — это уменьшает риск «зависших» отправок, но не устраняет его полностью на сайтах совсем без посетителей.
+                Плагин дополнительно проверяет очередь на каждом заходе и запускает отдельный worker раз в минуту — это уменьшает риск «зависших» отправок.
                 Для 100% надёжности рекомендуем настроить у хостинга реальный системный cron, обращающийся к <code>wp-cron.php</code> раз в 1–2 минуты, вместо стандартного псевдо-cron по посещениям.
             </p>
             <table class="form-table wp-ru-max-debug-table">
@@ -2890,23 +2918,29 @@ jQuery(function($){
     }
 
     private function render_tab_activation() {
-        $existing = WP_Ru_Max_License::get_data();
-        if ( ! empty( $existing['key'] ) ) {
-            WP_Ru_Max_License::force_recheck();
-        }
-
         $is_licensed  = WP_Ru_Max_License::is_active();
         $license      = WP_Ru_Max_License::get_data();
         $license_obj  = WP_Ru_Max_License::instance();
         $attempts     = $license_obj->get_remaining_attempts();
         $is_suspended = ! $is_licensed && ! empty( $license['status'] ) && $license['status'] === 'suspended';
+        $verification_status = $license['verification_status'] ?? '';
         ?>
         <div class="wp-ru-max-card">
             <?php if ( $is_licensed ) : ?>
                 <div class="wp-ru-max-activation-success">
                     <span class="wp-ru-max-success-icon">&#10003;</span>
                     <h2>Плагин активирован</h2>
-                    <p>Все функции WP Ru-max доступны без ограничений.</p>
+                    <p>Все функции WP Ru-max доступны; сохранённое подключение и автоматическая очередь продолжают работать независимо от временного сбоя проверки лицензии.</p>
+                    <?php if ( 'revoked' === $verification_status ) : ?>
+                    <div class="wp-ru-max-notice notice-warning" style="display:block;padding:12px 16px;border-left:4px solid #dba617;background:#fff;margin:12px 0;">
+                        <strong>Сервер проверки сообщил о возможном отзыве лицензии.</strong><br />
+                        Этот статус сохранён для проверки администратором. Уже настроенный MAX-токен и автоматическая очередь публикаций не остановлены.
+                    </div>
+                    <?php elseif ( 'unavailable' === $verification_status ) : ?>
+                    <div class="wp-ru-max-notice notice-info" style="display:block;padding:12px 16px;border-left:4px solid #72aee6;background:#fff;margin:12px 0;">
+                        Сервер проверки временно недоступен. Активный статус лицензии и автоматическая отправка сохранены.
+                    </div>
+                    <?php endif; ?>
                     <table class="form-table" style="max-width:500px;">
                         <tr><th>Домен:</th><td><code><?php echo esc_html( $license['domain'] ?? '—' ); ?></code></td></tr>
                         <tr><th>Дата активации:</th><td><?php echo esc_html( $license['activated_at'] ?? '—' ); ?></td></tr>
