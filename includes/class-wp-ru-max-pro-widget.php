@@ -96,10 +96,13 @@ class WP_Ru_Max_Pro_Widget {
         $max_target = '#' === $max_url ? '' : ' target="_blank" rel="noopener noreferrer"';
         $live_available = ! empty( $settings['chat']['manager_online'] )
             && wp_ru_max_pro_is_live_chat_available( $settings['chat'] );
-        // Keep the live-chat entry visible even when the manager is offline or
-        // outside the schedule. The schedule controls the status text, not
-        // whether a visitor can start a conversation.
-        $enabled = array( 'max', 'live_chat' );
+        // Version 1.0.51: live chat is an explicit setting. Offline/schedule
+        // state still does not hide it; only the administrator's toggle does.
+        $live_chat_enabled = wp_ru_max_pro_bool( $settings['chat']['live_chat_enabled'] ?? true, true );
+        $enabled = array( 'max' );
+        if ( $live_chat_enabled ) {
+            $enabled[] = 'live_chat';
+        }
         $channel_order = is_array( $settings['channel_order'] ?? null ) ? $settings['channel_order'] : array( 'phone', 'telegram', 'vkontakte', 'contact', 'email' );
         foreach ( $channel_order as $key ) {
             $item = $channels[ $key ] ?? $custom_channels[ $key ] ?? null;
