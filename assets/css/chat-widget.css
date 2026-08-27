@@ -20,6 +20,14 @@
     box-shadow: 0 8px 30px rgba(99, 102, 241, 0.45) !important;
 }
 
+/* The contacts module can opt the launcher into the same frosted treatment
+ * as its secondary channel icons. */
+.wp-ru-max-icon.wp-ru-max-icon-blur {
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
 #wp-ru-max-balloon {
     animation: wp-ru-max-fade-up 0.4s ease both;
     word-break: break-word;
@@ -278,6 +286,59 @@
 .wp-ru-max-retention-actions button:active {
     transform: scale(0.97);
 }
+
+/* Unified contacts menu */
+#wp-ru-max-widget #wp-ru-max-contacts-menu{position:absolute;inset:auto 0 0;height:1px;z-index:2;pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-panel{position:absolute;bottom:calc(var(--wprmp-size) + 14px);width:min(430px,calc(100vw - 32px));max-height:min(74vh,620px);overflow-y:auto;box-sizing:border-box;background:rgba(255,255,255,.97);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.7);border-radius:18px;box-shadow:0 10px 35px rgba(15,23,42,.22);padding:18px;display:none;pointer-events:auto}
+#wp-ru-max-widget #wp-ru-max-contacts-menu.wprmp-position-right .wprmp-panel{right:0}
+#wp-ru-max-widget #wp-ru-max-contacts-menu.wprmp-position-left .wprmp-panel{left:0}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-panel.is-open{display:block}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-panel *{max-width:100%;box-sizing:border-box;overflow-wrap:anywhere}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-panel-brand{display:flex;align-items:center;gap:9px;padding-right:20px}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-brand-symbol{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--wprmp-bg);color:var(--wprmp-color);font-size:10px;font-weight:800}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-panel h3{margin:0 0 2px;color:#222;font-size:16px}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-panel-brand small{display:block;color:#16a05d;font-size:11px}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-welcome{margin:9px 0;color:#64748b;font-size:13px}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-close{position:absolute;right:10px;top:8px;border:0;background:none;font-size:24px;color:#64748b;cursor:pointer}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-form{display:grid;gap:7px}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-form input,#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-form textarea{width:100%;border:1px solid #dbe3ed;border-radius:8px;padding:8px 9px;font:13px/1.35 inherit}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-form textarea{min-height:64px;resize:vertical}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-identity{display:grid;gap:7px}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-consents label{display:grid;grid-template-columns:18px 1fr;gap:8px;color:#64748b;font-size:10px;line-height:1.4}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-form button{border:0;border-radius:8px;padding:10px;background:var(--wprmp-bg,#4f46e5);color:var(--wprmp-color,#fff);cursor:pointer}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-form-status{font-size:12px;color:#166534}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-thread-live{display:flex;flex-direction:column;gap:7px;max-height:180px;overflow-y:auto;margin:10px 0}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-live-bubble{max-width:88%;padding:8px 10px;border-radius:12px;background:#f1f5f9;color:#334155;font-size:12px;line-height:1.45}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-live-bubble.visitor{align-self:flex-end;background:#e0e7ff}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-live-bubble.manager{align-self:flex-start;background:#dcfce7}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-live-bubble b,#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-live-bubble span{display:block}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-faq{margin-top:15px;border-top:1px solid #edf1f5;padding-top:12px}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-faq-item{display:block;width:100%;padding:8px 0;text-align:left;border:0;background:none;color:#334155;font-size:12px;cursor:pointer}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-faq-item i{display:none;color:#64748b;font-style:normal;font-size:11px;padding-top:5px}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-faq-item.is-expanded i{display:block}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-quick-buttons{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-quick-buttons button{border:1px solid #dbe3ed;background:#fff;color:#475569;border-radius:15px;padding:6px 9px;font-size:11px;cursor:pointer}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-channels{position:absolute;bottom:calc(var(--wprmp-size) + 14px);display:none;flex-direction:column;gap:9px;pointer-events:auto;z-index:3}
+#wp-ru-max-widget #wp-ru-max-contacts-menu.wprmp-position-right .wprmp-channels{right:4px}
+#wp-ru-max-widget #wp-ru-max-contacts-menu.wprmp-position-left .wprmp-channels{left:4px}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-channels.is-open{display:flex}
+#wp-ru-max-widget #wp-ru-max-contacts-menu.wprmp-layout-grid .wprmp-channels{display:none;grid-template-columns:repeat(2,44px)}
+#wp-ru-max-widget #wp-ru-max-contacts-menu.wprmp-layout-grid .wprmp-channels.is-open{display:grid}
+#wp-ru-max-widget #wp-ru-max-contacts-menu.wprmp-layout-menu .wprmp-channels{flex-direction:row}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-channel{position:relative;display:flex;width:44px;height:44px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.65);border-radius:50%;background:var(--wprmp-bg,#4f46e5);color:var(--wprmp-color,#fff);box-shadow:0 8px 24px rgba(15,23,42,.2);cursor:pointer;text-decoration:none;transition:transform .2s ease,filter .2s ease}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-channel:hover,#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-channel:focus-visible{transform:scale(1.08);filter:brightness(1.08);outline:0}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-channel>span{font-size:12px;font-weight:800}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-channel-label{position:absolute;right:56px;white-space:nowrap;padding:6px 9px;border-radius:9px;background:rgba(15,23,42,.86);color:#fff;font-size:11px;opacity:0;visibility:hidden;transition:opacity .18s ease}
+#wp-ru-max-widget #wp-ru-max-contacts-menu.wprmp-position-left .wprmp-channel-label{left:56px;right:auto}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-channel:hover .wprmp-channel-label,#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-channel:focus-visible .wprmp-channel-label{opacity:1;visibility:visible}
+#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-open-live-chat{animation:wprmp-manager-pulse 3.2s ease-in-out infinite}
+@keyframes wprmp-manager-pulse{0%,70%,100%{box-shadow:0 8px 24px rgba(15,23,42,.2),0 0 0 0 rgba(34,197,94,.3)}85%{box-shadow:0 8px 24px rgba(15,23,42,.2),0 0 0 8px rgba(34,197,94,0)}}
+#wp-ru-max-widget #wp-ru-max-contacts-menu.wprmp-has-blur .wprmp-channel{background:linear-gradient(145deg,rgba(255,255,255,.52),rgba(255,255,255,.16));backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+@media(max-width:600px){#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-panel{position:fixed;inset:10px;width:auto;max-height:none}#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-form-row{grid-template-columns:1fr}#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-channel-label{display:none}}
+@media(min-width:481px){#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-hide-desktop{display:none!important}}
+@media(max-width:480px){#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-hide-mobile{display:none!important}}
+@media(prefers-reduced-motion:reduce){#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-open-live-chat{animation:none}#wp-ru-max-widget #wp-ru-max-contacts-menu .wprmp-channel{transition:none}}
 .wp-ru-max-retention-stay {
     background: #4a90d9;
     color: #fff;
