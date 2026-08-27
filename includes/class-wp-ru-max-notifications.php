@@ -34,6 +34,12 @@ class WP_Ru_Max_Notifications {
             // чтобы знать order_id и статус внутри wp_mail фильтра.
             add_action( 'woocommerce_email_before_send_mail', array( $this, 'capture_woo_order_info' ), 1, 1 );
 
+            // WordPress не передаёт источник письма в фильтр wp_mail. Добавляем
+            // служебную метку к обоим стандартным письмам регистрации, чтобы
+            // их можно было отключить отдельно и без хрупкого сравнения текста.
+            add_filter( 'wp_new_user_notification_email_admin', array( $this, 'mark_registration_email' ), 10, 1 );
+            add_filter( 'wp_new_user_notification_email', array( $this, 'mark_registration_email' ), 10, 1 );
+
             // Уведомления об обновлении плагинов и ядра WordPress
             if ( ! empty( $settings['notify_plugin_updates'] ) ) {
                 add_action( 'upgrader_process_complete', array( $this, 'notify_plugin_update' ), 10, 2 );
@@ -79,6 +85,86 @@ class WP_Ru_Max_Notifications {
             'status'   => $status,
             'email_id' => $email_id,
         );
+    }
+
+    /**
+     * Помечает стандартное письмо WordPress о регистрации пользователя.
+     *
+     * @param array $email Аргументы письма WordPress.
+     * @return array
+     */
+    public function mark_registration_email( $email ) {
+        if ( ! is_array( $email ) ) {
+            return $email;
+        }
+
+        $headers = $email['headers'] ?? array();
+        if ( is_string( $headers ) ) {
+            $headers = preg_split( '/\r\n|\r|\n/', trim( $headers ) );
+            $headers = array_filter( $headers );
+        } elseif ( ! is_array( $headers ) ) {
+            $headers = array();
+        }
+
+        $headers[]       = 'X-WP-Ru-Max-Notification: user-registration';
+        $email['headers'] = $headers;
+        return $email;
+    }
+
+    /**
+     * Определяет стандартное письмо регистрации, включая старые версии WP
+     * без фильтров wp_new_user_notification_email_*.
+     *
+     * @param array    $args     Аргументы wp_mail.
+     * @param array|null $woo_info Данные WooCommerce-письма.
+     * @return bool
+     */
+    private function is_registration_email( $args, $woo_info = null ) {
+        if ( ! empty( $woo_info ) ) {
+            return false;
+        }
+
+        $headers = $args['headers'] ?? array();
+        $headers = is_array( $headers ) ? implode( "\n", $headers ) : (string) $headers;
+        if ( preg_match( '/X-WP-Ru-Max-Notification\s*:\s*user-registration/i', $headers ) ) {
+            return true;
+        }
+
+        $subject = isset( $args['subject'] ) ? (string) $args['subject'] : '';
+        return (bool) preg_match( '/new user registration|new user|registration|нов.{0,12}пользовател|регистрац.{0,18}пользовател/iu', $subject );
+    }
+
+    /**
+     * Применяет независимые выключатели системных уведомлений.
+     *
+     * @param array    $args     Аргументы wp_mail.
+     * @param array|null $woo_info Данные WooCommerce-письма.
+     * @param array    $settings Настройки плагина.
+     * @return bool
+     */
+    private function should_skip_email( $args, $woo_info, $settings ) {
+        // Версия 1.0.51: настройки управляют только копиями писем в MAX.
+        // При отсутствии ключа сохраняем прежнее поведение — уведомления включены.
+        $notify_user_registration = ! array_key_exists( 'notify_user_registration', $settings ) || ! empty( $settings['notify_user_registration'] );
+        $notify_customer_order     = ! array_key_exists( 'notify_customer_order', $settings ) || ! empty( $settings['notify_customer_order'] );
+
+        if ( $this->is_registration_email( $args, $woo_info ) && ! $notify_user_registration ) {
+            WP_Ru_Max_Logger::log( 'notifications', 'info', 'Уведомление о регистрации пользователя отключено настройкой.' );
+            return true;
+        }
+
+        $email_id = ! empty( $woo_info['email_id'] ) ? strtolower( (string) $woo_info['email_id'] ) : '';
+        if ( ! empty( $woo_info ) && 0 === strpos( $email_id, 'customer_' ) && ! $notify_customer_order ) {
+            WP_Ru_Max_Logger::log(
+                'notifications',
+                'info',
+                'Клиентское уведомление WooCommerce о заказе отключено настройкой.',
+                array( 'order_id' => $woo_info['order_id'], 'email_id' => $email_id )
+            );
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -257,6 +343,12 @@ class WP_Ru_Max_Notifications {
         // ── WooCommerce: фильтр по статусу и защита от дублей ────────────────
         $woo_info = self::$current_woo_order;
         self::$current_woo_order = null; // сбрасываем сразу
+
+        // Версия 1.0.51: эти два типа писем отключаются независимо от
+        // уведомлений администратора о новых заказах и других писем.
+        if ( $this->should_skip_email( $args, $woo_info, $settings ) ) {
+            return $args;
+        }
 
         if ( ! empty( $settings['woo_filter_enabled'] ) && ! empty( $woo_info ) ) {
             $order_id = $woo_info['order_id'];
