@@ -143,13 +143,20 @@ class WP_Ru_Max_Chat_Widget {
         $px  = (int) $cfg['px'];
         $img = $cfg['img'];
 
-        $href        = ! empty( $url ) ? esc_url( $url ) : '#';
-        $target      = ! empty( $url ) ? ' target="_blank" rel="noopener noreferrer"' : '';
+        $contacts_active = function_exists( 'wp_ru_max_pro_is_enabled' )
+            && wp_ru_max_pro_is_enabled()
+            && ! empty( wp_ru_max_pro_settings()['enabled'] );
+        $contacts_settings = $contacts_active ? wp_ru_max_pro_settings() : array();
+        $pro_blur_enabled = $contacts_active
+            && ! empty( $contacts_settings['style']['backdrop_blur'] );
+        $href        = $contacts_active ? '#' : ( ! empty( $url ) ? esc_url( $url ) : '#' );
+        $target      = ( ! $contacts_active && ! empty( $url ) ) ? ' target="_blank" rel="noopener noreferrer"' : '';
         $side_css    = ( 'left' === $position ) ? 'left:20px;right:auto;' : 'right:20px;left:auto;';
         $balloon_css = ( 'left' === $position ) ? 'left:0;' : 'right:0;';
         $arrow_css   = ( 'left' === $position ) ? 'left:14px;' : 'right:14px;';
         $icon_url    = esc_url( WP_RU_MAX_PLUGIN_URL . 'assets/' . $img );
         $anim_class  = ! empty( $animation ) && $animation !== 'none' ? ' wp-ru-max-anim-' . esc_attr( $animation ) : '';
+        $blur_class  = $pro_blur_enabled ? ' wp-ru-max-icon-blur' : '';
         ?>
 <div id="wp-ru-max-widget" style="position:fixed;bottom:<?php echo (int) $bottom_offset; ?>px;<?php echo esc_attr( $side_css ); ?>z-index:99999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:none;">
      <div id="wp-ru-max-balloon" style="position:absolute;bottom:<?php echo ( $px + 14 ); ?>px;<?php echo esc_attr( $balloon_css ); ?>background:#fff;border:1px solid #e0e0e0;border-radius:14px;padding:12px 16px 12px 16px;max-width:265px;min-width:265px;box-shadow:0 4px 24px rgba(0,0,0,0.15);display:none;word-break:break-word;">
@@ -159,9 +166,10 @@ class WP_Ru_Max_Chat_Widget {
     </div>
     <a href="<?php echo $href; ?>"<?php echo $target; ?>
        id="wp-ru-max-icon"
-       class="wp-ru-max-icon<?php echo $anim_class; ?>"
+        class="wp-ru-max-icon<?php echo $anim_class . $blur_class; ?>"
        style="display:block;width:<?php echo $px; ?>px;height:<?php echo $px; ?>px;border-radius:50%;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.28);cursor:pointer;text-decoration:none;transition:transform 0.2s ease,box-shadow 0.2s ease;"
-       aria-label="Написать нам в MAX"
+        aria-label="<?php echo esc_attr( $contacts_active ? 'Открыть меню связи' : 'Написать нам в MAX' ); ?>"
+        title="<?php echo esc_attr( $contacts_active ? 'Открыть меню связи' : 'MAX' ); ?>"
        onmouseover="this.style.transform='scale(1.1)';this.style.boxShadow='0 6px 24px rgba(0,0,0,0.38)'"
        onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 4px 16px rgba(0,0,0,0.28)'">
         <img src="<?php echo $icon_url; ?>"
@@ -191,6 +199,7 @@ class WP_Ru_Max_Chat_Widget {
         'yaMetrikaGoal'        => $ya_goal,
     ) ); ?>;
     </script>
+     <?php do_action( 'wp_ru_max_before_widget_close', $settings ); ?>
 </div>
 <?php if ( $retention_enabled ) :
     $btn_radius_css = (int) $r_btn_radius . 'px';
