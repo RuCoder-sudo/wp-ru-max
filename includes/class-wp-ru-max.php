@@ -148,6 +148,12 @@ class WP_Ru_Max {
                 'chat_widget_retention_leave_color'   => '#555555',
             ) );
         }
+        // «Связь с клиентами» стала встроенной частью основного плагина.
+        // Создаём совместимую опцию сразу при активации, чтобы виджет не
+        // зависел от отдельно установленного PRO-аддона.
+        if ( false === get_option( WP_RU_MAX_PRO_OPTION ) && function_exists( 'wp_ru_max_pro_settings' ) ) {
+            add_option( WP_RU_MAX_PRO_OPTION, wp_ru_max_pro_settings() );
+        }
     }
 
     // ─── Активация / деактивация ─────────────────────────────────────────────
@@ -179,8 +185,19 @@ class WP_Ru_Max {
         flush_rewrite_rules( false );
     }
 
-    public static function deactivate() {
-        // Ничего не удаляем при деактивации — данные сохраняются
+    public static function deactivate( $network_wide = false ) {
+        // Данные сохраняются, но фоновые события не должны продолжать
+        // запускаться, пока плагин отключён.
+        if ( $network_wide && function_exists( 'is_multisite' ) && is_multisite() ) {
+            $sites = get_sites( array( 'number' => 0 ) );
+            foreach ( $sites as $site ) {
+                switch_to_blog( (int) $site->blog_id );
+                wp_clear_scheduled_hook( WP_Ru_Max_Post_Sender::QUEUE_WORKER_HOOK );
+                restore_current_blog();
+            }
+        } else {
+            wp_clear_scheduled_hook( WP_Ru_Max_Post_Sender::QUEUE_WORKER_HOOK );
+        }
     }
 
     /**
