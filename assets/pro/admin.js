@@ -84,6 +84,18 @@ jQuery(function ($) {
     widget.toggleClass('is-open-chat', isChat).find('.wprmp-preview-chat').toggleClass('is-visible', isChat && $('[data-style="mode"]').val() === 'chat');
   });
   $(document).on('input change', '.wprmp-admin input,.wprmp-admin select,.wprmp-admin textarea', preview);
+  $(document).on('click', '.wprmp-channel-top > label', function (event) {
+    var target = $(event.target), checkbox = $(this).find('.wprmp-enabled').first();
+    if (!checkbox.length || target.is('.wprmp-enabled')) return;
+    event.preventDefault();
+    if (target.closest('.wprmp-drag-handle').length) return;
+    checkbox.prop('checked', !checkbox.prop('checked')).trigger('change');
+  });
+  $(document).on('click', '.wprmp-channel-top', function (event) {
+    var target = $(event.target), checkbox = $(this).find('.wprmp-enabled').first();
+    if (!checkbox.length || target.closest('label, input, button, a, .wprmp-drag-handle').length) return;
+    checkbox.prop('checked', !checkbox.prop('checked')).trigger('change');
+  });
   $(document).on('click', '.wprmp-add-custom-channel', function () { customChannelIndex += 1; $('.wprmp-channel-order').append(customChannelCard('custom_' + Date.now() + '_' + customChannelIndex)); preview(); });
   $(document).on('click', '.wprmp-remove-custom', function () { $(this).closest('[data-custom-channel="1"]').remove(); preview(); });
   var draggedChannel = null;
