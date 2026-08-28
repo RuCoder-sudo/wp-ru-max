@@ -1,4 +1,4 @@
-/* WP Ru-max Admin JavaScript — v1.0.51 */
+/* WP Ru-max Admin JavaScript */
 (function ($) {
     'use strict';
 
@@ -324,6 +324,11 @@
             notify_format:              $('input[name="notify_format"]:checked').val(),
             notify_plugin_updates:      $('input[name="notify_plugin_updates"]').is(':checked') ? '1' : '0',
             notify_site_errors:         $('input[name="notify_site_errors"]').is(':checked') ? '1' : '0',
+            // Передаём оба независимых правила и при общем сохранении.
+            // Иначе общий AJAX-запрос мог перезаписать отдельное сохранение
+            // снятой галочки старым значением true.
+            notify_user_registration:   $('input[name="notify_user_registration"]').is(':checked') ? '1' : '0',
+            notify_customer_order:      $('input[name="notify_customer_order"]').is(':checked') ? '1' : '0',
             woo_filter_enabled:         $('input[name="woo_filter_enabled"]').is(':checked') ? '1' : '0',
             'woo_notify_statuses[]':    wooStatuses,
             general_dedup_enabled:      $('input[name="general_dedup_enabled"]').is(':checked') ? '1' : '0',
