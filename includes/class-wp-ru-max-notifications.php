@@ -9,8 +9,10 @@ class WP_Ru_Max_Notifications {
     private static $instance = null;
 
     /**
-     * Данные текущего WooCommerce-письма, заполняемые хуком woocommerce_email_before_send_mail.
-     * Сбрасываются после каждого вызова intercept_email.
+     * Данные текущего WooCommerce-письма, заполняемые хуком
+     * woocommerce_email_before_send_mail. Для писем без заказа (например,
+     * customer_new_account) сохраняется только email_id. Сбрасываются после
+     * каждого вызова intercept_email.
      */
     private static $current_woo_order = null;
 
@@ -59,17 +61,31 @@ class WP_Ru_Max_Notifications {
      * @param WC_Email $email Объект WooCommerce письма.
      */
     public function capture_woo_order_info( $email ) {
+        $email_id = isset( $email->id ) ? (string) $email->id : '';
         if ( ! isset( $email->object ) ) {
+            if ( $email_id ) {
+                self::$current_woo_order = array(
+                    'order_id' => 0,
+                    'status'   => '',
+                    'email_id' => $email_id,
+                );
+            }
             return;
         }
 
         // Поддержка WC_Order и любых его наследников
         if ( ! ( $email->object instanceof WC_Abstract_Order ) &&
              ! ( $email->object instanceof WC_Order ) ) {
-            // fallback: проверяем через интерфейс
-            if ( ! method_exists( $email->object, 'get_id' ) || ! method_exists( $email->object, 'get_status' ) ) {
-                return;
+            // Письма WooCommerce без заказа (например, создание аккаунта)
+            // всё равно должны участвовать в правилах отправки.
+            if ( $email_id ) {
+                self::$current_woo_order = array(
+                    'order_id' => 0,
+                    'status'   => '',
+                    'email_id' => $email_id,
+                );
             }
+            return;
         }
 
         $order_id = (int) $email->object->get_id();
@@ -78,7 +94,6 @@ class WP_Ru_Max_Notifications {
         }
 
         $status   = (string) $email->object->get_status();
-        $email_id = isset( $email->id ) ? (string) $email->id : '';
 
         self::$current_woo_order = array(
             'order_id' => $order_id,
@@ -120,6 +135,14 @@ class WP_Ru_Max_Notifications {
      * @return bool
      */
     private function is_registration_email( $args, $woo_info = null ) {
+        // WooCommerce отправляет письмо о создании аккаунта с отдельным
+        // email_id. Оно не является заказом и должно управляться правилом
+        // «Регистрация нового пользователя», даже если customer_* включены.
+        $woo_email_id = ! empty( $woo_info['email_id'] ) ? strtolower( (string) $woo_info['email_id'] ) : '';
+        if ( in_array( $woo_email_id, array( 'customer_new_account', 'new_account', 'new_user' ), true ) ) {
+            return true;
+        }
+
         if ( ! empty( $woo_info ) ) {
             return false;
         }
@@ -131,7 +154,35 @@ class WP_Ru_Max_Notifications {
         }
 
         $subject = isset( $args['subject'] ) ? (string) $args['subject'] : '';
-        return (bool) preg_match( '/new user registration|new user|registration|нов.{0,12}пользовател|регистрац.{0,18}пользовател/iu', $subject );
+        return (bool) preg_match( '/new user registration|new user|registration|new account|account.{0,12}(created|registered)|нов.{0,12}пользовател|регистрац.{0,18}пользовател|нов.{0,8}аккаунт|учетн.{0,12}запис/iu', $subject );
+    }
+
+    /**
+     * Читает логическое правило без доверия к типу значения в wp_options.
+     *
+     * Старые версии и сторонние импорты могли сохранить "false" строкой.
+     * Для ! empty( 'false' ) это true, поэтому такая запись ошибочно включала
+     * уведомление обратно.
+     *
+     * @param array  $settings Все настройки плагина.
+     * @param string $key      Ключ правила.
+     * @param bool   $default  Значение для старых установок без ключа.
+     * @return bool
+     */
+    private function is_rule_enabled( $settings, $key, $default = true ) {
+        if ( ! array_key_exists( $key, $settings ) ) {
+            return $default;
+        }
+
+        $value = $settings[ $key ];
+        if ( is_bool( $value ) ) {
+            return $value;
+        }
+        if ( is_string( $value ) ) {
+            return ! in_array( strtolower( trim( $value ) ), array( '', '0', 'false', 'off', 'no' ), true );
+        }
+
+        return ! empty( $value );
     }
 
     /**
@@ -145,8 +196,8 @@ class WP_Ru_Max_Notifications {
     private function should_skip_email( $args, $woo_info, $settings ) {
         // Версия 1.0.51: настройки управляют только копиями писем в MAX.
         // При отсутствии ключа сохраняем прежнее поведение — уведомления включены.
-        $notify_user_registration = ! array_key_exists( 'notify_user_registration', $settings ) || ! empty( $settings['notify_user_registration'] );
-        $notify_customer_order     = ! array_key_exists( 'notify_customer_order', $settings ) || ! empty( $settings['notify_customer_order'] );
+        $notify_user_registration = $this->is_rule_enabled( $settings, 'notify_user_registration', true );
+        $notify_customer_order    = $this->is_rule_enabled( $settings, 'notify_customer_order', true );
 
         if ( $this->is_registration_email( $args, $woo_info ) && ! $notify_user_registration ) {
             WP_Ru_Max_Logger::log( 'notifications', 'info', 'Уведомление о регистрации пользователя отключено настройкой.' );
