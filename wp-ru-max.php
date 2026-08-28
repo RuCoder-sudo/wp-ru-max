@@ -3,7 +3,7 @@
  * Plugin Name:       WP Ru-max
  * Plugin URI:        https://fixcoder.ru/wp-ru-max/
  * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Jetpack / Elementor и настраиваемый чат-виджет с анимацией и звуком. Поддерживает WordPress Multisite (мультисайт) и поддомены.
- * Version:           1.0.51
+ * Version:           1.0.52
  * Author:            Сергей Солошенко (RuCoder)
  * Author URI:        https://fixcoder.ru/
  * License:           GPL v2 or later
@@ -73,7 +73,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'WP_RU_MAX_VERSION', '1.0.51' );
+define( 'WP_RU_MAX_VERSION', '1.0.52' );
 define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
 define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -83,9 +83,9 @@ define( 'WP_RU_MAX_API_BASE', 'https://platform-api2.max.ru' );
 // PRO is bundled into the main plugin. The option names stay compatible with
 // the standalone add-on so existing settings and conversations are preserved.
 define( 'WP_RU_MAX_PRO_BUNDLED', true );
-// Version 1.0.51: the bundled module uses the same cache-busting version as
+// Version 1.0.52: the bundled module uses the same cache-busting version as
 // the main plugin, so all updated CSS/JS files are refreshed together.
-if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.51' );
+if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.52' );
 if ( ! defined( 'WP_RU_MAX_PRO_FILE' ) ) define( 'WP_RU_MAX_PRO_FILE', __FILE__ );
 if ( ! defined( 'WP_RU_MAX_PRO_DIR' ) ) define( 'WP_RU_MAX_PRO_DIR', WP_RU_MAX_PLUGIN_DIR );
 if ( ! defined( 'WP_RU_MAX_PRO_URL' ) ) define( 'WP_RU_MAX_PRO_URL', WP_RU_MAX_PLUGIN_URL . 'assets/pro/' );
