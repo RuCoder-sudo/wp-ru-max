@@ -1202,11 +1202,12 @@ jQuery(function($){
             <h3>История версий</h3>
             <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
 
-            <h4 style="margin-bottom:4px;">v1.0.49</h4>
+            <h4 style="margin-bottom:4px;">v1.0.52</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
-                <li><strong>Исправлено:</strong> настройка «Эффект размытия фона иконок» теперь применяется к виджету и отображается в живом preview.</li>
-                <li><strong>Исправлено:</strong> блок «ЖИВОЙ ПРОСМОТР» теперь загружается со стилями и реагирует на клики по «Написать нам» и «Живой чат».</li>
-                <li><strong>Добавлено:</strong> синхронизация цветов, CTA, текста сайта, приветствия, размера, положения и анимации в реальном времени.</li>
+                <li><strong>Исправлено:</strong> снятые галочки правил регистрации пользователя и клиентских писем WooCommerce сохраняются и не перезаписываются старым значением при общем сохранении.</li>
+                <li><strong>Исправлено:</strong> письмо WooCommerce <code>customer_new_account</code> определяется как регистрация пользователя и блокируется в MAX при выключенном правиле регистрации.</li>
+                <li><strong>Исправлено:</strong> значения настроек <code>false</code>, <code>0</code>, <code>off</code> и <code>no</code> корректно считаются выключенными.</li>
+                <li><strong>Изменено:</strong> правило клиентских писем не блокирует админское <code>new_order</code>, а исходные письма WordPress и WooCommerce не изменяются.</li>
             </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.51</h4>
@@ -1215,6 +1216,13 @@ jQuery(function($){
                 <li><strong>Добавлено:</strong> компоновки значков «Столбиком», «Веером», «В два ряда» и «Полукругом» с обновлением preview.</li>
                 <li><strong>Добавлено:</strong> независимое отключение уведомления о регистрации пользователя и клиентского письма о заказе WooCommerce.</li>
                 <li><strong>Изменено:</strong> исходные письма WordPress и WooCommerce клиентам не блокируются при отключении их копий в MAX.</li>
+            </ul>
+
+            <h4 style="margin-bottom:4px;">v1.0.49</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Исправлено:</strong> настройка «Эффект размытия фона иконок» теперь применяется к виджету и отображается в живом preview.</li>
+                <li><strong>Исправлено:</strong> блок «ЖИВОЙ ПРОСМОТР» теперь загружается со стилями и реагирует на клики по «Написать нам» и «Живой чат».</li>
+                <li><strong>Добавлено:</strong> синхронизация цветов, CTA, текста сайта, приветствия, размера, положения и анимации в реальном времени.</li>
             </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.47</h4>
@@ -1826,6 +1834,10 @@ jQuery(function($){
         $enabled  = ! empty( $settings['notifications_enabled'] );
         $chat_ids = isset( $settings['notify_chat_ids'] ) ? array_filter( array_map( 'trim', (array) $settings['notify_chat_ids'] ) ) : array();
         $chat_ids_display = ! empty( $chat_ids ) ? array_values( $chat_ids ) : array( '' );
+        $notify_user_registration = ! array_key_exists( 'notify_user_registration', $settings )
+            || filter_var( $settings['notify_user_registration'], FILTER_VALIDATE_BOOLEAN );
+        $notify_customer_order = ! array_key_exists( 'notify_customer_order', $settings )
+            || filter_var( $settings['notify_customer_order'], FILTER_VALIDATE_BOOLEAN );
         ?>
         <div class="wp-ru-max-card">
             <h2>Личные уведомления</h2>
@@ -1918,12 +1930,12 @@ jQuery(function($){
                                 <span class="description"> — уведомление в MAX при критических PHP-ошибках (fatal error)</span>
                             </label>
                             <label style="display:block;margin-top:10px;">
-                                <input type="checkbox" id="notify_user_registration" name="notify_user_registration" value="1" <?php checked( ! empty( $settings['notify_user_registration'] ?? true ) ); ?> />
+                                <input type="checkbox" id="notify_user_registration" name="notify_user_registration" value="1" <?php checked( $notify_user_registration ); ?> />
                                 <strong>Регистрация нового пользователя</strong>
                                 <span class="description"> — дублировать в MAX уведомление WordPress о регистрации пользователя</span>
                             </label>
                             <label style="display:block;margin-top:10px;">
-                                <input type="checkbox" id="notify_customer_order" name="notify_customer_order" value="1" <?php checked( ! empty( $settings['notify_customer_order'] ?? true ) ); ?> />
+                                <input type="checkbox" id="notify_customer_order" name="notify_customer_order" value="1" <?php checked( $notify_customer_order ); ?> />
                                 <strong>Клиентское уведомление о заказе</strong>
                                 <span class="description"> — дублировать в MAX письмо клиенту «Спасибо за ваш заказ» и другие письма customer_*</span>
                             </label>
