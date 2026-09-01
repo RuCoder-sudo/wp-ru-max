@@ -19,6 +19,25 @@ class WP_Ru_Max_Pro_Widget {
         add_action( 'wp_ajax_nopriv_wp_ru_max_pro_history', array( $this, 'history' ) );
     }
 
+    /**
+     * Public widget endpoints need a small abuse guard because a nonce is not
+     * authentication for anonymous visitors.
+     */
+    private function allow_public_request( $action, $limit = 20 ) {
+        $ip = isset( $_SERVER['REMOTE_ADDR'] )
+            ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) )
+            : 'unknown';
+        $key   = 'wp_ru_max_public_' . md5( $action . '|' . $ip . '|' . wp_salt( 'auth' ) );
+        $count = (int) get_transient( $key );
+
+        if ( $count >= $limit ) {
+            return false;
+        }
+
+        set_transient( $key, $count + 1, MINUTE_IN_SECONDS );
+        return true;
+    }
+
     public function assets() {
         if ( ! wp_ru_max_pro_is_enabled() ) {
             return;
@@ -27,8 +46,12 @@ class WP_Ru_Max_Pro_Widget {
         if ( empty( $settings['enabled'] ) ) {
             return;
         }
-        wp_enqueue_style( 'wp-ru-max-pro', WP_RU_MAX_PRO_URL . 'widget.css', array(), WP_RU_MAX_PRO_VERSION );
-        wp_enqueue_script( 'wp-ru-max-pro', WP_RU_MAX_PRO_URL . 'widget.js', array(), WP_RU_MAX_PRO_VERSION, true );
+        $css_path = WP_RU_MAX_PRO_DIR . 'assets/pro/widget.css';
+        $js_path  = WP_RU_MAX_PRO_DIR . 'assets/pro/widget.js';
+        $css_ver  = file_exists( $css_path ) ? (string) filemtime( $css_path ) : WP_RU_MAX_PRO_VERSION;
+        $js_ver   = file_exists( $js_path ) ? (string) filemtime( $js_path ) : WP_RU_MAX_PRO_VERSION;
+        wp_enqueue_style( 'wp-ru-max-pro', WP_RU_MAX_PRO_URL . 'widget.css', array(), $css_ver );
+        wp_enqueue_script( 'wp-ru-max-pro', WP_RU_MAX_PRO_URL . 'widget.js', array(), $js_ver, true );
         wp_localize_script( 'wp-ru-max-pro', 'wpRuMaxProFront', array(
             'ajaxUrl' => admin_url( 'admin-ajax.php' ),
             'nonce' => wp_create_nonce( 'wp_ru_max_pro_front' ),
@@ -139,6 +162,9 @@ class WP_Ru_Max_Pro_Widget {
 
     public function message() {
         check_ajax_referer( 'wp_ru_max_pro_front', 'nonce' );
+        if ( ! $this->allow_public_request( 'message' ) ) {
+            wp_send_json_error( 'Слишком много запросов. Попробуйте ещё раз через минуту.', 429 );
+        }
         $settings = wp_ru_max_pro_settings();
         if ( empty( $settings['enabled'] ) ) {
             wp_send_json_error( 'Виджет отключен.' );
@@ -232,6 +258,9 @@ class WP_Ru_Max_Pro_Widget {
 
     public function history() {
         check_ajax_referer( 'wp_ru_max_pro_front', 'nonce' );
+        if ( ! $this->allow_public_request( 'history', 60 ) ) {
+            wp_send_json_error( 'Слишком много запросов. Попробуйте ещё раз через минуту.', 429 );
+        }
         $id = sanitize_key( wp_unslash( $_POST['conversation_id'] ?? '' ) );
         $pending = get_option( 'wp_ru_max_pro_pending_messages', array() );
         foreach ( $pending as $conversation ) {
