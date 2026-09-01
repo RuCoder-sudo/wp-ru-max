@@ -404,12 +404,17 @@ class WP_Ru_Max_Notifications {
         if ( ! empty( $settings['woo_filter_enabled'] ) && ! empty( $woo_info ) ) {
             $order_id = $woo_info['order_id'];
             // WooCommerce хранит статус с префиксом 'wc-' в БД, но get_status() возвращает без 'wc-'
-            $status   = ltrim( $woo_info['status'], 'wc-' );
+            $status   = preg_replace( '/^wc-/', '', (string) $woo_info['status'] );
 
             // Фильтр по статусам
             $allowed_statuses = isset( $settings['woo_notify_statuses'] ) ? (array) $settings['woo_notify_statuses'] : array();
             if ( ! empty( $allowed_statuses ) ) {
-                $allowed_clean = array_map( function( $s ) { return ltrim( $s, 'wc-' ); }, $allowed_statuses );
+                $allowed_clean = array_map(
+                    function( $s ) {
+                        return preg_replace( '/^wc-/', '', (string) $s );
+                    },
+                    $allowed_statuses
+                );
                 if ( ! in_array( $status, $allowed_clean, true ) ) {
                     WP_Ru_Max_Logger::log( 'notifications', 'info',
                         "WooCommerce заказ #{$order_id} (статус: {$status}) пропущен — статус не входит в список уведомлений.",
@@ -512,8 +517,8 @@ class WP_Ru_Max_Notifications {
                     array(
                         'chat_id'      => $chat_id,
                         'subject'      => $subject,
-                        'text_length'  => mb_strlen( $text, 'UTF-8' ),
-                        'text_preview' => mb_substr( $text, 0, 200, 'UTF-8' ),
+                        'text_length'  => wp_ru_max_strlen( $text, 'UTF-8' ),
+                        'text_preview' => wp_ru_max_substr( $text, 0, 200, 'UTF-8' ),
                     )
                 );
             } else {
@@ -626,7 +631,7 @@ class WP_Ru_Max_Notifications {
         // Экранируем HTML-спецсимволы: сообщения об ошибках PHP и имена файлов
         // могут содержать <, >, & которые сломают parse_mode=html в MAX.
         $site = htmlspecialchars( get_bloginfo( 'name' ), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
-        $msg  = htmlspecialchars( mb_substr( $error['message'], 0, 300, 'UTF-8' ), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $msg  = htmlspecialchars( wp_ru_max_substr( $error['message'], 0, 300, 'UTF-8' ), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
         $file = htmlspecialchars( basename( $error['file'] ), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
         $line = (int) $error['line'];
         $text = "<b>Критическая ошибка сайта!</b>\n\nСайт: {$site}\nОшибка: {$msg}\nФайл: {$file}, строка {$line}";
