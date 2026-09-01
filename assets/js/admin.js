@@ -157,7 +157,6 @@
             post_sender_enabled:    $('#post_sender_enabled').is(':checked') ? '1' : '0',
             send_new_post:          $('input[name="send_new_post"]').is(':checked') ? '1' : '0',
             send_updated_post:      $('input[name="send_updated_post"]').is(':checked') ? '1' : '0',
-            auto_send_default:      $('input[name="auto_send_default"]').is(':checked') ? '1' : '0',
             show_read_more:         $('input[name="show_read_more"]').is(':checked') ? '1' : '0',
             show_action_label:      $('input[name="show_action_label"]').is(':checked') ? '1' : '0',
             show_author_date:       $('input[name="show_author_date"]').is(':checked') ? '1' : '0',
@@ -656,6 +655,320 @@
     if ($('#history_table_wrap').length) {
         loadLogs(1);
     }
+
+    /* -- Autoposting: tabs, calendar and drag-and-drop -- */
+    (function () {
+        var $root = $('#wp-ru-max-autopost');
+        if (!$root.length) { return; }
+
+        var calendarDate = new Date();
+        calendarDate.setDate(1);
+        var calendarData = { events: [], available_posts: [], networks: {} };
+        var monthNames = [
+            'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+            'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+        ];
+
+        function monthValue() {
+            return calendarDate.getFullYear() + '-' + ('0' + (calendarDate.getMonth() + 1)).slice(-2);
+        }
+
+        function setAutoNotice(selector, ok, text) {
+            var $el = $(selector);
+            if (!$el.length) { return; }
+            $el.removeClass('success error').addClass(ok ? 'success' : 'error').text(text).show();
+        }
+
+        function loadAutopostCalendar() {
+            doAjax('wp_ru_max_autopost_calendar', { month: monthValue() }, function (res) {
+                if (!res || !res.success) {
+                    setAutoNotice('#wp-ru-max-calendar-result', false, (res && res.data) || 'Не удалось загрузить календарь.');
+                    return;
+                }
+                renderAutopostCalendar(res.data);
+                $('#wp-ru-max-autopost-total').text(res.data.summary.total);
+                $('#wp-ru-max-autopost-errors').text(res.data.summary.errors);
+            }, function (msg) {
+                setAutoNotice('#wp-ru-max-calendar-result', false, msg);
+            });
+        }
+
+        function renderAutopostCalendar(data) {
+            calendarData = data || calendarData;
+            var eventsByDate = {};
+            $.each(calendarData.events || [], function (_, event) {
+                if (!eventsByDate[event.date]) { eventsByDate[event.date] = []; }
+                eventsByDate[event.date].push(event);
+            });
+            $('#wp-ru-max-calendar-title').text(monthNames[calendarDate.getMonth()] + ' ' + calendarDate.getFullYear());
+            var firstDay = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1);
+            var daysInMonth = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 0).getDate();
+            var offset = (firstDay.getDay() + 6) % 7;
+            var html = '<div class="wp-ru-max-calendar-grid">';
+            $.each(['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'], function (_, day) {
+                html += '<div class="wp-ru-max-calendar-weekday">' + day + '</div>';
+            });
+            for (var blank = 0; blank < offset; blank++) {
+                html += '<div class="wp-ru-max-calendar-day is-empty"></div>';
+            }
+            for (var dayNumber = 1; dayNumber <= daysInMonth; dayNumber++) {
+                var dateKey = calendarData.month + '-' + ('0' + dayNumber).slice(-2);
+                var today = new Date();
+                var isToday = today.getFullYear() === calendarDate.getFullYear() &&
+                    today.getMonth() === calendarDate.getMonth() && today.getDate() === dayNumber;
+                html += '<div class="wp-ru-max-calendar-day' + (isToday ? ' is-today' : '') + '" data-date="' + dateKey + '" role="button" tabindex="0" aria-label="Запланировать публикацию на ' + dateKey + '">';
+                html += '<div class="wp-ru-max-calendar-day-number">' + dayNumber + '</div>';
+                $.each(eventsByDate[dateKey] || [], function (_, event) {
+                    var scheduled = event.type === 'scheduled' || event.type === 'error';
+                    var completed = event.type === 'completed';
+                    var hasError = event.type === 'error';
+                    var stateText = '';
+                    if (event.states) {
+                        var states = [];
+                        $.each(event.states, function (network, state) {
+                            states.push(network + ': ' + state);
+                            if (state === 'error') {
+                                hasError = true;
+                            }
+                        });
+                        stateText = states.join(', ');
+                    }
+                    var eventClasses = scheduled ? ['is-scheduled'] : (completed ? ['is-completed'] : ['is-published']);
+                    if (hasError) {
+                        eventClasses.push('is-error');
+                    }
+                    html += '<div class="wp-ru-max-calendar-event ' + eventClasses.join(' ') + '"' +
+                        (scheduled ? ' draggable="true" data-post-id="' + event.id + '" data-datetime="' + escAttr(event.datetime) + '" data-networks="' + escAttr(JSON.stringify(event.networks || [])) + '"' : '') +
+                        ' title="' + escAttr(event.title + (stateText ? ' — ' + stateText : '')) + '">';
+                    html += '<span class="wp-ru-max-calendar-event-time">' + (event.datetime || '').slice(11, 16) + '</span> ';
+                    html += '<span>' + escHtml(event.title || '(без названия)') + '</span>';
+                    if (scheduled) {
+                        html += '<span class="wp-ru-max-calendar-event-actions">';
+                        html += '<button type="button" class="wp-ru-max-autopost-run" data-post-id="' + event.id + '" title="Опубликовать сейчас">▶</button>';
+                        html += '<button type="button" class="wp-ru-max-autopost-delete" data-post-id="' + event.id + '" title="Удалить задание">×</button>';
+                        html += '</span>';
+                    }
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+            html += '</div>';
+            $('#wp-ru-max-calendar').html(html);
+        }
+
+        function closeCalendarScheduleModal() {
+            $root.find('.wp-ru-max-calendar-modal').remove();
+        }
+
+        function openCalendarScheduleModal(date, postId, time, selectedNetworks) {
+            closeCalendarScheduleModal();
+            var posts = calendarData.available_posts || [];
+            var configuredNetworks = calendarData.networks || {};
+            var selectedPostId = String(postId || '');
+            var selectedTime = time || '10:00';
+            var selected = $.map(selectedNetworks || [], function (network) {
+                return String(network);
+            });
+            var postOptions = '<option value="">Выберите статью</option>';
+            $.each(posts, function (_, post) {
+                postOptions += '<option value="' + escAttr(String(post.id)) + '"' +
+                    (String(post.id) === selectedPostId ? ' selected' : '') + '>' +
+                    escHtml(post.title || '(без названия)') + '</option>';
+            });
+            var networkControls = '';
+            $.each(configuredNetworks, function (network, label) {
+                networkControls += '<label class="wp-ru-max-calendar-network">' +
+                    '<input type="checkbox" value="' + escAttr(network) + '"' +
+                    (selected.indexOf(String(network)) !== -1 ? ' checked' : '') + '> ' +
+                    escHtml(label) + '</label>';
+            });
+            if (!networkControls) {
+                networkControls = '<p class="description">Сначала подключите социальную сеть в настройках плагина.</p>';
+            }
+            var html = '<div class="wp-ru-max-calendar-modal" role="dialog" aria-modal="true">' +
+                '<div class="wp-ru-max-calendar-modal-backdrop"></div>' +
+                '<div class="wp-ru-max-calendar-modal-card">' +
+                '<button type="button" class="wp-ru-max-calendar-modal-close" aria-label="Закрыть">×</button>' +
+                '<h3>Запланировать публикацию</h3>' +
+                '<p class="description">Выберите статью и одну или несколько социальных сетей.</p>' +
+                '<label class="wp-ru-max-calendar-modal-field">Статья' +
+                '<select class="wp-ru-max-calendar-post">' + postOptions + '</select></label>' +
+                '<label class="wp-ru-max-calendar-modal-field">Дата и время' +
+                '<input type="datetime-local" class="wp-ru-max-calendar-datetime" value="' + escAttr(date + 'T' + selectedTime) + '"></label>' +
+                '<div class="wp-ru-max-calendar-modal-field"><strong>Социальные сети</strong>' +
+                '<div class="wp-ru-max-calendar-network-list">' + networkControls + '</div></div>' +
+                '<div class="wp-ru-max-calendar-modal-actions">' +
+                '<button type="button" class="button wp-ru-max-calendar-modal-cancel">Отмена</button>' +
+                '<button type="button" class="button button-primary wp-ru-max-calendar-modal-save">Сохранить</button>' +
+                '</div></div></div>';
+            $root.append(html);
+        }
+
+        $root.on('click', '[data-autopost-tab]', function () {
+            var tab = $(this).data('autopost-tab');
+            $root.find('[data-autopost-tab]').removeClass('is-active');
+            $(this).addClass('is-active');
+            $root.find('[data-autopost-pane]').removeClass('is-active');
+            $root.find('[data-autopost-pane="' + tab + '"]').addClass('is-active');
+            if (tab === 'calendar') { loadAutopostCalendar(); }
+        });
+        $root.on('click', '.wp-ru-max-calendar-day:not(.is-empty)', function (event) {
+            if ($(event.target).closest('.wp-ru-max-calendar-event, button, a, input, select').length) {
+                return;
+            }
+            var $day = $(this);
+            openCalendarScheduleModal(String($day.data('date')), '', '10:00', []);
+        });
+        $root.on('keydown', '.wp-ru-max-calendar-day:not(.is-empty)', function (event) {
+            if (event.key !== 'Enter' && event.key !== ' ') {
+                return;
+            }
+            if ($(event.target).closest('.wp-ru-max-calendar-event, button, a, input, select').length) {
+                return;
+            }
+            event.preventDefault();
+            openCalendarScheduleModal(String($(this).data('date')), '', '10:00', []);
+        });
+        $root.on('click', '.wp-ru-max-calendar-modal-close, .wp-ru-max-calendar-modal-cancel, .wp-ru-max-calendar-modal-backdrop', function () {
+            closeCalendarScheduleModal();
+        });
+        $root.on('click', '.wp-ru-max-calendar-modal-save', function () {
+            var $modal = $(this).closest('.wp-ru-max-calendar-modal');
+            var postId = parseInt($modal.find('.wp-ru-max-calendar-post').val(), 10) || 0;
+            var datetime = ($modal.find('.wp-ru-max-calendar-datetime').val() || '').replace('T', ' ');
+            var networks = [];
+            $modal.find('.wp-ru-max-calendar-network-list input:checked').each(function () {
+                networks.push($(this).val());
+            });
+            if (!postId) {
+                setAutoNotice('#wp-ru-max-calendar-result', false, 'Выберите статью.');
+                return;
+            }
+            if (!networks.length) {
+                setAutoNotice('#wp-ru-max-calendar-result', false, 'Выберите хотя бы одну социальную сеть.');
+                return;
+            }
+            var $button = $(this).prop('disabled', true).text('Сохранение…');
+            doAjax('wp_ru_max_autopost_save_meta', {
+                post_id: postId,
+                networks: networks,
+                datetime: datetime
+            }, function (res) {
+                if (res && res.success) {
+                    closeCalendarScheduleModal();
+                    setAutoNotice('#wp-ru-max-calendar-result', true, 'Задание автопостинга сохранено.');
+                    loadAutopostCalendar();
+                } else {
+                    $button.prop('disabled', false).text('Сохранить');
+                    setAutoNotice('#wp-ru-max-calendar-result', false, (res && res.data) || 'Не удалось сохранить задание.');
+                }
+            });
+        });
+        $('#wp-ru-max-calendar-prev').on('click', function () {
+            calendarDate.setMonth(calendarDate.getMonth() - 1);
+            loadAutopostCalendar();
+        });
+        $('#wp-ru-max-calendar-next').on('click', function () {
+            calendarDate.setMonth(calendarDate.getMonth() + 1);
+            loadAutopostCalendar();
+        });
+        $('#wp-ru-max-calendar-today').on('click', function () {
+            calendarDate = new Date();
+            calendarDate.setDate(1);
+            loadAutopostCalendar();
+        });
+        $('#wp-ru-max-autopost-refresh').on('click', function () {
+            loadAutopostCalendar();
+            setAutoNotice('#wp-ru-max-autopost-result', true, 'Состояние очереди обновлено.');
+        });
+        $root.on('dragstart', '.wp-ru-max-calendar-event.is-scheduled', function (event) {
+            event.originalEvent.dataTransfer.setData('text/plain', JSON.stringify({
+                postId: $(this).data('post-id'),
+                datetime: $(this).data('datetime')
+            }));
+            $(this).addClass('is-dragging');
+        });
+        $root.on('dragend', '.wp-ru-max-calendar-event', function () {
+            $(this).removeClass('is-dragging');
+        });
+        $root.on('dragover', '.wp-ru-max-calendar-day:not(.is-empty)', function (event) {
+            event.preventDefault();
+            $(this).addClass('is-drop-target');
+        });
+        $root.on('dragleave', '.wp-ru-max-calendar-day', function () {
+            $(this).removeClass('is-drop-target');
+        });
+        $root.on('drop', '.wp-ru-max-calendar-day:not(.is-empty)', function (event) {
+            event.preventDefault();
+            $(this).removeClass('is-drop-target');
+            var raw = event.originalEvent.dataTransfer.getData('text/plain');
+            var source;
+            try { source = JSON.parse(raw); } catch (e) { return; }
+            var time = (source.datetime || '').slice(11, 16) || '10:00';
+            doAjax('wp_ru_max_autopost_move', {
+                post_id: source.postId,
+                datetime: $(this).data('date') + ' ' + time
+            }, function (res) {
+                if (res && res.success) {
+                    setAutoNotice('#wp-ru-max-calendar-result', true, 'Дата автопостинга изменена.');
+                    loadAutopostCalendar();
+                } else {
+                    setAutoNotice('#wp-ru-max-calendar-result', false, (res && res.data) || 'Не удалось перенести запись.');
+                }
+            });
+        });
+        $root.on('click', '.wp-ru-max-autopost-delete', function (event) {
+            event.stopPropagation();
+            var postId = $(this).data('post-id');
+            if (!window.confirm('Удалить задание автопостинга для этой записи?')) { return; }
+            doAjax('wp_ru_max_autopost_delete', { post_id: postId }, function (res) {
+                setAutoNotice('#wp-ru-max-calendar-result', !!(res && res.success), (res && res.data) || 'Ошибка удаления.');
+                loadAutopostCalendar();
+            });
+        });
+        $root.on('click', '.wp-ru-max-autopost-run', function (event) {
+            event.stopPropagation();
+            var $button = $(this).prop('disabled', true);
+            var networks = [];
+            try {
+                networks = JSON.parse($button.closest('.wp-ru-max-calendar-event').attr('data-networks') || '[]');
+            } catch (e) {}
+            if (!networks.length) {
+                $button.prop('disabled', false);
+                openCalendarScheduleModal(
+                    String($button.closest('.wp-ru-max-calendar-day').data('date')),
+                    $button.data('post-id'),
+                    String($button.closest('.wp-ru-max-calendar-event').data('datetime') || '').slice(11, 16) || '10:00',
+                    networks
+                );
+                return;
+            }
+            doAjax('wp_ru_max_autopost_run', { post_id: $button.data('post-id'), networks: networks }, function (res) {
+                $button.prop('disabled', false);
+                setAutoNotice('#wp-ru-max-calendar-result', !!(res && res.success), (res && res.data && res.data.message) || (res && res.data) || 'Ошибка запуска.');
+                loadAutopostCalendar();
+            });
+        });
+        $root.on('click', '.wp-ru-max-autopost-save-settings', function () {
+            var $button = $(this).prop('disabled', true).text('Сохранение…');
+            doAjax('wp_ru_max_autopost_save_settings', {
+                enabled: $('#autopost_enabled').is(':checked') ? 1 : 0,
+                default_time: $('#autopost_default_time').val(),
+                retry_attempts: $('#autopost_retry_attempts').val(),
+                retry_delay_minutes: $('#autopost_retry_delay').val(),
+                notify_enabled: $('#autopost_notify_enabled').is(':checked') ? 1 : 0,
+                notify_emails: $('#autopost_notify_emails').val(),
+                notify_on_success: $('#autopost_notify_success').is(':checked') ? 1 : 0,
+                notify_on_error: $('#autopost_notify_error').is(':checked') ? 1 : 0
+            }, function (res) {
+                $button.prop('disabled', false).text('Сохранить настройки');
+                setAutoNotice('#wp-ru-max-autopost-settings-result', !!(res && res.success), (res && res.data) || 'Ошибка сохранения.');
+            });
+        });
+        /* Загружаем текущий месяц сразу, чтобы календарь был готов после
+         * открытия вкладки и не зависел от повторного клика по навигации. */
+        loadAutopostCalendar();
+    }());
 
     /* -- Utility: escape attribute value -- */
     function escAttr(str) {
