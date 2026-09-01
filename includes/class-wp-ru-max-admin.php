@@ -46,6 +46,7 @@ class WP_Ru_Max_Admin {
         add_action( 'admin_init',                        array( $this, 'register_quick_share_columns' ) );
         add_action( 'wp_ajax_wp_ru_max_quick_share',     array( $this, 'ajax_quick_share' ) );
         add_action( 'admin_footer',                      array( $this, 'render_quick_share_drawer' ) );
+        add_action( 'quick_edit_custom_box',             array( $this, 'render_quick_edit_autopost' ), 10, 2 );
     }
 
     public function register_rest_routes() {
@@ -85,30 +86,7 @@ class WP_Ru_Max_Admin {
 
     public function rest_get_skip( $request ) {
         $post_id = (int) $request['post_id'];
-        wp_cache_delete( $post_id, 'post_meta' );
-
-        $skip = get_post_meta( $post_id, self::SKIP_META_KEY, true );
-        if ( $skip === '' || $skip === null || $skip === false ) {
-            $legacy = get_post_meta( $post_id, self::SKIP_META_KEY_LEGACY, true );
-            if ( $legacy !== '' && $legacy !== null && $legacy !== false ) {
-                $skip = $legacy;
-            }
-        }
-        $skip_str = is_scalar( $skip ) ? trim( (string) $skip ) : '';
-
-        if ( $skip_str === '' ) {
-            // Явное значение не задано — применяем глобальную настройку По умолчанию
-            $settings     = get_option( 'wp_ru_max_settings', array() );
-            $default_on   = ! empty( $settings['auto_send_default'] );
-            $is_on        = $default_on;
-        } else {
-            $is_on = ( $skip_str === '0' );
-        }
-
-        return rest_ensure_response( array(
-            'on'     => $is_on,
-            'stored' => $skip_str,
-        ) );
+        return rest_ensure_response( $this->get_autopost_preferences( $post_id ) );
     }
 
     public function rest_set_skip( $request ) {
@@ -120,6 +98,9 @@ class WP_Ru_Max_Admin {
 
         update_post_meta( $post_id, self::SKIP_META_KEY, $value );
         delete_post_meta( $post_id, self::SKIP_META_KEY_LEGACY );
+        if ( null !== $request->get_param( 'excluded' ) ) {
+            update_post_meta( $post_id, self::EXCLUDE_META_KEY, $this->sanitize_excluded_networks( $request->get_param( 'excluded' ) ) );
+        }
 
         wp_cache_delete( $post_id, 'post_meta' );
         $stored = get_post_meta( $post_id, self::SKIP_META_KEY, true );
@@ -143,11 +124,9 @@ class WP_Ru_Max_Admin {
             )
         );
 
-        return rest_ensure_response( array(
-            'on'     => ( $stored === '0' ),
-            'stored' => $stored,
-            'sent'   => $value,
-        ) );
+        $preferences = $this->get_autopost_preferences( $post_id );
+        $preferences['sent'] = $value;
+        return rest_ensure_response( $preferences );
     }
 
     public function ajax_set_skip() {
@@ -162,6 +141,10 @@ class WP_Ru_Max_Admin {
 
         update_post_meta( $post_id, self::SKIP_META_KEY, $value );
         delete_post_meta( $post_id, self::SKIP_META_KEY_LEGACY );
+        if ( isset( $_POST['excluded'] ) ) {
+            $excluded = wp_unslash( $_POST['excluded'] );
+            update_post_meta( $post_id, self::EXCLUDE_META_KEY, $this->sanitize_excluded_networks( $excluded ) );
+        }
 
         wp_cache_delete( $post_id, 'post_meta' );
         $stored = get_post_meta( $post_id, self::SKIP_META_KEY, true );
@@ -184,10 +167,7 @@ class WP_Ru_Max_Admin {
             )
         );
 
-        wp_send_json_success( array(
-            'on'     => ( $stored === '0' ),
-            'stored' => $stored,
-        ) );
+        wp_send_json_success( $this->get_autopost_preferences( $post_id ) );
     }
 
     public function ajax_get_skip() {
@@ -196,6 +176,19 @@ class WP_Ru_Max_Admin {
         if ( ! $post_id || ! current_user_can( 'edit_post', $post_id ) ) {
             wp_send_json_error( 'Нет прав доступа.' );
         }
+        wp_send_json_success( $this->get_autopost_preferences( $post_id ) );
+    }
+
+    const SKIP_META_KEY        = 'wp_ru_max_skip';
+    const SKIP_META_KEY_LEGACY = '_wp_ru_max_skip';
+    const EXCLUDE_META_KEY     = 'wp_ru_max_autopost_excluded_networks';
+
+    /**
+     * Возвращает единое состояние автопостинга записи для всех редакторов.
+     * Старый wp_ru_max_skip сохраняется как совместимое хранилище общего
+     * переключателя, а список исключений хранится отдельно.
+     */
+    public function get_autopost_preferences( $post_id ) {
         wp_cache_delete( $post_id, 'post_meta' );
         $skip = get_post_meta( $post_id, self::SKIP_META_KEY, true );
         if ( $skip === '' || $skip === null || $skip === false ) {
@@ -205,22 +198,56 @@ class WP_Ru_Max_Admin {
             }
         }
         $skip_str = is_scalar( $skip ) ? trim( (string) $skip ) : '';
-
-        if ( $skip_str === '' ) {
-            $settings   = get_option( 'wp_ru_max_settings', array() );
-            $is_on      = ! empty( $settings['auto_send_default'] );
+        if ( '' === $skip_str ) {
+            $social  = get_option( 'wp_ru_max_social', array() );
+            $legacy_settings = get_option( 'wp_ru_max_settings', array() );
+            $is_on   = array_key_exists( 'auto_send_default', $social )
+                ? ! empty( $social['auto_send_default'] )
+                : ! empty( $legacy_settings['auto_send_default'] );
         } else {
-            $is_on = ( $skip_str === '0' );
+            $is_on = ( '0' === $skip_str );
         }
-
-        wp_send_json_success( array(
-            'on'     => $is_on,
-            'stored' => $skip_str,
-        ) );
+        return array(
+            'on'       => $is_on,
+            'stored'   => $skip_str,
+            'excluded' => $this->get_excluded_networks( $post_id ),
+        );
     }
 
-    const SKIP_META_KEY        = 'wp_ru_max_skip';
-    const SKIP_META_KEY_LEGACY = '_wp_ru_max_skip';
+    private function sanitize_excluded_networks( $networks ) {
+        $allowed = array_keys( WP_Ru_Max_Auto_Posting::networks() );
+        $clean   = array();
+        foreach ( (array) $networks as $network ) {
+            $network = sanitize_key( $network );
+            if ( in_array( $network, $allowed, true ) && ! in_array( $network, $clean, true ) ) {
+                $clean[] = $network;
+            }
+        }
+        return $clean;
+    }
+
+    private function get_excluded_networks( $post_id ) {
+        $stored = get_post_meta( $post_id, self::EXCLUDE_META_KEY, true );
+        return $this->sanitize_excluded_networks( is_array( $stored ) ? $stored : array() );
+    }
+
+    /**
+     * Не показываем одну и ту же сеть дважды, если сторонний фильтр
+     * или старое подключение вернуло разные ключи с одним названием.
+     */
+    private function unique_configured_networks( $networks ) {
+        $unique = array();
+        $seen   = array();
+        foreach ( (array) $networks as $network => $label ) {
+            $label_key = strtolower( preg_replace( '/\s+/u', ' ', trim( wp_strip_all_tags( (string) $label ) ) ) );
+            if ( '' === $label_key || isset( $seen[ $label_key ] ) ) {
+                continue;
+            }
+            $seen[ $label_key ] = true;
+            $unique[ $network ] = $label;
+        }
+        return $unique;
+    }
 
     public function maybe_migrate_skip_meta() {
         if ( get_option( 'wp_ru_max_skip_meta_migrated_v1' ) ) {
@@ -258,7 +285,9 @@ class WP_Ru_Max_Admin {
                 'single'            => true,
                 'type'              => 'string',
                 'sanitize_callback' => array( $this, 'sanitize_skip_meta' ),
-                'auth_callback'     => function() { return current_user_can( 'edit_posts' ); },
+                'auth_callback'     => function( $allowed, $meta_key, $object_id ) {
+                    return current_user_can( 'edit_post', (int) $object_id );
+                },
             ) );
 
             add_action(
@@ -338,8 +367,12 @@ class WP_Ru_Max_Admin {
             return;
         }
         // Проверяем nonce стандартного редактора WordPress для предотвращения CSRF.
-        if ( ! isset( $_POST['_wpnonce'] ) ||
-             ! wp_verify_nonce( wp_unslash( $_POST['_wpnonce'] ), 'update-post_' . $post_id ) ) {
+        $valid_nonce = isset( $_POST['_wpnonce'] )
+            && wp_verify_nonce( wp_unslash( $_POST['_wpnonce'] ), 'update-post_' . $post_id );
+        if ( ! $valid_nonce && isset( $_POST['_inline_edit'] ) ) {
+            $valid_nonce = wp_verify_nonce( wp_unslash( $_POST['_inline_edit'] ), 'inlineeditnonce' );
+        }
+        if ( ! $valid_nonce ) {
             return;
         }
         if ( ! current_user_can( 'edit_post', $post_id ) ) {
@@ -354,10 +387,15 @@ class WP_Ru_Max_Admin {
         }
 
         if ( $value === null ) {
-            return;
+            $value = null;
+        } else {
+            update_post_meta( $post_id, self::SKIP_META_KEY, $this->sanitize_skip_meta( $value ) );
         }
 
-        update_post_meta( $post_id, self::SKIP_META_KEY, $this->sanitize_skip_meta( $value ) );
+        if ( isset( $_POST['wp_ru_max_autopost_excluded_networks'] ) ) {
+            $excluded = wp_unslash( $_POST['wp_ru_max_autopost_excluded_networks'] );
+            update_post_meta( $post_id, self::EXCLUDE_META_KEY, $this->sanitize_excluded_networks( $excluded ) );
+        }
     }
 
     public function admin_icon_css() {
@@ -393,13 +431,10 @@ class WP_Ru_Max_Admin {
 
     public function enqueue_gutenberg_panel() {
         $settings = get_option( 'wp_ru_max_settings', array() );
-        $token    = isset( $settings['bot_token'] ) ? $settings['bot_token'] : '';
-        $channels = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
 
-        if ( empty( $token ) || empty( $channels ) ) {
-            return;
-        }
-
+        // The social-posting panel must be available even before MAX is
+        // configured. Only the legacy MAX controls depend on hasMax.
+        $autopost_networks = $this->unique_configured_networks( WP_Ru_Max_Auto_Posting::configured_networks() );
         $gutenberg_js_path = WP_RU_MAX_PLUGIN_DIR . 'assets/js/gutenberg-panel.js';
         $gutenberg_js_ver  = file_exists( $gutenberg_js_path )
             ? (string) filemtime( $gutenberg_js_path )
@@ -412,7 +447,10 @@ class WP_Ru_Max_Admin {
             $gutenberg_js_ver,
             true
         );
-        $auto_send_default = ! empty( $settings['auto_send_default'] );
+        $social_settings   = get_option( 'wp_ru_max_social', array() );
+        $auto_send_default = array_key_exists( 'auto_send_default', $social_settings )
+            ? ! empty( $social_settings['auto_send_default'] )
+            : ! empty( $settings['auto_send_default'] );
         wp_localize_script( 'wp-ru-max-gutenberg', 'wpRuMaxGutenberg', array(
             'ajaxUrl'         => admin_url( 'admin-ajax.php' ),
             'nonce'           => wp_create_nonce( 'wp_ru_max_nonce' ),
@@ -420,6 +458,9 @@ class WP_Ru_Max_Admin {
             'restUrl'         => esc_url_raw( rest_url( 'wp-ru-max/v1/skip/' ) ),
             'restNonce'       => wp_create_nonce( 'wp_rest' ),
             'autoSendDefault' => $auto_send_default,
+            'hasMax'          => isset( $autopost_networks['max'] ),
+            'networks'        => $autopost_networks,
+            'defaultTime'      => (string) ( get_option( WP_Ru_Max_Auto_Posting::SETTINGS_OPTION, array() )['default_time'] ?? '10:00' ),
         ) );
     }
 
@@ -435,23 +476,20 @@ class WP_Ru_Max_Admin {
         $token    = isset( $settings['bot_token'] ) ? $settings['bot_token'] : '';
         $channels = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
 
-        if ( empty( $token ) || empty( $channels ) ) {
-            return;
-        }
-
-        $skip    = get_post_meta( $post->ID, self::SKIP_META_KEY, true );
-        $skip_is_set = ( $skip !== '' && $skip !== null && $skip !== false );
-        if ( $skip_is_set ) {
-            $enabled = ( $skip !== '1' );
-        } else {
-            $enabled = ! empty( $settings['auto_send_default'] );
-        }
+        $preferences = $this->get_autopost_preferences( $post->ID );
+        $enabled = ! empty( $preferences['on'] );
+        $excluded_networks = (array) ( $preferences['excluded'] ?? array() );
         $nonce   = wp_create_nonce( 'wp_ru_max_nonce' );
         $icon    = WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png';
+        $autopost_config = WP_Ru_Max_Auto_Posting::instance()->get_post_config( $post->ID );
+        $autopost_networks = isset( $autopost_config['networks'] ) ? (array) $autopost_config['networks'] : array();
+        $autopost_datetime = isset( $autopost_config['datetime'] ) ? str_replace( ' ', 'T', $autopost_config['datetime'] ) : '';
+        $configured_networks = $this->unique_configured_networks( WP_Ru_Max_Auto_Posting::configured_networks() );
         ?>
         <div class="misc-pub-section wp-ru-max-classic-section" style="border-top:1px solid #ddd;padding-top:8px;margin-top:4px;">
             <img src="<?php echo esc_url( $icon ); ?>" width="16" height="16" alt="MAX" style="vertical-align:middle;margin-right:4px;">
-            <strong>Отправить в MAX</strong>
+            <strong>Автоотправка в социальные сети</strong>
+            <p class="description" style="margin:4px 0;">Общий переключатель применяется ко всем подключённым социальным сетям.</p>
             <div style="margin-top:6px;">
                 <input type="hidden" name="<?php echo esc_attr( self::SKIP_META_KEY ); ?>" value="1">
                 <label style="cursor:pointer;">
@@ -460,20 +498,37 @@ class WP_Ru_Max_Admin {
                            name="<?php echo esc_attr( self::SKIP_META_KEY ); ?>"
                            value="0"
                            <?php checked( $enabled ); ?>>
-                    Автоотправка в MAX: <span class="wp-ru-max-auto-label"><?php echo esc_html( $enabled ? 'ВКЛ' : 'ВЫКЛ' ); ?></span>
+                            Автоотправка: <span class="wp-ru-max-auto-label"><?php echo esc_html( $enabled ? 'ВКЛ' : 'ВЫКЛ' ); ?></span>
                 </label>
             </div>
-            <div style="margin-top:6px;">
-                <button type="button"
-                        class="button button-secondary wp-ru-max-send-now-classic"
-                        style="width:100%;justify-content:center;"
-                        data-post-id="<?php echo intval( $post->ID ); ?>"
-                        data-nonce="<?php echo esc_attr( $nonce ); ?>">
-                    Отправить в MAX вручную
-                </button>
-                <span class="wp-ru-max-classic-result" style="display:none;margin-top:4px;font-size:12px;"></span>
+            <div style="margin-top:9px;">
+                <strong style="display:block;margin-bottom:4px;">Не отправлять автоматически в:</strong>
+                <input type="hidden" name="wp_ru_max_autopost_excluded_networks[]" value="">
+                <?php foreach ( $configured_networks as $network => $label ) : ?>
+                    <label style="display:block;margin:3px 0;cursor:pointer;">
+                        <input type="checkbox" name="wp_ru_max_autopost_excluded_networks[]" value="<?php echo esc_attr( $network ); ?>" <?php checked( in_array( $network, $excluded_networks, true ) ); ?>>
+                        <?php echo esc_html( $label ); ?>
+                    </label>
+                <?php endforeach; ?>
             </div>
         </div>
+            <div class="misc-pub-section wp-ru-max-classic-autopost" style="border-top:1px solid #ddd;padding-top:8px;margin-top:4px;">
+                <strong>Автопостинг в социальные сети</strong>
+                <p class="description" style="margin:4px 0 7px;">Выберите сети и дату. Время — по часовому поясу сайта.</p>
+                <input type="hidden" name="wp_ru_max_autopost_networks[]" value="">
+                 <div class="wp-ru-max-autopost-network-list">
+                     <?php foreach ( $configured_networks as $network => $label ) : ?>
+                        <label><input type="checkbox" name="wp_ru_max_autopost_networks[]" value="<?php echo esc_attr( $network ); ?>" <?php checked( in_array( $network, $autopost_networks, true ) ); ?>> <?php echo esc_html( $label ); ?></label>
+                    <?php endforeach; ?>
+                </div>
+                 <?php if ( empty( $configured_networks ) ) : ?>
+                     <p class="description">Подключите хотя бы одну социальную сеть в разделе «Социальные сети».</p>
+                 <?php endif; ?>
+                <label class="wp-ru-max-autopost-datetime-label">Дата и время
+                    <input type="datetime-local" name="wp_ru_max_autopost_datetime" value="<?php echo esc_attr( $autopost_datetime ); ?>" step="60">
+                </label>
+                <p class="description">Оставьте дату пустой, чтобы снять задание.</p>
+            </div>
         <?php
     }
 
@@ -525,15 +580,16 @@ class WP_Ru_Max_Admin {
             array( 'Главная',                   'manage_options', 'admin.php?page=wp-ru-max&tab=main' ),
             array( 'Отправка публикаций',       'manage_options', 'admin.php?page=wp-ru-max&tab=post_sender' ),
             array( 'Личные уведомления',        'manage_options', 'admin.php?page=wp-ru-max&tab=notifications' ),
-            array( 'Чат',                       'manage_options', 'admin.php?page=wp-ru-max&tab=chat' ),
-            array( 'Дополнительные настройки',  'manage_options', 'admin.php?page=wp-ru-max&tab=advanced' ),
+            array( 'Дополнительные',            'manage_options', 'admin.php?page=wp-ru-max&tab=advanced' ),
+            array( 'Автопостинг',                'manage_options', 'admin.php?page=wp-ru-max&tab=autoposting' ),
+            array( 'Чат виджет',                 'manage_options', 'admin.php?page=wp-ru-max&tab=chat' ),
+            array( 'Связь с клиентами',          'manage_options', 'admin.php?page=wp-ru-max&tab=contacts' ),
             array( 'Социальные сети',          'manage_options', 'admin.php?page=wp-ru-max&tab=social_networks' ),
             array( 'Прямой доступ',            'manage_options', 'admin.php?page=wp-ru-max&tab=direct_access' ),
             array( 'Настройки',                'manage_options', 'admin.php?page=wp-ru-max&tab=settings_social' ),
             array( 'История',                   'manage_options', 'admin.php?page=wp-ru-max&tab=history' ),
             array( 'Инструкция',                'manage_options', 'admin.php?page=wp-ru-max&tab=instructions' ),
             array( 'Обновления',                'manage_options', 'admin.php?page=wp-ru-max&tab=updates' ),
-            array( 'Связь с клиентами',         'manage_options', 'admin.php?page=wp-ru-max&tab=contacts' ),
             array( $is_licensed ? 'Активирован ✓' : '⚠ Активация', 'manage_options', 'admin.php?page=wp-ru-max&tab=activation' ),
         );
     }
@@ -541,8 +597,9 @@ class WP_Ru_Max_Admin {
     public function enqueue_admin_scripts( $hook ) {
         $is_plugin_page = strpos( $hook, 'wp-ru-max' ) !== false;
         $is_post_edit   = in_array( $hook, array( 'post.php', 'post-new.php' ), true );
+        $is_post_list   = 'edit.php' === $hook;
 
-        if ( ! $is_plugin_page && ! $is_post_edit ) {
+        if ( ! $is_plugin_page && ! $is_post_edit && ! $is_post_list ) {
             return;
         }
 
@@ -556,7 +613,7 @@ class WP_Ru_Max_Admin {
             ) );
         }
 
-        if ( $is_post_edit ) {
+        if ( $is_post_edit || $is_post_list ) {
             wp_add_inline_script( 'jquery', $this->get_classic_editor_inline_js() );
         }
     }
@@ -565,33 +622,49 @@ class WP_Ru_Max_Admin {
         $ajax_url = esc_js( admin_url( 'admin-ajax.php' ) );
         return "
 jQuery(function($){
-    $(document).on('click', '.wp-ru-max-send-now-classic', function(){
-        var btn    = $(this);
-        var result = btn.siblings('.wp-ru-max-classic-result');
-        var postId = btn.data('post-id');
-        var nonce  = btn.data('nonce');
-        btn.prop('disabled', true).text('Отправляю...');
-        result.hide();
-        $.post('" . $ajax_url . "', {
-            action:  'wp_ru_max_send_post_now',
-            post_id: postId,
-            nonce:   nonce
-        }, function(resp){
-            btn.prop('disabled', false).text('Отправить в MAX вручную');
-            if(resp.success){
-                result.css('color','#00a32a').text('✓ ' + resp.data).show();
-            } else {
-                result.css('color','#d63638').text('✗ ' + (resp.data || 'Ошибка')).show();
-            }
-        }).fail(function(){
-            btn.prop('disabled', false).text('Отправить в MAX вручную');
-            result.css('color','#d63638').text('✗ Ошибка соединения').show();
-        });
-    });
     $(document).on('change', '#wp_ru_max_auto_send_classic', function(){
         var lbl = $(this).closest('label');
         lbl.find('.wp-ru-max-auto-label').text(this.checked ? 'ВКЛ' : 'ВЫКЛ');
     });
+    // Заполняем поля автопостинга в «Быстрой правке» данными текущей статьи.
+    // В таблице записей для каждой строки есть скрытый источник этих данных.
+    $(document).on('click', '.editinline', function(){
+        var row = $(this).closest('tr');
+        var postId = (row.attr('id') || '').replace('post-', '');
+        if (!postId) { return; }
+        window.setTimeout(function(){
+            var editRow = $('#edit-' + postId);
+            var source = row.find('.wp-ru-max-quick-edit-data');
+            if (!editRow.length || !source.length) { return; }
+
+            var networks = [];
+            try {
+                networks = JSON.parse(source.attr('data-networks') || '[]');
+            } catch (e) {}
+            editRow.find('input[name=\"wp_ru_max_autopost_networks[]\"]').prop('checked', false);
+            editRow.find('input[name=\"wp_ru_max_autopost_networks[]\"]').each(function(){
+                $(this).prop('checked', networks.indexOf($(this).val()) !== -1);
+            });
+             var autoEnabled = source.attr('data-auto-enabled') !== '0';
+             editRow.find('input[name=\"<?php echo esc_js( self::SKIP_META_KEY ); ?>\"][value=\"0\"]')
+                 .prop('checked', autoEnabled);
+             editRow.find('.wp-ru-max-quick-auto-label').text(autoEnabled ? 'ВКЛ' : 'ВЫКЛ');
+             var excluded = [];
+             try {
+                 excluded = JSON.parse(source.attr('data-excluded') || '[]');
+             } catch (e) {}
+             editRow.find('input[name=\"wp_ru_max_autopost_excluded_networks[]\"]').prop('checked', false);
+             editRow.find('input[name=\"wp_ru_max_autopost_excluded_networks[]\"]').each(function(){
+                 $(this).prop('checked', excluded.indexOf($(this).val()) !== -1);
+             });
+            editRow.find('input[name=\"wp_ru_max_autopost_datetime\"]').val(
+                (source.attr('data-datetime') || '').replace(' ', 'T')
+            );
+        }, 0);
+    });
+     $(document).on('change', '.wp-ru-max-quick-edit-autopost input[name=\"<?php echo esc_js( self::SKIP_META_KEY ); ?>\"][value=\"0\"]', function(){
+         $(this).siblings('.wp-ru-max-quick-auto-label').text(this.checked ? 'ВКЛ' : 'ВЫКЛ');
+     });
 });
 ";
     }
@@ -693,7 +766,6 @@ jQuery(function($){
                 case 'post_sender_enabled':
                 case 'send_new_post':
                 case 'send_updated_post':
-                case 'auto_send_default':
                 case 'show_read_more':
                 case 'show_action_label':
                 case 'show_author_date':
@@ -738,7 +810,7 @@ jQuery(function($){
         } else {
             $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages', 'max_oauth_bot_username', 'chat_widget_utm_source', 'chat_widget_utm_medium', 'chat_widget_utm_campaign', 'chat_widget_utm_content', 'chat_widget_ya_metrika_counter', 'chat_widget_ya_metrika_goal', 'hashtags_custom_mentions' );
             $allowed_textarea = array( 'notify_template', 'post_message_template', 'chat_widget_retention_message', 'chat_widget_sound_specific_pages' );
-            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'auto_send_default', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'notify_user_registration', 'notify_customer_order', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_message_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled', 'multisite_enabled', 'woo_filter_enabled', 'chat_widget_ya_metrika_enabled', 'general_dedup_enabled', 'hashtags_enabled' );
+            $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'notify_user_registration', 'notify_customer_order', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_message_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled', 'multisite_enabled', 'woo_filter_enabled', 'chat_widget_ya_metrika_enabled', 'general_dedup_enabled', 'hashtags_enabled' );
             $allowed_int      = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay', 'send_delay_seconds', 'retry_count', 'retry_delay_seconds', 'general_dedup_ttl' );
             $allowed_float    = array( 'image_size_limit_mb' );
             $allowed_color    = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
@@ -964,7 +1036,7 @@ jQuery(function($){
         } else {
             WP_Ru_Max_Logger::log( 'direct_access', 'success',
                 'Push отправлен → ' . $chat_id,
-                array( 'msg_length' => mb_strlen( $message ) ) );
+                array( 'msg_length' => wp_ru_max_strlen( $message ) ) );
             wp_send_json_success( 'Push-уведомление успешно отправлено в ' . esc_html( $chat_id ) . '!' );
         }
     }
@@ -1068,15 +1140,16 @@ jQuery(function($){
                         'main'            => 'Главная',
                         'post_sender'     => 'Отправка публикаций',
                         'notifications'   => 'Личные уведомления',
-                        'chat'            => 'Чат',
                         'advanced'        => 'Дополнительные',
+                        'autoposting'     => 'Автопостинг',
+                        'chat'            => 'Чат виджет',
+                        'contacts'        => 'Связь с клиентами',
                         'social_networks' => 'Социальные сети',
                         'direct_access'   => 'Прямой доступ',
                         'settings_social' => 'Настройки',
                         'history'         => 'История',
                         'instructions'    => 'Инструкция',
                         'updates'         => 'Обновления',
-                        'contacts'        => 'Связь с клиентами',
                         'activation'      => WP_Ru_Max_License::is_active() ? 'Активирован' : 'Активация',
                     ) );
                     $tab_keys = apply_filters( 'wp_ru_max_admin_tab_keys', array_keys( $tabs ) );
@@ -1096,7 +1169,7 @@ jQuery(function($){
                     // Фильтры расширений добавляют вкладки в навигацию. Они
                     // должны также присутствовать среди выводимых панелей,
                     // иначе ссылка открывается с пустым содержимым.
-                    $all_tabs = array( 'main', 'post_sender', 'notifications', 'chat', 'advanced', 'social_networks', 'direct_access', 'settings_social', 'history', 'instructions', 'updates', 'activation', 'contacts' );
+                    $all_tabs = array( 'main', 'post_sender', 'notifications', 'advanced', 'autoposting', 'chat', 'contacts', 'social_networks', 'direct_access', 'settings_social', 'history', 'instructions', 'updates', 'activation' );
                     foreach ( $all_tabs as $tab_key ) :
                         $is_active = ( $active_tab === $tab_key );
                     ?>
@@ -1106,6 +1179,7 @@ jQuery(function($){
                             case 'main':          $this->render_tab_main( $settings );         break;
                             case 'post_sender':   $this->render_tab_post_sender( $settings );  break;
                             case 'notifications': $this->render_tab_notifications( $settings ); break;
+                            case 'autoposting':   $this->render_tab_autoposting();       break;
                             case 'advanced':      $this->render_tab_advanced( $settings );      break;
                             case 'instructions':  $this->render_tab_instructions();             break;
                             case 'chat':          $this->render_tab_chat( $settings );          break;
@@ -1187,20 +1261,27 @@ jQuery(function($){
         </div>
 
         <div class="wp-ru-max-card">
-            <h3>В ближайших обновлениях</h3>
-            <p style="color:#666;font-style:italic;margin-bottom:16px;">Запланировано к реализации — список для себя, чтобы не забыть что добавим в следующих версиях.</p>
-
-            <ul style="margin-left:20px;list-style:disc;line-height:2;">
-                <li style="margin-top:10px;">
-                    <strong>CRM + автоматизация</strong><br>
-                    <span style="color:#555;">Интеграция с CRM-системами (amoCRM, Bitrix24) и автоматизация отдела продаж позволит упростить работу с клиентами и повысить эффективность продаж.</span>
-                </li>
-            </ul>
-        </div>
-
-        <div class="wp-ru-max-card">
             <h3>История версий</h3>
             <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
+
+            <h4 style="margin-bottom:4px;">v1.0.54</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Исправлено:</strong> OAuth VK ID теперь использует отдельное Web-приложение, а приложение сообщества больше не подставляется в пользовательский поток.</li>
+                <li><strong>Исправлено:</strong> пользовательский VK ID-токен сохраняется отдельно для загрузки фото, а Community Access Token сохраняется для публикации на стене.</li>
+                <li><strong>Добавлено:</strong> если миниатюра WordPress отсутствует, плагин использует первую картинку из содержимого записи.</li>
+                <li><strong>Добавлено:</strong> подробные сообщения в журнале о причине, по которой изображение не было прикреплено.</li>
+                <li><strong>Добавлено:</strong> внутренние вкладки Telegram, Одноклассники, ВКонтакте и Яндекс Дзен в разделе «Социальные сети».</li>
+                <li><strong>Обновлено:</strong> инструкция по VK дополнена отдельными пошаговыми разделами для <code>dev.vk.ru</code> и <code>id.vk.ru</code>.</li>
+            </ul>
+
+            <h4 style="margin-bottom:4px;">v1.0.53</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Добавлено:</strong> автопостинг по расписанию в MAX, Telegram, ВКонтакте, Одноклассники и Яндекс Дзен.</li>
+                <li><strong>Добавлено:</strong> отдельная очередь с независимыми статусами, повторными попытками и email-уведомлениями по каждой сети.</li>
+                <li><strong>Добавлено:</strong> выбор сетей, даты и времени в Gutenberg и Classic Editor.</li>
+                <li><strong>Добавлено:</strong> календарь публикаций с переносом запланированных заданий мышью, ручным запуском и удалением.</li>
+                <li><strong>Исправлено:</strong> панель Gutenberg автопостинга подключается на всех сайтах с плагином, даже если MAX ещё не настроен.</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.52</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -1218,6 +1299,7 @@ jQuery(function($){
                 <li><strong>Изменено:</strong> исходные письма WordPress и WooCommerce клиентам не блокируются при отключении их копий в MAX.</li>
             </ul>
 
+            <?php if ( false ) : ?>
             <h4 style="margin-bottom:4px;">v1.0.49</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
                 <li><strong>Исправлено:</strong> настройка «Эффект размытия фона иконок» теперь применяется к виджету и отображается в живом preview.</li>
@@ -1271,7 +1353,7 @@ jQuery(function($){
                 <li><strong>Исправлено:</strong> <code>ajax_send_push</code> — исправлен порядок выбора токена Telegram: <code>direct_telegram_token</code> теперь учитывается корректно.</li>
             </ul>
 
-            <?php /* Старые версии оставлены в исходниках для справки, но в плагине показываются только 1.0.43–1.0.47. */ ?>
+            <?php /* Старые версии оставлены в исходниках для справки, но скрыты из интерфейса. */ ?>
             <?php if ( false ) : ?>
             <h4 style="margin-bottom:4px;">v1.0.42</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -1292,7 +1374,7 @@ jQuery(function($){
             <h4 style="margin-bottom:4px;">v1.0.40</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
                 <li>Изменено: адрес MAX API обновлён с platform-api.max.ru на platform-api2.max.ru согласно официальному уведомлению MAX для бизнеса (обязательный переход до 19 июля 2026).</li>
-                <li>Изменено: добавлена поддержка сертификата Минцифры России — параметр sslverify=false добавлен в основной метод request() класса API; теперь все методы работают единообразно с новым адресом без SSL-ошибок.</li>
+                <li>Изменено: запросы к API используют стандартную проверку TLS-сертификатов WordPress, чтобы токен и ответы API нельзя было подменить.</li>
             </ul>
 
             <h4 style="margin-bottom:4px;">v1.0.39</h4>
@@ -1404,6 +1486,7 @@ jQuery(function($){
                 <li>Сворачиваемые списки категорий и тегов (>8 элементов).</li>
             </ul>
 
+            <?php endif; ?>
             <?php endif; ?>
             <p style="margin-top:8px;"><a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=history' ) ); ?>">→ Открыть журнал событий</a></p>
         </div>
@@ -1544,19 +1627,6 @@ jQuery(function($){
                                 <input type="checkbox" name="send_updated_post" value="1" <?php checked( ! empty( $settings['send_updated_post'] ) ); ?> />
                                 Обновляется существующая запись
                             </label>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Автоотправка по умолчанию</th>
-                        <td>
-                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-                                <label class="wp-ru-max-toggle">
-                                    <input type="checkbox" name="auto_send_default" value="1" <?php checked( ! empty( $settings['auto_send_default'] ) ); ?> />
-                                    <span class="wp-ru-max-toggle-slider"></span>
-                                </label>
-                                <strong>ВКЛ для всех новых записей</strong>
-                            </div>
-                            <p class="description">Если включено — тумблер «Автоотправка в MAX» будет по умолчанию <strong>ВКЛ</strong> для каждой новой записи, которую ещё не редактировали вручную. Если выключено — по умолчанию <strong>ВЫКЛ</strong>.</p>
                         </td>
                     </tr>
                     <tr>
@@ -2265,11 +2335,133 @@ jQuery(function($){
         <?php
     }
 
+    private function render_tab_autoposting() {
+        $settings = wp_parse_args(
+            get_option( WP_Ru_Max_Auto_Posting::SETTINGS_OPTION, array() ),
+            WP_Ru_Max_Auto_Posting::default_settings()
+        );
+        $summary = WP_Ru_Max_Auto_Posting::get_queue_summary();
+        ?>
+        <div class="wp-ru-max-autopost" id="wp-ru-max-autopost">
+            <div class="wp-ru-max-card wp-ru-max-autopost-hero">
+                <div>
+                    <h2>Автопостинг</h2>
+                    <p>Запланируйте публикацию статьи и переносите её по календарю мышкой.</p>
+                </div>
+                <div class="wp-ru-max-autopost-stats">
+                    <span><strong id="wp-ru-max-autopost-total"><?php echo (int) $summary['total']; ?></strong> в очереди</span>
+                    <span><strong id="wp-ru-max-autopost-errors"><?php echo (int) $summary['errors']; ?></strong> с ошибками</span>
+                </div>
+            </div>
+            <div class="wp-ru-max-autopost-tabs" role="tablist">
+                <button type="button" class="is-active" data-autopost-tab="posts">Автопост</button>
+                <button type="button" data-autopost-tab="calendar">Календарь</button>
+                <button type="button" data-autopost-tab="notifications">Уведомления</button>
+                <button type="button" data-autopost-tab="settings">Настройки</button>
+            </div>
+
+            <section class="wp-ru-max-autopost-pane is-active" data-autopost-pane="posts">
+                <div class="wp-ru-max-card">
+                    <h3>Как запланировать запись</h3>
+                    <ol class="wp-ru-max-autopost-steps">
+                        <li>Откройте вкладку «Календарь» и кликните по нужному числу.</li>
+                        <li>Выберите статью, одну или несколько социальных сетей, дату и время.</li>
+                        <li>Нажмите «Сохранить». Задание появится в календаре и будет обработано автоматически.</li>
+                    </ol>
+                    <p class="description">Задание можно также изменить перетаскиванием карточки по календарю. Отправка выполняется по часовому поясу сайта.</p>
+                </div>
+                <div class="wp-ru-max-card">
+                    <h3>Состояние очереди</h3>
+                    <p>Очередь проверяется раз в минуту через WP-Cron. При временной ошибке сети публикация повторяется независимо для каждой социальной сети.</p>
+                    <button type="button" class="button button-secondary" id="wp-ru-max-autopost-refresh">Обновить состояние</button>
+                    <div id="wp-ru-max-autopost-result" class="wp-ru-max-autopost-result" aria-live="polite"></div>
+                </div>
+            </section>
+
+            <section class="wp-ru-max-autopost-pane" data-autopost-pane="calendar">
+                <div class="wp-ru-max-card">
+                    <div class="wp-ru-max-calendar-toolbar">
+                        <button type="button" class="button" id="wp-ru-max-calendar-prev" aria-label="Предыдущий месяц">‹</button>
+                        <h3 id="wp-ru-max-calendar-title"></h3>
+                        <button type="button" class="button" id="wp-ru-max-calendar-next" aria-label="Следующий месяц">›</button>
+                        <button type="button" class="button button-secondary" id="wp-ru-max-calendar-today">Сегодня</button>
+                    </div>
+                    <p class="description">Фиолетовые карточки #6366f1 — созданные задания, зелёные #41c100 — успешно опубликованные, красные — задания с ошибкой. В календаре отображаются только статьи. Перетаскивать можно запланированные карточки.</p>
+                    <div id="wp-ru-max-calendar" class="wp-ru-max-calendar" aria-live="polite"></div>
+                    <div id="wp-ru-max-calendar-result" class="wp-ru-max-autopost-result" aria-live="polite"></div>
+                </div>
+            </section>
+
+            <section class="wp-ru-max-autopost-pane" data-autopost-pane="notifications">
+                <div class="wp-ru-max-card">
+                    <h3>Уведомления о публикациях</h3>
+                    <p>Получайте письмо после успешной публикации или когда все попытки отправки завершились ошибкой.</p>
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row">Уведомления</th>
+                            <td><label><input type="checkbox" id="autopost_notify_enabled" <?php checked( ! empty( $settings['notify_enabled'] ) ); ?>> Включить email-уведомления</label></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="autopost_notify_emails">Получатели</label></th>
+                            <td><input type="text" class="regular-text" id="autopost_notify_emails" value="<?php echo esc_attr( $settings['notify_emails'] ); ?>" placeholder="admin@example.com, editor@example.com"><p class="description">Несколько адресов разделяйте запятой или пробелом.</p></td>
+                        </tr>
+                        <tr>
+                            <th scope="row">События</th>
+                            <td>
+                                <label><input type="checkbox" id="autopost_notify_success" <?php checked( ! empty( $settings['notify_on_success'] ) ); ?>> Успешная публикация</label><br>
+                                <label><input type="checkbox" id="autopost_notify_error" <?php checked( ! empty( $settings['notify_on_error'] ) ); ?>> Ошибка после всех попыток</label>
+                            </td>
+                        </tr>
+                    </table>
+                    <button type="button" class="button button-primary wp-ru-max-autopost-save-settings">Сохранить уведомления</button>
+                </div>
+            </section>
+
+            <section class="wp-ru-max-autopost-pane" data-autopost-pane="settings">
+                <div class="wp-ru-max-card">
+                    <h3>Общие настройки автопостинга</h3>
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row">Планировщик</th>
+                            <td><label><input type="checkbox" id="autopost_enabled" <?php checked( ! empty( $settings['enabled'] ) ); ?>> Разрешить обработку запланированных публикаций</label><p class="description">Отключение приостанавливает отправку, но не удаляет задания.</p></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="autopost_default_time">Время по умолчанию</label></th>
+                            <td><input type="time" id="autopost_default_time" value="<?php echo esc_attr( $settings['default_time'] ); ?>"><p class="description">Используется как подсказка в редакторе записи.</p></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="autopost_retry_attempts">Попытки</label></th>
+                            <td><input type="number" min="1" max="<?php echo (int) WP_Ru_Max_Auto_Posting::MAX_ATTEMPTS; ?>" id="autopost_retry_attempts" value="<?php echo (int) $settings['retry_attempts']; ?>"> <span>на каждую сеть</span></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="autopost_retry_delay">Интервал повтора</label></th>
+                            <td><input type="number" min="1" max="1440" id="autopost_retry_delay" value="<?php echo (int) $settings['retry_delay_minutes']; ?>"> минут</td>
+                        </tr>
+                    </table>
+                    <button type="button" class="button button-primary wp-ru-max-autopost-save-settings">Сохранить настройки</button>
+                    <div id="wp-ru-max-autopost-settings-result" class="wp-ru-max-autopost-result" aria-live="polite"></div>
+                </div>
+            </section>
+        </div>
+        <?php
+    }
+
     private function render_tab_instructions() {
         ?>
         <div class="wp-ru-max-card">
-            <h2>Инструкция по подключению WP Ru-max</h2>
-            <p>Следуйте этим шагам, чтобы быстро подключить ваш сайт к мессенджеру MAX.</p>
+            <h2>Инструкция по подключению</h2>
+            <p>Следуйте этим шагам, чтобы быстро подключить ваш сайт.</p>
+        </div>
+        <div class="wp-ru-max-social-tabs wp-ru-max-instruction-tabs" role="tablist" aria-label="Инструкции по подключению">
+            <button type="button" class="is-active" data-instruction-tab="max" role="tab" aria-selected="true">MAX</button>
+            <button type="button" data-instruction-tab="telegram" role="tab" aria-selected="false">Telegram</button>
+            <button type="button" data-instruction-tab="ok" role="tab" aria-selected="false">Одноклассники</button>
+            <button type="button" data-instruction-tab="vk" role="tab" aria-selected="false">ВКонтакте</button>
+            <button type="button" data-instruction-tab="dzen" role="tab" aria-selected="false">Яндекс Дзен</button>
+        </div>
+        <section class="wp-ru-max-social-pane wp-ru-max-instruction-pane is-active" data-instruction-pane="max" role="tabpanel">
+        <div class="wp-ru-max-card">
+            <h2 style="border-bottom:2px solid #0077ff;padding-bottom:10px;">Инструкция по подключению MAX</h2>
         </div>
         <div class="wp-ru-max-card">
             <h3>Шаг 1: Регистрация на платформе MAX для партнёров</h3>
@@ -2352,11 +2544,13 @@ jQuery(function($){
             <ul>
                 <li><a href="https://business.max.ru" target="_blank" rel="noopener">Платформа MAX для партнёров</a></li>
                 <li><a href="https://dev.max.ru" target="_blank" rel="noopener">Документация MAX API</a></li>
-                <li><a href="https://fixcoder.ru/" target="_blank" rel="noopener">Разработка сайтов под ключ</a></li>
+                <li><a href="https://max.ru" target="_blank" rel="noopener">Официальный сайт MAX</a></li>
             </ul>
         </div>
+        </section>
+        <section class="wp-ru-max-social-pane wp-ru-max-instruction-pane" data-instruction-pane="telegram" role="tabpanel" hidden>
         <div class="wp-ru-max-card">
-            <h2 style="border-bottom:2px solid #6366f1;padding-bottom:10px;">Инструкция: Telegram</h2>
+            <h2 style="border-bottom:2px solid #6366f1;padding-bottom:10px;">Инструкция по подключению Telegram</h2>
             <p>Следуйте этим шагам, чтобы подключить автопостинг в Telegram.</p>
         </div>
         <div class="wp-ru-max-card">
@@ -2397,9 +2591,11 @@ jQuery(function($){
                 <strong>Поддержка нескольких каналов:</strong> вы можете добавить неограниченное количество ботов и каналов — записи будут публиковаться во все одновременно.
             </p>
         </div>
+        </section>
 
+        <section class="wp-ru-max-social-pane wp-ru-max-instruction-pane" data-instruction-pane="ok" role="tabpanel" hidden>
         <div class="wp-ru-max-card">
-            <h2 style="border-bottom:2px solid #f97316;padding-bottom:10px;margin-top:10px;">Инструкция: Одноклассники</h2>
+            <h2 style="border-bottom:2px solid #f97316;padding-bottom:10px;margin-top:10px;">Инструкция по подключению Одноклассников</h2>
         </div>
         <div class="wp-ru-max-card">
             <h3>Шаг 1: Зарегистрировать приложение на OK.ru</h3>
@@ -2422,33 +2618,100 @@ jQuery(function($){
             </ol>
             <p><strong>Документация API:</strong> <a href="https://apiok.ru/dev/methods/" target="_blank" rel="noopener">https://apiok.ru/dev/methods/</a></p>
         </div>
+        </section>
 
+        <section class="wp-ru-max-social-pane wp-ru-max-instruction-pane" data-instruction-pane="vk" role="tabpanel" hidden>
         <div class="wp-ru-max-card">
-            <h2 style="border-bottom:2px solid #0077ff;padding-bottom:10px;margin-top:10px;">Инструкция: ВКонтакте</h2>
+            <h2 style="border-bottom:2px solid #0077ff;padding-bottom:10px;margin-top:10px;">Инструкция по подключению ВКонтакте</h2>
         </div>
         <div class="wp-ru-max-card">
-            <h3>Шаг 1: Создать приложение ВКонтакте</h3>
+            <h3>Подключение ВКонтакте: нужны два разных приложения</h3>
+            <p>Плагин использует два независимых OAuth-потока. Не заменяйте один ID другим. Числа ниже — только примеры, укажите свои значения из кабинетов VK:</p>
+            <table class="widefat striped" style="max-width:900px;margin:12px 0 20px;">
+                <thead><tr><th>Назначение</th><th>Кабинет</th><th>ID</th><th>Что делает</th></tr></thead>
+                <tbody>
+                    <tr><td>Приложение сообщества</td><td><code>dev.vk.ru</code></td><td><code>12345678</code></td><td>Community Access Token для <code>wall.post</code></td></tr>
+                    <tr><td>Web-приложение VK ID</td><td><code>id.vk.ru</code></td><td><code>87654321</code></td><td>Пользовательский токен для загрузки изображения</td></tr>
+                </tbody>
+            </table>
+            <p><strong>Почему это важно:</strong> токен сообщества может опубликовать текст на стене, но VK не разрешает этим токеном выполнять пользовательские методы загрузки фото. Поэтому текст и картинка используют разные токены.</p>
+        </div>
+        <div class="wp-ru-max-card">
+            <h3>Часть 1. Кабинет разработчика VK — dev.vk.ru</h3>
             <ol>
-                <li>Перейдите на <a href="https://dev.vk.ru/ru/api/open-api/getting-started" target="_blank" rel="noopener"><strong>https://dev.vk.ru/ru/api/open-api/getting-started</strong></a>.</li>
-                <li>Нажмите <strong>«Создать приложение»</strong>. Выберите тип <strong>«Веб-сайт»</strong>.</li>
-                <li>Заполните название и укажите адрес вашего сайта в поле <strong>«Адрес сайта»</strong>.</li>
-                <li>Скопируйте <strong>ID приложения</strong> и <strong>Защищённый ключ / сервисный ключ</strong> из настроек приложения.</li>
+                <li>Откройте <a href="https://dev.vk.ru/ru/admin/apps-list" target="_blank" rel="noopener"><strong>https://dev.vk.ru/ru/admin/apps-list</strong></a> и войдите в аккаунт VK, который является администратором нужного сообщества.</li>
+                <li>Найдите нужное приложение сообщества. Если оно уже существует и токен сообщества у вас работает, его не нужно удалять, пересоздавать или менять.</li>
+                <li>Если приложение ещё не создано, нажмите «Создать приложение» и создайте приложение для сайта/сообщества. После создания сохраните его ID и защищённый ключ.</li>
+                <li>В настройках этого приложения проверьте, что приложение включено и не находится в режиме, который блокирует OAuth.</li>
+                <li>В плагине на вкладке <strong>Социальные сети → ВКонтакте</strong> в поле <strong>«ID приложения сообщества»</strong> укажите числовой ID своего приложения, например <code>12345678</code>.</li>
+                <li>В поле <strong>«Защищённый ключ»</strong> укажите защищённый ключ приложения из этого кабинета. <strong>Сервисный ключ доступа сюда не вставляйте.</strong></li>
+                <li>ID сообщества указывается отдельно. Для группы или паблика используйте отрицательное число, например <code>-123456789</code>.</li>
+                <li>Поле «Десктопная версия сайта» и переключатель «Приложения загружаются в iframe» относятся к настройкам платформы/мини-приложения. Они <strong>не являются</strong> доверенным Redirect URL VK ID.</li>
             </ol>
+            <p><strong>Если Community Access Token уже сохранён:</strong> не удаляйте его и не вставляйте сервисный ключ вместо него. Плагин сохранит этот токен для публикации текста.</p>
+            <p><a href="https://dev.vk.ru/ru/admin/apps-list" target="_blank" rel="noopener">Открыть список приложений в dev.vk.ru</a></p>
         </div>
         <div class="wp-ru-max-card">
-            <h3>Шаг 2: Авторизоваться и настроить плагин</h3>
+            <h3>Часть 2. Кабинет авторизации VK ID — id.vk.ru</h3>
             <ol>
-                <li>Перейдите на вкладку <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=social_networks' ) ); ?>"><strong>«Социальные сети»</strong></a>.</li>
-                <li>В разделе <strong>«ВКонтакте»</strong> нажмите <strong>«Добавить аккаунт»</strong>.</li>
-                <li>В настройках приложения укажите Authorized redirect URL без параметров: <code><?php echo esc_html( home_url( '/wp-ru-max-vk-callback/' ) ); ?></code>.</li>
-                <li>Введите ID приложения, защищённый ключ и ID группы/паблика, затем нажмите <strong>«Авторизоваться через VK ID»</strong>.</li>
-                <li>Пройдите авторизацию VK ID и подтвердите доступ к выбранному сообществу. Access Token сохранится автоматически — копировать URL из адресной строки не нужно.</li>
+                <li>Откройте <a href="https://id.vk.ru/about/business/go" target="_blank" rel="noopener"><strong>кабинет VK ID</strong></a>. Если VK попросит войти или выбрать профиль бизнеса, войдите в профиль, которому принадлежит ваше Web-приложение.</li>
+                <li>Откройте своё Web-приложение VK ID. Платформа должна быть <strong>Web</strong>, состояние — включено и доступно для авторизации. В примере ниже используется условный ID <code>87654321</code>.</li>
+                <li>В поле <strong>«Базовый домен»</strong> укажите ровно домен сайта без протокола и без пути:</li>
             </ol>
-            <p><strong>Документация:</strong> <a href="https://dev.vk.com/ru/reference" target="_blank" rel="noopener">https://dev.vk.com/ru/reference</a></p>
+            <p style="margin-left:28px;"><code>ваш-сайт.ru</code></p>
+            <ol start="4">
+                 <li>В поле <strong>«Доверенный Redirect URL»</strong> добавьте ровно эту строку:</li>
+            </ol>
+            <p style="margin-left:28px;"><code><?php echo esc_html( home_url( '/wp-ru-max-vk-callback/' ) ); ?></code></p>
+            <ol start="5">
+                <li>Сохраните настройки приложения VK ID.</li>
+                <li>В URL не добавляйте <code>?code</code>, <code>?state</code>, <code>?payload</code> или другие параметры.</li>
+                <li>Не меняйте <code>https</code> на <code>http</code>, не добавляйте <code>www</code> и не убирайте завершающий слеш.</li>
+                <li>Для этого потока нужен ID именно вашего Web-приложения VK ID, например <code>87654321</code>. Защищённый ключ и сервисный ключ из приложения VK ID не нужно вставлять в поле приложения сообщества.</li>
+            </ol>
+            <p><a href="https://id.vk.ru/about/business/go" target="_blank" rel="noopener">Открыть кабинет приложений VK ID</a></p>
         </div>
+        <div class="wp-ru-max-card">
+            <h3>Часть 3. Заполнить вкладку «Социальные сети → ВКонтакте»</h3>
+            <table class="widefat striped" style="max-width:900px;margin:12px 0;">
+                <tbody>
+                    <tr><th style="width:300px;">Поле в плагине</th><th>Что указать</th></tr>
+                    <tr><td>ID приложения сообщества *</td><td>Ваш числовой ID, например <code>12345678</code></td></tr>
+                    <tr><td>ID приложения VK ID для фото *</td><td>Ваш числовой ID Web-приложения, например <code>87654321</code></td></tr>
+                    <tr><td>Защищённый ключ</td><td>Защищённый ключ приложения сообщества из <code>dev.vk.ru</code>, не сервисный ключ</td></tr>
+                    <tr><td>Access Token</td><td>Уже сохранённый Community Access Token. При OAuth он не должен исчезать</td></tr>
+                    <tr><td>ID группы / страницы</td><td>Отрицательный ID сообщества, например <code>-123456789</code></td></tr>
+                </tbody>
+            </table>
+            <p>После заполнения нажмите <strong>«Сохранить настройки»</strong>. Затем нажмите <strong>«Авторизовать сообщество VK»</strong>. Плагин сначала авторизует пользователя через VK ID, получит пользовательский токен для фото, а при отсутствии сохранённого токена сообщества дополнительно запросит Community Access Token.</p>
+        </div>
+        <div class="wp-ru-max-card">
+            <h3>Часть 4. Как проверить, что фото действительно отправляется</h3>
+            <ol>
+                <li>После нажатия кнопки проверьте адрес страницы авторизации. В нём должно быть:</li>
+            </ol>
+            <p style="margin-left:28px;"><code>client_id=87654321</code> — это только пример для проверки.</p>
+            <p style="margin-left:28px;">В реальном URL должен быть ID вашего Web-приложения VK ID, а не ID приложения сообщества.</p>
+            <ol start="2">
+                <li>После возврата в WordPress должна появиться надпись, что VK успешно авторизован. Пользовательский токен сохраняется автоматически, копировать его из URL не нужно.</li>
+                <li>У записи должна быть миниатюра WordPress. Если миниатюра не назначена, плагин попробует взять первую картинку из содержимого статьи.</li>
+                <li>Картинка должна быть доступна сайту по HTTPS без авторизации, защиты Basic Auth или ограничения по User-Agent. WordPress должен суметь скачать её с URL.</li>
+                <li>Опубликуйте новую тестовую запись или запустите повторную публикацию. Уже опубликованный ранее пост сам по себе не изменится.</li>
+            </ol>
+            <p>В журнале плагина теперь указана точная причина, если вложение не добавилось:</p>
+            <ul>
+                <li><strong>«нет миниатюры или изображения в содержимом»</strong> — у записи не найдена картинка;</li>
+                <li><strong>«не найден пользовательский VK-токен»</strong> — нужно заново пройти авторизацию VK ID;</li>
+                <li><strong>«VK не предоставил URL сервера загрузки»</strong> — VK отклонил права или параметры токена;</li>
+                <li><strong>«не удалось скачать главное изображение»</strong> — URL картинки недоступен серверу WordPress;</li>
+                <li><strong>«VK не сохранил изображение на стене»</strong> — ошибка метода <code>photos.saveWallPhoto</code>, в сообщении будет код VK.</li>
+            </ul>
+        </div>
+        </section>
 
+        <section class="wp-ru-max-social-pane wp-ru-max-instruction-pane" data-instruction-pane="dzen" role="tabpanel" hidden>
         <div class="wp-ru-max-card">
-            <h2 style="border-bottom:2px solid #e84d1c;padding-bottom:10px;margin-top:10px;">Инструкция: Яндекс Дзен</h2>
+            <h2 style="border-bottom:2px solid #e84d1c;padding-bottom:10px;margin-top:10px;">Инструкция по подключению Яндекс Дзен</h2>
         </div>
         <div class="wp-ru-max-card">
             <h3>Подключение Яндекс Дзен</h3>
@@ -2463,6 +2726,7 @@ jQuery(function($){
                 <strong>Обратите внимание:</strong> Яндекс Дзен также поддерживает автоматическую синхронизацию через RSS — это простейший способ, не требующий API-токена.
             </p>
         </div>
+        </section>
         <div class="wp-ru-max-card">
             <h3>Согласие пользователя</h3>
             <p>Используя плагин WP Ru-max и активируя лицензию, пользователь подтверждает, что ознакомлен с указанными ниже страницами и даёт согласие на обработку его <strong>email, имени, фамилии и домена</strong>:</p>
@@ -2473,6 +2737,23 @@ jQuery(function($){
                 <li><a href="https://github.com/RuCoder-sudo/wp-ru-max/wiki/Политика-конфиденциальности" target="_blank" rel="noopener">Политика конфиденциальности</a></li>
             </ul>
         </div>
+        <script>
+        (function($){
+            $('.wp-ru-max-instruction-tabs [data-instruction-tab]').on('click', function(){
+                var key = $(this).data('instruction-tab');
+                $('.wp-ru-max-instruction-tabs [data-instruction-tab]')
+                    .removeClass('is-active')
+                    .attr('aria-selected', 'false');
+                $(this).addClass('is-active').attr('aria-selected', 'true');
+                $('.wp-ru-max-instruction-pane')
+                    .removeClass('is-active')
+                    .attr('hidden', true);
+                $('.wp-ru-max-instruction-pane[data-instruction-pane="' + key + '"]')
+                    .addClass('is-active')
+                    .removeAttr('hidden');
+            });
+        })(jQuery);
+        </script>
         <?php
     }
 
@@ -3206,6 +3487,9 @@ jQuery(function($){
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Нет прав доступа.' );
         }
+        if ( ! WP_Ru_Max_License::is_active() ) {
+            wp_send_json_error( 'Плагин не активирован. Настройки социальных сетей заблокированы. Перейдите на вкладку «Активация» и введите лицензионный ключ для разблокировки.' );
+        }
 
         $social = get_option( 'wp_ru_max_social', array() );
 
@@ -3246,6 +3530,10 @@ jQuery(function($){
         if ( isset( $_POST['vk_app_id'] ) ) {
             $vk_app_id               = $this->normalize_vk_app_id( wp_unslash( $_POST['vk_app_id'] ) );
             $social['vk_app_id']      = $vk_app_id;
+            $vk_user_app_id          = $this->normalize_vk_app_id( wp_unslash( $_POST['vk_user_app_id'] ?? '' ) );
+            if ( '' !== $vk_user_app_id ) {
+                $social['vk_user_app_id'] = $vk_user_app_id;
+            }
             $social['vk_secret_key']  = sanitize_text_field( wp_unslash( $_POST['vk_secret_key'] ?? $_POST['vk_service_token'] ?? '' ) );
             // Новое имя поля оставляем как алиас для установок, где оно уже появилось.
             $social['vk_service_token'] = $social['vk_secret_key'];
@@ -3298,13 +3586,16 @@ jQuery(function($){
         if ( isset( $_POST['social_unique_link'] ) ) {
             $social['social_unique_link'] = ! empty( $_POST['social_unique_link'] );
         }
+        if ( isset( $_POST['auto_send_default'] ) ) {
+            $social['auto_send_default'] = ! empty( $_POST['auto_send_default'] );
+        }
         foreach ( array( 'tg', 'ok', 'vk', 'dzen' ) as $net ) {
             $tpl_key = 'social_template_' . $net;
             $btn_key = 'social_readmore_' . $net;
             $btn_txt = 'social_readmore_text_' . $net;
             $cut_key = 'social_cut_limit_' . $net;
             if ( isset( $_POST[ $tpl_key ] ) ) {
-                $social[ $tpl_key ] = sanitize_textarea_field( wp_unslash( $_POST[ $tpl_key ] ) );
+                $social[ $tpl_key ] = WP_Ru_Max_Social_Poster::sanitize_template( wp_unslash( $_POST[ $tpl_key ] ) );
             }
             if ( isset( $_POST[ $btn_key ] ) ) {
                 $social[ $btn_key ] = ! empty( $_POST[ $btn_key ] );
@@ -3323,27 +3614,45 @@ jQuery(function($){
     }
 
     /**
-     * Начинает официальную авторизацию токена сообщества VK.
+     * Начинает двухэтапную авторизацию VK.
      *
-     * Для wall.post нужен именно Community Access Token. VK получает его
-     * через oauth.vk.com/authorize с group_ids, а не через service token
-     * приложения и не через обычный VK ID access_token пользователя.
+     * Сначала получаем пользовательский VK ID OAuth-токен для загрузки фото,
+     * затем отдельный Community Access Token для wall.post.
+     *
+     * VK больше не выдаёт новые пользовательские токены через старый
+     * legacy OAuth. PKCE позволяет обменять code на токен на сервере,
+     * не передавая защищённый ключ в браузер.
      */
     public function vk_oauth_start() {
         check_admin_referer( 'wp_ru_max_vk_oauth' );
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_die( 'Недостаточно прав.', 'Ошибка авторизации VK', array( 'response' => 403 ) );
         }
+        if ( ! WP_Ru_Max_License::is_active() ) {
+            wp_die( 'Плагин не активирован. Перейдите на вкладку «Активация» и введите лицензионный ключ для разблокировки.', 'WP Ru-max', array( 'response' => 403 ) );
+        }
 
         $social = get_option( 'wp_ru_max_social', array() );
         $app_id = $this->normalize_vk_app_id( $social['vk_app_id'] ?? '' );
+        $user_app_id = $this->normalize_vk_app_id( $social['vk_user_app_id'] ?? '' );
         $secret = trim( (string) ( $social['vk_secret_key'] ?? $social['vk_service_token'] ?? '' ) );
         $owner  = trim( (string) ( $social['vk_owner_id'] ?? '' ) );
+        $group_id = ltrim( $owner, '-' );
+        $existing_community_token = '';
+        if ( '' !== $group_id && is_array( $social['vk_group_tokens'] ?? null ) && ! empty( $social['vk_group_tokens'][ $group_id ] ) ) {
+            $existing_community_token = trim( (string) $social['vk_group_tokens'][ $group_id ] );
+        }
+        if ( '' === $existing_community_token && ! empty( $social['vk_access_token'] ) ) {
+            $existing_community_token = trim( (string) $social['vk_access_token'] );
+        }
 
         if ( '' === $app_id ) {
             $this->redirect_vk_oauth_error( 'Укажите числовой ID приложения VK или ссылку вида https://vk.ru/app12345678.' );
         }
-        if ( '' === $secret ) {
+        if ( '' === $user_app_id ) {
+            $this->redirect_vk_oauth_error( 'Укажите ID Web-приложения VK ID для загрузки фотографий.' );
+        }
+        if ( '' === $secret && '' === $existing_community_token ) {
             $this->redirect_vk_oauth_error( 'Сначала укажите защищённый ключ приложения VK.' );
         }
         if ( '' === $owner || ! preg_match( '/^-?\d+$/', $owner ) || 0 === (int) $owner ) {
@@ -3355,47 +3664,59 @@ jQuery(function($){
         if ( (string) ( $social['vk_app_id'] ?? '' ) !== $app_id ) {
             $social['vk_app_id'] = $app_id;
         }
+        if ( (string) ( $social['vk_user_app_id'] ?? '' ) !== $user_app_id ) {
+            $social['vk_user_app_id'] = $user_app_id;
+        }
 
         /*
-         * Не оставляем старый service token активным во время новой
-         * авторизации. Иначе фоновой WP-Cron может продолжать отправлять
-         * его в wall.post, пока администратор ещё не получил токен группы.
+         * Не очищаем токен группы до начала OAuth. Администратор может
+         * использовать уже полученный Community Access Token вручную, а
+         * ошибка или отмена авторизации не должна выключать публикацию VK.
+         * После успешного OAuth токен целевой группы будет обновлён ниже.
          */
-        $social['vk_access_token'] = '';
-        $social['vk_group_tokens'] = array();
+        if ( ! isset( $social['vk_group_tokens'] ) || ! is_array( $social['vk_group_tokens'] ) ) {
+            $social['vk_group_tokens'] = array();
+        }
         update_option( 'wp_ru_max_social', $social );
 
-        $state = $this->vk_random_string( 32 );
-        $redirect_uri = home_url( '/wp-ru-max-vk-callback/' );
-        $group_id     = ltrim( $owner, '-' );
+        $state          = $this->vk_random_string( 32 );
+        $code_verifier  = $this->vk_random_string( 48 );
+        $code_challenge = $this->vk_base64url_encode( hash( 'sha256', $code_verifier, true ) );
+        $redirect_uri   = home_url( '/wp-ru-max-vk-callback/' );
+        $group_id       = ltrim( $owner, '-' );
 
         set_transient(
             'wp_ru_max_vk_oauth_' . md5( $state ),
             array(
-                'stage'         => 'community',
+                'stage'         => 'user_vkid',
                 'user_id'      => get_current_user_id(),
                 'redirect_uri' => $redirect_uri,
                 'secret'      => $secret,
                 'group_id'    => $group_id,
+                'code_verifier' => $code_verifier,
             ),
             10 * MINUTE_IN_SECONDS
         );
 
         $auth_url = add_query_arg(
             array(
-                'client_id'     => $app_id,
-                'display'       => 'page',
-                'redirect_uri'  => $redirect_uri,
-                'group_ids'     => $group_id,
-                'scope'         => 'manage',
-                'response_type' => 'code',
-                'v'             => '5.199',
-                'state'         => $state,
+                'response_type'        => 'code',
+                'client_id'            => $user_app_id,
+                // Для photos.getWallUploadServer VK проверяет не только
+                // photos, но и wall/groups при публикации в сообщество.
+                'scope'                => 'photos,wall,groups',
+                'v'                    => '5.199',
+                'redirect_uri'         => $redirect_uri,
+                'state'                => $state,
+                'code_challenge'        => $code_challenge,
+                'code_challenge_method' => 'S256',
             ),
-            'https://oauth.vk.com/authorize'
+            'https://id.vk.ru/authorize'
         );
 
-        wp_safe_redirect( $auth_url );
+        // Адрес VK внешний; wp_safe_redirect() отклоняет его как
+        // неразрешённый host и возвращает администратора вместо OAuth.
+        wp_redirect( $auth_url );
         exit;
     }
 
@@ -3406,10 +3727,27 @@ jQuery(function($){
         if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
             wp_die( 'Сессия администратора недействительна.', 'Ошибка авторизации VK', array( 'response' => 403 ) );
         }
+        if ( ! WP_Ru_Max_License::is_active() ) {
+            wp_die( 'Плагин не активирован. Перейдите на вкладку «Активация» и введите лицензионный ключ для разблокировки.', 'WP Ru-max', array( 'response' => 403 ) );
+        }
 
-        $state = sanitize_text_field( wp_unslash( $_GET['state'] ?? '' ) );
-        $code  = sanitize_text_field( wp_unslash( $_GET['code'] ?? '' ) );
-        $error = sanitize_text_field( wp_unslash( $_GET['error_description'] ?? $_GET['error'] ?? '' ) );
+        /*
+         * VK ID возвращает данные авторизации в JSON-параметре payload.
+         * Для совместимости принимаем также старый формат с code/state
+         * непосредственно в query string.
+         */
+        $payload = array();
+        if ( ! empty( $_GET['payload'] ) && is_scalar( $_GET['payload'] ) ) {
+            $decoded_payload = json_decode( wp_unslash( $_GET['payload'] ), true );
+            if ( is_array( $decoded_payload ) ) {
+                $payload = $decoded_payload;
+            }
+        }
+
+        $state = sanitize_text_field( wp_unslash( $payload['state'] ?? $_GET['state'] ?? '' ) );
+        $code  = sanitize_text_field( wp_unslash( $payload['code'] ?? $_GET['code'] ?? '' ) );
+        $error = sanitize_text_field( wp_unslash( $payload['error_description'] ?? $_GET['error_description'] ?? $_GET['error'] ?? '' ) );
+        $device_id = sanitize_text_field( wp_unslash( $payload['device_id'] ?? $_GET['device_id'] ?? '' ) );
 
         if ( '' !== $error ) {
             $this->redirect_vk_oauth_error( $error );
@@ -3427,29 +3765,12 @@ jQuery(function($){
         $social = get_option( 'wp_ru_max_social', array() );
 
         /*
-         * Первый callback — от VK ID. Получаем пользовательский токен с
-         * правом groups, затем официально запрашиваем токен сообщества.
-         * Второй шаг через oauth.vk.com нужен именно для публикации в группе
-         * и является частью актуального Authorization Code Flow VK.
+         * Первый callback — от VK ID OAuth. Обмениваем code на
+         * пользовательский токен, который нужен только для загрузки фото.
          */
-        if ( 'vk_id' === ( $pending['stage'] ?? '' ) ) {
-            $device_id = sanitize_text_field( wp_unslash( $_GET['device_id'] ?? '' ) );
-            if ( '' === $device_id ) {
-                $this->redirect_vk_oauth_error( 'VK ID не вернул device_id. Запустите авторизацию заново.' );
-            }
-
-            $token_body = array(
-                'grant_type'    => 'authorization_code',
-                'code_verifier' => (string) ( $pending['code_verifier'] ?? '' ),
-                'redirect_uri'  => (string) $pending['redirect_uri'],
-                'code'          => $code,
-                'client_id'     => trim( (string) ( $social['vk_app_id'] ?? '' ) ),
-                'device_id'     => $device_id,
-                'state'         => $state,
-            );
-            if ( ! empty( $pending['secret'] ) ) {
-                // Для конфиденциального VK ID-приложения это service_token.
-                $token_body['service_token'] = (string) $pending['secret'];
+        if ( 'user_vkid' === ( $pending['stage'] ?? '' ) ) {
+            if ( '' === $device_id || empty( $pending['code_verifier'] ) ) {
+                $this->redirect_vk_oauth_error( 'VK не вернул параметры безопасного обмена кода. Попробуйте авторизацию заново.' );
             }
 
             $token_response = wp_remote_post(
@@ -3457,7 +3778,14 @@ jQuery(function($){
                 array(
                     'timeout' => 20,
                     'headers' => array( 'Content-Type' => 'application/x-www-form-urlencoded' ),
-                    'body'    => $token_body,
+                    'body'    => array(
+                        'grant_type'    => 'authorization_code',
+                        'client_id'     => trim( (string) ( $social['vk_user_app_id'] ?? '' ) ),
+                        'code_verifier' => (string) $pending['code_verifier'],
+                        'device_id'     => $device_id,
+                        'code'          => $code,
+                        'redirect_uri'  => (string) $pending['redirect_uri'],
+                    ),
                 )
             );
             if ( is_wp_error( $token_response ) ) {
@@ -3466,16 +3794,43 @@ jQuery(function($){
 
             $token_data = json_decode( wp_remote_retrieve_body( $token_response ), true );
             if ( ! is_array( $token_data ) || empty( $token_data['access_token'] ) ) {
-                $description = $token_data['error_description'] ?? $token_data['error'] ?? 'VK ID не выдал Access Token.';
+                $description = $token_data['error_description'] ?? $token_data['error'] ?? 'VK ID не выдал пользовательский Access Token.';
                 $this->redirect_vk_oauth_error( (string) $description );
             }
 
-            // Сохраняем пользовательскую пару VK ID для refresh и диагностики.
+            // Этот токен используется только для photos.getWallUploadServer
+            // и photos.saveWallPhoto, но не для wall.post.
             $social['vk_user_access_token']  = sanitize_text_field( $token_data['access_token'] );
             $social['vk_user_refresh_token'] = sanitize_text_field( $token_data['refresh_token'] ?? '' );
             $social['vk_device_id']          = $device_id;
-            $social['vk_user_expires_at']    = time() + max( 0, (int) ( $token_data['expires_in'] ?? 0 ) );
+            $social['vk_user_scopes']        = sanitize_text_field( $token_data['scope'] ?? '' );
+            $expires_in = (int) ( $token_data['expires_in'] ?? 0 );
+            $social['vk_user_expires_at']    = $expires_in > 0 ? time() + $expires_in : 0;
             update_option( 'wp_ru_max_social', $social );
+
+            /*
+             * Если Community Access Token уже был сохранён, второй OAuth
+             * не нужен: он только создаёт дополнительную точку отказа и
+             * может отправить пользователя в настройки старого приложения.
+             */
+            $saved_group_token = '';
+            if ( ! empty( $social['vk_group_tokens'][ $pending['group_id'] ] ) ) {
+                $saved_group_token = trim( (string) $social['vk_group_tokens'][ $pending['group_id'] ] );
+            }
+            if ( '' === $saved_group_token && ! empty( $social['vk_access_token'] ) ) {
+                $saved_group_token = trim( (string) $social['vk_access_token'] );
+            }
+            if ( '' !== $saved_group_token ) {
+                wp_safe_redirect( add_query_arg(
+                    array(
+                        'page'      => 'wp-ru-max',
+                        'tab'       => 'social_networks',
+                        'vk_oauth'  => 'success',
+                    ),
+                    admin_url( 'admin.php' )
+                ) );
+                exit;
+            }
 
             // Второй этап: токен администратора сообщества.
             $community_state = $this->vk_random_string( 32 );
@@ -3504,7 +3859,7 @@ jQuery(function($){
                 ),
                 'https://oauth.vk.com/authorize'
             );
-            wp_safe_redirect( $community_auth_url );
+            wp_redirect( $community_auth_url );
             exit;
         }
 
@@ -3635,14 +3990,31 @@ jQuery(function($){
      * Вкладка: Социальные сети
      * ========================================================= */
     private function render_tab_social_networks( $settings ) {
+        if ( ! WP_Ru_Max_License::is_active() ) {
+            $this->render_social_activation_lock(
+                'Социальные сети',
+                'Настройки социальных сетей заблокированы.'
+            );
+            return;
+        }
+
         $social = get_option( 'wp_ru_max_social', array() );
         $tg_bots = $social['telegram_bots'] ?? array();
+        $active_social_tab = ( ! empty( $_GET['vk_oauth'] ) || ! empty( $_GET['vk_oauth_error'] ) ) ? 'vk' : 'telegram';
         ?>
         <div class="wp-ru-max-card">
             <h2>Социальные сети</h2>
             <p>Подключите свои аккаунты в социальных сетях для автоматической публикации записей WordPress.</p>
         </div>
 
+        <div class="wp-ru-max-social-tabs" role="tablist" aria-label="Социальные сети">
+            <button type="button" class="<?php echo 'telegram' === $active_social_tab ? 'is-active' : ''; ?>" data-social-tab="telegram" role="tab" aria-selected="<?php echo 'telegram' === $active_social_tab ? 'true' : 'false'; ?>">Telegram</button>
+            <button type="button" class="<?php echo 'ok' === $active_social_tab ? 'is-active' : ''; ?>" data-social-tab="ok" role="tab" aria-selected="<?php echo 'ok' === $active_social_tab ? 'true' : 'false'; ?>">Одноклассники</button>
+            <button type="button" class="<?php echo 'vk' === $active_social_tab ? 'is-active' : ''; ?>" data-social-tab="vk" role="tab" aria-selected="<?php echo 'vk' === $active_social_tab ? 'true' : 'false'; ?>">ВКонтакте</button>
+            <button type="button" class="<?php echo 'dzen' === $active_social_tab ? 'is-active' : ''; ?>" data-social-tab="dzen" role="tab" aria-selected="<?php echo 'dzen' === $active_social_tab ? 'true' : 'false'; ?>">Яндекс Дзен</button>
+        </div>
+
+        <section class="wp-ru-max-social-pane <?php echo 'telegram' === $active_social_tab ? 'is-active' : ''; ?>" data-social-pane="telegram" role="tabpanel" <?php echo 'telegram' === $active_social_tab ? '' : 'hidden'; ?>>
         <?php /* ---- TELEGRAM ---- */ ?>
         <div class="wp-ru-max-card" id="sn-telegram-section">
             <h2 style="display:flex;align-items:center;gap:10px;">
@@ -3691,7 +4063,9 @@ jQuery(function($){
                 <button type="button" class="button button-secondary" id="tg-add-bot-btn">+ Добавить бота</button>
             </div>
         </div>
+        </section>
 
+        <section class="wp-ru-max-social-pane <?php echo 'ok' === $active_social_tab ? 'is-active' : ''; ?>" data-social-pane="ok" role="tabpanel" <?php echo 'ok' === $active_social_tab ? '' : 'hidden'; ?>>
         <?php /* ---- ОДНОКЛАССНИКИ ---- */ ?>
         <div class="wp-ru-max-card" id="sn-ok-section">
             <h2 style="display:flex;align-items:center;gap:10px;">
@@ -3747,7 +4121,9 @@ jQuery(function($){
             </div>
             <p class="description" style="margin-top:6px;">После авторизации скопируйте access_token из адресной строки и вставьте выше.</p>
         </div>
+        </section>
 
+        <section class="wp-ru-max-social-pane <?php echo 'vk' === $active_social_tab ? 'is-active' : ''; ?>" data-social-pane="vk" role="tabpanel" <?php echo 'vk' === $active_social_tab ? '' : 'hidden'; ?>>
         <?php /* ---- ВКОНТАКТЕ ---- */ ?>
         <div class="wp-ru-max-card" id="sn-vk-section">
             <h2 style="display:flex;align-items:center;gap:10px;">
@@ -3758,7 +4134,7 @@ jQuery(function($){
             <?php elseif ( ! empty( $_GET['vk_oauth_error'] ) ) : ?>
                 <div class="notice notice-error inline"><p>Ошибка VK: <?php echo esc_html( rawurldecode( sanitize_text_field( wp_unslash( $_GET['vk_oauth_error'] ) ) ) ); ?></p></div>
             <?php endif; ?>
-            <p>Для публикации создайте приложение в <a href="https://dev.vk.ru/ru/admin/apps-list" target="_blank" rel="noopener">кабинете разработчика VK</a>, добавьте чистый redirect URL ниже и введите ID приложения и защищённый ключ.</p>
+            <p>Для публикации используются два приложения VK: приложение сообщества и отдельное Web-приложение VK ID для загрузки фото.</p>
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
                 <label class="wp-ru-max-toggle">
                     <input type="checkbox" id="vk_enabled" <?php checked( ! empty( $social['vk_enabled'] ) ); ?> />
@@ -3768,10 +4144,17 @@ jQuery(function($){
             </div>
             <table class="form-table">
                 <tr>
-                    <th><label for="vk_app_id">ID приложения <span style="color:#d63638;">*</span></label></th>
+                    <th><label for="vk_app_id">ID приложения сообщества <span style="color:#d63638;">*</span></label></th>
                     <td>
                         <input type="text" id="vk_app_id" class="regular-text" value="<?php echo esc_attr( $social['vk_app_id'] ?? '' ); ?>" placeholder="12345678 или https://vk.ru/app12345678" />
-                        <p class="description">Можно указать числовой ID или ссылку приложения вида <code>https://vk.ru/app12345678</code>. При сохранении будет оставлен только ID.</p>
+                        <p class="description">Укажите числовой ID вашего приложения сообщества, например <code>12345678</code>. При сохранении будет оставлен только числовой ID.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="vk_user_app_id">ID приложения VK ID для фото <span style="color:#d63638;">*</span></label></th>
+                    <td>
+                        <input type="text" id="vk_user_app_id" class="regular-text" value="<?php echo esc_attr( $social['vk_user_app_id'] ?? '' ); ?>" placeholder="87654321" />
+                        <p class="description">Это ID вашего Web-приложения из кабинета <a href="https://id.vk.ru/about/business/go" target="_blank" rel="noopener">VK ID</a>, например <code>87654321</code>. Для него добавьте доверенный Redirect URL <code><?php echo esc_html( home_url( '/wp-ru-max-vk-callback/' ) ); ?></code>.</p>
                     </td>
                 </tr>
                 <tr>
@@ -3788,6 +4171,15 @@ jQuery(function($){
                         <p class="description">Заполняется автоматически после авторизации сообщества. Сервисный ключ приложения сюда вставлять нельзя.</p>
                     </td>
                 </tr>
+                <?php if ( ! empty( $social['vk_user_access_token'] ) ) : ?>
+                <tr>
+                    <th>Права токена для фото</th>
+                    <td>
+                        <code><?php echo esc_html( $social['vk_user_scopes'] ?? 'не указаны VK' ); ?></code>
+                        <p class="description">Нужны права <code>photos</code>, <code>wall</code> и <code>groups</code>. Если здесь нет <code>photos</code>, нажмите авторизацию VK заново после настройки прав приложения.</p>
+                    </td>
+                </tr>
+                <?php endif; ?>
                 <tr>
                     <th><label for="vk_owner_id">ID группы / страницы</label></th>
                     <td>
@@ -3799,9 +4191,11 @@ jQuery(function($){
             <div class="wp-ru-max-actions" style="margin-top:10px;">
                 <a id="vk_authorize_btn" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=wp_ru_max_vk_start' ), 'wp_ru_max_vk_oauth' ) ); ?>" class="button button-secondary">Авторизовать сообщество VK</a>
             </div>
-            <p class="description" style="margin-top:6px;">В настройках приложения VK укажите Authorized redirect URL <strong>ровно без параметров</strong>: <code><?php echo esc_html( home_url( '/wp-ru-max-vk-callback/' ) ); ?></code>. Авторизация запрашивает официальный токен выбранного сообщества, необходимый для публикации.</p>
+            <p class="description" style="margin-top:6px;">В вашем Web-приложении VK ID должен быть указан доверенный Redirect URL <strong>ровно как показано, включая завершающий слеш и без параметров</strong>: <code><?php echo esc_html( home_url( '/wp-ru-max-vk-callback/' ) ); ?></code>. Поле «Десктопная версия сайта» приложения из <code>dev.vk.ru</code> к этому OAuth-потоку не относится. Для загрузки фото VK запрашиваются права <code>photos</code>, <code>wall</code> и <code>groups</code>. Авторизация сохраняет пользовательский токен для загрузки фото и отдельный токен сообщества для публикации. Уже сохранённый токен группы не удаляется при неудачной или отменённой авторизации.</p>
         </div>
+        </section>
 
+        <section class="wp-ru-max-social-pane <?php echo 'dzen' === $active_social_tab ? 'is-active' : ''; ?>" data-social-pane="dzen" role="tabpanel" <?php echo 'dzen' === $active_social_tab ? '' : 'hidden'; ?>>
         <?php /* ---- ЯНДЕКС ДЗЕН ---- */ ?>
         <div class="wp-ru-max-card" id="sn-dzen-section">
             <h2 style="display:flex;align-items:center;gap:10px;">
@@ -3836,6 +4230,7 @@ jQuery(function($){
                 </tr>
             </table>
         </div>
+        </section>
 
         <div class="wp-ru-max-card">
             <div class="wp-ru-max-actions">
@@ -3846,6 +4241,21 @@ jQuery(function($){
 
         <script>
         (function($){
+            /* ── Переключение вкладок социальных сетей без перезагрузки ── */
+            $('.wp-ru-max-social-tabs [data-social-tab]').on('click', function(){
+                var key = $(this).data('social-tab');
+                $('.wp-ru-max-social-tabs [data-social-tab]')
+                    .removeClass('is-active')
+                    .attr('aria-selected', 'false');
+                $(this).addClass('is-active').attr('aria-selected', 'true');
+                $('.wp-ru-max-social-pane')
+                    .removeClass('is-active')
+                    .attr('hidden', true);
+                $('.wp-ru-max-social-pane[data-social-pane="' + key + '"]')
+                    .addClass('is-active')
+                    .removeAttr('hidden');
+            });
+
             /*
              * OAuth-старт читает настройки из wp_options. Поэтому сначала
              * сохраняем текущие значения полей, даже если пользователь не
@@ -3862,6 +4272,7 @@ jQuery(function($){
                     nonce: wpRuMax.nonce,
                     vk_enabled: $('#vk_enabled').is(':checked') ? 1 : 0,
                     vk_app_id: $('#vk_app_id').val(),
+                    vk_user_app_id: $('#vk_user_app_id').val(),
                     vk_secret_key: $('#vk_secret_key').val(),
                     vk_access_token: $('#vk_access_token').val(),
                     vk_owner_id: $('#vk_owner_id').val()
@@ -3941,6 +4352,7 @@ jQuery(function($){
                     ok_group_id  : $('#ok_group_id').val(),
                     vk_enabled   : $('#vk_enabled').is(':checked') ? 1 : 0,
                     vk_app_id    : $('#vk_app_id').val(),
+                    vk_user_app_id: $('#vk_user_app_id').val(),
                     vk_secret_key: $('#vk_secret_key').val(),
                     vk_access_token: $('#vk_access_token').val(),
                     vk_owner_id  : $('#vk_owner_id').val(),
@@ -3984,6 +4396,27 @@ jQuery(function($){
             });
         })(jQuery);
         </script>
+        <?php
+    }
+
+    /**
+     * Показывает единое сообщение для закрытых лицензией разделов.
+     */
+    private function render_social_activation_lock( $title, $description ) {
+        ?>
+        <div class="wp-ru-max-card">
+            <h2><?php echo esc_html( $title ); ?></h2>
+            <div class="wp-ru-max-license-banner">
+                <span class="dashicons dashicons-lock" aria-hidden="true"></span>
+                <div>
+                    <strong>Плагин не активирован.</strong>
+                    <?php echo esc_html( $description ); ?>
+                    Перейдите на вкладку
+                    <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=activation' ) ); ?>">Активация</a>
+                    и введите лицензионный ключ для разблокировки.
+                </div>
+            </div>
+        </div>
         <?php
     }
 
@@ -4291,6 +4724,9 @@ jQuery(function($){
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Нет прав доступа.' );
         }
+        if ( ! WP_Ru_Max_License::is_active() ) {
+            wp_send_json_error( 'Плагин не активирован. Перейдите на вкладку «Активация» и введите лицензионный ключ для разблокировки.' );
+        }
 
         $network = isset( $_POST['network'] ) ? sanitize_text_field( wp_unslash( $_POST['network'] ) ) : '';
         $message = isset( $_POST['message'] ) ? sanitize_textarea_field( wp_unslash( $_POST['message'] ) ) : '';
@@ -4436,11 +4872,22 @@ jQuery(function($){
      * Вкладка: Настройки (социальных сетей)
      * ========================================================= */
     private function render_tab_settings_social( $settings ) {
+        if ( ! WP_Ru_Max_License::is_active() ) {
+            $this->render_social_activation_lock(
+                'Настройки публикаций в социальные сети',
+                'Поля и сохранение настроек социальных сетей заблокированы.'
+            );
+            return;
+        }
+
         $social = get_option( 'wp_ru_max_social', array() );
         $post_types_selected  = $social['social_post_types']        ?? array( 'post', 'product' );
         $hashtag_taxonomies   = $social['social_hashtag_taxonomies'] ?? array( 'category', 'post_tag' );
         $url_params           = $social['social_url_params']        ?? '';
         $unique_link          = ! empty( $social['social_unique_link'] );
+        $auto_send_default    = array_key_exists( 'auto_send_default', $social )
+            ? ! empty( $social['auto_send_default'] )
+            : ! empty( $settings['auto_send_default'] );
 
         $all_post_types = get_post_types( array( 'public' => true ), 'objects' );
         $all_taxonomies = get_taxonomies( array( 'public' => true ), 'objects' );
@@ -4448,6 +4895,14 @@ jQuery(function($){
         <div class="wp-ru-max-card">
             <h2>Настройки публикаций в социальные сети</h2>
             <p>Настройте общие параметры автопубликации, а также индивидуальные шаблоны сообщений для каждой социальной сети.</p>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:14px;">
+                <label class="wp-ru-max-toggle">
+                    <input type="checkbox" id="social_auto_send_default" <?php checked( $auto_send_default ); ?> />
+                    <span class="wp-ru-max-toggle-slider"></span>
+                </label>
+                <strong>Автоотправка по умолчанию для всех социальных сетей</strong>
+            </div>
+            <p class="description">Определяет начальное состояние общего переключателя в каждой новой статье. В самой статье можно выключить автоотправку или исключить отдельные подключённые сети.</p>
         </div>
 
         <div class="wp-ru-max-card">
@@ -4499,6 +4954,11 @@ jQuery(function($){
             </table>
         </div>
 
+        <div class="wp-ru-max-card">
+            <h3>Настройки шаблонов сообщения</h3>
+            <p class="description">Выберите социальную сеть и настройте формат публикации отдельно для неё.</p>
+        </div>
+
         <?php
         $sn_settings = array(
             'tg'   => array( 'label' => 'Telegram', 'limit_note' => 'Telegram ограничивает длину сообщения 4096 символами (1024 при наличии медиа).' ),
@@ -4511,6 +4971,7 @@ jQuery(function($){
             '{excerpt}' => 'Анонс / краткое описание',
             '{url}' => 'Ссылка на запись',
             '{short_link}' => 'Сокращённая ссылка',
+            '{image}' => 'URL главного изображения записи (фото также прикрепляется автоматически)',
             '{author}' => 'Автор',
             '{date}' => 'Дата публикации',
             '{categories}' => 'Рубрики',
@@ -4520,14 +4981,22 @@ jQuery(function($){
             '{product_regular_price}' => 'Обычная цена товара (WooCommerce)',
             '{product_sale_price}' => 'Цена со скидкой (WooCommerce)',
         );
+        ?>
+        <div class="wp-ru-max-social-tabs wp-ru-max-template-tabs" role="tablist" aria-label="Шаблоны сообщений">
+            <?php foreach ( $sn_settings as $net => $sn ) : ?>
+            <button type="button" class="<?php echo 'tg' === $net ? 'is-active' : ''; ?>" data-template-tab="<?php echo esc_attr( $net ); ?>" role="tab" aria-selected="<?php echo 'tg' === $net ? 'true' : 'false'; ?>"><?php echo esc_html( $sn['label'] ); ?></button>
+            <?php endforeach; ?>
+        </div>
+        <?php
         foreach ( $sn_settings as $net => $sn ) :
             $tpl      = $social[ 'social_template_' . $net ]      ?? '';
             $readmore = ! empty( $social[ 'social_readmore_' . $net ] );
             $rmtxt    = $social[ 'social_readmore_text_' . $net ]  ?? 'Читать далее';
             $cut      = ! empty( $social[ 'social_cut_limit_' . $net ] );
         ?>
+        <section class="wp-ru-max-social-pane wp-ru-max-template-pane <?php echo 'tg' === $net ? 'is-active' : ''; ?>" data-template-pane="<?php echo esc_attr( $net ); ?>" role="tabpanel" <?php echo 'tg' === $net ? '' : 'hidden'; ?>>
         <div class="wp-ru-max-card">
-            <h3><?php echo esc_html( $sn['label'] ); ?> — шаблон сообщения</h3>
+            <h3>Шаблон сообщения — <?php echo esc_html( $sn['label'] ); ?></h3>
             <p class="description">Определите, как будет выглядеть публикация в <?php echo esc_html( $sn['label'] ); ?>. Пустое поле — использовать стандартный формат.</p>
 
             <div style="margin-bottom:10px;">
@@ -4546,20 +5015,20 @@ jQuery(function($){
 
             <table class="form-table" style="margin-top:12px;">
                 <tr>
-                    <th><label>Кнопка «Читать далее»</label></th>
+                    <th><label><?php echo 'vk' === $net ? 'Ссылка «Читать далее»' : 'Кнопка «Читать далее»'; ?></label></th>
                     <td>
                         <label>
                             <input type="checkbox" id="social_readmore_<?php echo esc_attr( $net ); ?>" name="social_readmore_<?php echo esc_attr( $net ); ?>" <?php checked( $readmore ); ?> />
-                            Добавить кнопку «Читать далее» под сообщением
+                            <?php echo 'vk' === $net ? 'Добавить ссылку «Читать далее» под сообщением' : 'Добавить кнопку «Читать далее» под сообщением'; ?>
                         </label>
                     </td>
                 </tr>
                 <tr>
-                    <th><label for="social_readmore_text_<?php echo esc_attr( $net ); ?>">Текст кнопки</label></th>
+                        <th><label for="social_readmore_text_<?php echo esc_attr( $net ); ?>"><?php echo 'vk' === $net ? 'Текст ссылки' : 'Текст кнопки'; ?></label></th>
                     <td>
                         <input type="text" id="social_readmore_text_<?php echo esc_attr( $net ); ?>" name="social_readmore_text_<?php echo esc_attr( $net ); ?>"
                             class="regular-text" value="<?php echo esc_attr( $rmtxt ); ?>" placeholder="Читать далее" />
-                        <p class="description">Оставьте пустым для текста по умолчанию.</p>
+                        <p class="description">Оставьте пустым для текста по умолчанию. ВКонтакте не поддерживает настоящие inline-кнопки в записях стены, поэтому добавляется кликабельная ссылка с этим текстом.</p>
                     </td>
                 </tr>
                 <tr>
@@ -4574,6 +5043,7 @@ jQuery(function($){
                 </tr>
             </table>
         </div>
+        </section>
         <?php endforeach; ?>
 
         <div class="wp-ru-max-card">
@@ -4585,6 +5055,20 @@ jQuery(function($){
 
         <script>
         (function($){
+            $('.wp-ru-max-template-tabs [data-template-tab]').on('click', function(){
+                var key = $(this).data('template-tab');
+                $('.wp-ru-max-template-tabs [data-template-tab]')
+                    .removeClass('is-active')
+                    .attr('aria-selected', 'false');
+                $(this).addClass('is-active').attr('aria-selected', 'true');
+                $('.wp-ru-max-template-pane')
+                    .removeClass('is-active')
+                    .attr('hidden', true);
+                $('.wp-ru-max-template-pane[data-template-pane="' + key + '"]')
+                    .addClass('is-active')
+                    .removeAttr('hidden');
+            });
+
             /* Вставка ключевого слова по клику */
             $(document).on('click', '.sn-kw-btn', function(){
                 var net = $(this).data('net');
@@ -4605,6 +5089,7 @@ jQuery(function($){
                     nonce             : wpRuMax.nonce,
                     social_url_params : $('#social_url_params').val(),
                     social_unique_link: $('#social_unique_link').is(':checked') ? 1 : 0,
+                    auto_send_default : $('#social_auto_send_default').is(':checked') ? 1 : 0,
                     social_post_types : [],
                     social_hashtag_taxonomies: []
                 };
@@ -4683,6 +5168,8 @@ jQuery(function($){
         if ( 'wp_ru_max_share' !== $column ) {
             return;
         }
+        $autopost_config = WP_Ru_Max_Auto_Posting::instance()->get_post_config( $post_id );
+        $preferences = $this->get_autopost_preferences( $post_id );
         $title = esc_attr( get_the_title( $post_id ) );
         $url   = esc_attr( get_permalink( $post_id ) );
         echo '<button type="button" class="wp-ru-max-qs-btn"'
@@ -4694,6 +5181,67 @@ jQuery(function($){
             . 'line-height:1;opacity:.65;transition:opacity .15s;vertical-align:middle;"'
             . ' onmouseenter="this.style.opacity=\'1\'" onmouseleave="this.style.opacity=\'.65\'">'
             . '🚀</button>';
+        echo '<span class="wp-ru-max-quick-edit-data"'
+            . ' data-networks="' . esc_attr( wp_json_encode( (array) ( $autopost_config['networks'] ?? array() ) ) ) . '"'
+            . ' data-datetime="' . esc_attr( (string) ( $autopost_config['datetime'] ?? '' ) ) . '"'
+            . ' data-auto-enabled="' . esc_attr( ! empty( $preferences['on'] ) ? '1' : '0' ) . '"'
+            . ' data-excluded="' . esc_attr( wp_json_encode( (array) ( $preferences['excluded'] ?? array() ) ) ) . '"'
+            . ' aria-hidden="true" style="display:none;"></span>';
+    }
+
+    /**
+     * Добавляет настройки автопостинга в форму «Быстрой правки».
+     *
+     * WordPress использует одну общую форму inline-edit для всей таблицы,
+     * поэтому значения конкретной статьи подставляются JavaScript-ом из
+     * скрытого элемента в её строке.
+     */
+    public function render_quick_edit_autopost( $column_name, $post_type ) {
+        if ( 'wp_ru_max_share' !== $column_name ) {
+            return;
+        }
+
+        $configured_networks = $this->unique_configured_networks( WP_Ru_Max_Auto_Posting::configured_networks() );
+        ?>
+        <fieldset class="inline-edit-col-right wp-ru-max-quick-edit-autopost">
+            <div class="inline-edit-col">
+                <span class="title">Автопостинг</span>
+                <input type="hidden" name="<?php echo esc_attr( self::SKIP_META_KEY ); ?>" value="1">
+                <label>
+                    <input type="checkbox" name="<?php echo esc_attr( self::SKIP_META_KEY ); ?>" value="0">
+                    Автоотправка: <span class="wp-ru-max-quick-auto-label">ВКЛ</span>
+                </label>
+                <strong style="display:block;margin-top:8px;">Не отправлять автоматически в:</strong>
+                <input type="hidden" name="wp_ru_max_autopost_excluded_networks[]" value="">
+                <div class="wp-ru-max-autopost-excluded-list">
+                    <?php foreach ( $configured_networks as $network => $label ) : ?>
+                        <label>
+                            <input type="checkbox" name="wp_ru_max_autopost_excluded_networks[]" value="<?php echo esc_attr( $network ); ?>">
+                            <?php echo esc_html( $label ); ?>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+                <input type="hidden" name="wp_ru_max_autopost_networks[]" value="">
+                <?php if ( ! empty( $configured_networks ) ) : ?>
+                    <div class="wp-ru-max-autopost-network-list">
+                        <?php foreach ( $configured_networks as $network => $label ) : ?>
+                            <label>
+                                <input type="checkbox" name="wp_ru_max_autopost_networks[]" value="<?php echo esc_attr( $network ); ?>">
+                                <?php echo esc_html( $label ); ?>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else : ?>
+                    <p class="description">Нет подключённых социальных сетей.</p>
+                <?php endif; ?>
+                <label class="wp-ru-max-autopost-datetime-label">
+                    Дата и время
+                    <input type="datetime-local" name="wp_ru_max_autopost_datetime" value="" step="60">
+                </label>
+                <p class="description">Пустая дата снимает задание.</p>
+            </div>
+        </fieldset>
+        <?php
     }
 
     /**
@@ -4711,10 +5259,12 @@ jQuery(function($){
 
         $social     = get_option( 'wp_ru_max_social', array() );
         $tg_bots    = $social['telegram_bots'] ?? array();
-        $has_tg     = ! empty( $tg_bots );
-        $has_vk     = ! empty( $social['vk_enabled'] );
-        $has_ok     = ! empty( $social['ok_enabled'] );
-        $has_dzen   = ! empty( $social['dzen_enabled'] );
+        $configured_networks = $this->unique_configured_networks( WP_Ru_Max_Auto_Posting::configured_networks() );
+        $has_max    = isset( $configured_networks['max'] );
+        $has_tg     = isset( $configured_networks['telegram'] );
+        $has_vk     = isset( $configured_networks['vk'] );
+        $has_ok     = isset( $configured_networks['ok'] );
+        $has_dzen   = isset( $configured_networks['dzen'] );
         $ajax_url   = esc_js( admin_url( 'admin-ajax.php' ) );
         $nonce      = esc_js( wp_create_nonce( 'wp_ru_max_nonce' ) );
         $max_icon   = esc_url( WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png' );
@@ -4763,11 +5313,13 @@ jQuery(function($){
     <div class="wp-ru-max-qs-body">
         <p style="margin:0 0 14px;color:#555;font-size:13px;">Выберите соцсети для публикации:</p>
         <div class="wp-ru-max-qs-net-list">
+            <?php if ( $has_max ) : ?>
             <label class="wp-ru-max-qs-net-label">
                 <input type="checkbox" name="wp_ru_max_qs_net" value="max" checked />
                 <img src="<?php echo esc_url( $max_icon ); ?>" width="22" height="22" style="border-radius:4px;flex-shrink:0;" alt="" />
                 <span><strong>MAX</strong> <span style="color:#888;font-size:12px;">Мессенджер</span></span>
             </label>
+            <?php endif; ?>
             <?php if ( $has_tg ) : ?>
             <label class="wp-ru-max-qs-net-label">
                 <input type="checkbox" name="wp_ru_max_qs_net" value="telegram" />
@@ -4890,8 +5442,8 @@ jQuery(function($){
      * ========================================================= */
     public function ajax_quick_share() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
-        if ( ! current_user_can( 'edit_posts' ) ) {
-            wp_send_json_error( 'Нет прав доступа.' );
+        if ( ! WP_Ru_Max_License::is_active() ) {
+            wp_send_json_error( 'Плагин не активирован. Перейдите на вкладку «Активация» и введите лицензионный ключ для разблокировки.' );
         }
 
         $post_id  = isset( $_POST['post_id'] ) ? intval( $_POST['post_id'] ) : 0;
@@ -4902,6 +5454,15 @@ jQuery(function($){
         if ( ! $post_id ) {
             wp_send_json_error( 'Не указан ID записи.' );
         }
+        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
+        }
+
+        // Не принимаем вручную переданные имена сетей, которых нет в
+        // настройках сайта. Интерфейс скрывает их, но проверка обязательна
+        // и на сервере.
+        $available_networks = array_keys( WP_Ru_Max_Auto_Posting::configured_networks() );
+        $networks = array_values( array_intersect( array_unique( $networks ), $available_networks ) );
         if ( empty( $networks ) ) {
             wp_send_json_error( 'Выберите хотя бы одну соцсеть.' );
         }
