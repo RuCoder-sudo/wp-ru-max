@@ -176,6 +176,14 @@ class WP_Ru_Max_Contacts {
     public function add_key( $keys ) { $keys[] = 'contacts'; return $keys; }
     public function add_submenu( $items ) { $items[] = array( 'Связь с клиентами', 'manage_options', 'admin.php?page=wp-ru-max&tab=contacts' ); return $items; }
     private function text( $value ) { return sanitize_text_field( wp_unslash( $value ?? '' ) ); }
+    private function allow_public_request( $action, $limit = 20 ) {
+        $ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown';
+        $key = 'wp_ru_max_contacts_public_' . md5( $action . '|' . $ip . '|' . wp_salt( 'auth' ) );
+        $count = (int) get_transient( $key );
+        if ( $count >= $limit ) return false;
+        set_transient( $key, $count + 1, MINUTE_IN_SECONDS );
+        return true;
+    }
     private function icon( $key ) {
         $map = array( 'phone' => '☎', 'telegram' => '✈', 'vkontakte' => 'VK', 'contact' => '✉', 'email' => '@' );
         return $map[ $key ] ?? '↗';
@@ -341,6 +349,7 @@ class WP_Ru_Max_Contacts {
     }
     public function message() {
         check_ajax_referer( 'wp_ru_max_contacts_front', 'nonce' );
+        if ( ! $this->allow_public_request( 'message' ) ) wp_send_json_error( 'Слишком много запросов. Попробуйте ещё раз через минуту.', 429 );
         $s = wp_ru_max_contacts_settings();
         if ( empty( $s['enabled'] ) ) wp_send_json_error( 'Виджет отключен.' );
         $name = sanitize_text_field( wp_unslash( $_POST['name'] ?? '' ) );
@@ -382,6 +391,7 @@ class WP_Ru_Max_Contacts {
     }
     public function history() {
         check_ajax_referer( 'wp_ru_max_contacts_front', 'nonce' ); $id = sanitize_key( wp_unslash( $_POST['conversation_id'] ?? '' ) );
+        if ( ! $this->allow_public_request( 'history', 60 ) ) wp_send_json_error( 'Слишком много запросов. Попробуйте ещё раз через минуту.', 429 );
         foreach ( (array) get_option( 'wp_ru_max_pro_pending_messages', array() ) as $item ) if ( ( $item['conversation_id'] ?? '' ) === $id ) wp_send_json_success( array( 'messages' => array_values( (array) ( $item['messages'] ?? array() ) ) ) );
         wp_send_json_success( array( 'messages' => array() ) );
     }
