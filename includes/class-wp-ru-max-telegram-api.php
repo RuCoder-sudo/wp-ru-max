@@ -103,8 +103,8 @@ class WP_Ru_Max_Telegram_API {
      */
     public function send_message( $chat_id, $text, $parse_mode = 'HTML' ) {
         // Telegram ограничивает длину одного сообщения 4096 символами
-        if ( mb_strlen( $text, 'UTF-8' ) > 4096 ) {
-            $text = mb_substr( $text, 0, 4090, 'UTF-8' ) . "\n...";
+        if ( wp_ru_max_strlen( $text, 'UTF-8' ) > 4096 ) {
+            $text = wp_ru_max_substr( $text, 0, 4090, 'UTF-8' ) . "\n...";
         }
 
         $params = array(
@@ -132,8 +132,8 @@ class WP_Ru_Max_Telegram_API {
      */
     public function send_photo( $chat_id, $photo_url, $caption = '', $parse_mode = 'HTML' ) {
         // Telegram ограничивает подпись к фото 1024 символами
-        if ( mb_strlen( $caption, 'UTF-8' ) > 1024 ) {
-            $caption = mb_substr( $caption, 0, 1020, 'UTF-8' ) . "\n...";
+        if ( wp_ru_max_strlen( $caption, 'UTF-8' ) > 1024 ) {
+            $caption = wp_ru_max_substr( $caption, 0, 1020, 'UTF-8' ) . "\n...";
         }
 
         $params = array(
@@ -175,8 +175,8 @@ class WP_Ru_Max_Telegram_API {
      * @return array|WP_Error
      */
     public function send_message_with_button( $chat_id, $text, $btn_text, $btn_url, $parse_mode = 'HTML' ) {
-        if ( mb_strlen( $text, 'UTF-8' ) > 4096 ) {
-            $text = mb_substr( $text, 0, 4090, 'UTF-8' ) . "\n...";
+        if ( wp_ru_max_strlen( $text, 'UTF-8' ) > 4096 ) {
+            $text = wp_ru_max_substr( $text, 0, 4090, 'UTF-8' ) . "\n...";
         }
 
         $keyboard = array(
@@ -214,8 +214,8 @@ class WP_Ru_Max_Telegram_API {
      * @return array|WP_Error
      */
     public function send_photo_with_button( $chat_id, $photo_url, $caption, $btn_text, $btn_url, $parse_mode = 'HTML' ) {
-        if ( mb_strlen( $caption, 'UTF-8' ) > 1024 ) {
-            $caption = mb_substr( $caption, 0, 1020, 'UTF-8' ) . "\n...";
+        if ( wp_ru_max_strlen( $caption, 'UTF-8' ) > 1024 ) {
+            $caption = wp_ru_max_substr( $caption, 0, 1020, 'UTF-8' ) . "\n...";
         }
 
         $keyboard = array(
