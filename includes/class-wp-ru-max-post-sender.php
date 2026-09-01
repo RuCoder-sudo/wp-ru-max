@@ -362,6 +362,15 @@ class WP_Ru_Max_Post_Sender {
             return;
         }
 
+        if ( $this->is_network_excluded( $post->ID, 'max' ) ) {
+            unset( $queue[ $job_key ] );
+            $this->save_queue( $queue );
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Отложенная отправка записи #{$post->ID} пропущена — MAX исключён в настройках статьи.", array(
+                'post_id' => $post->ID,
+            ) );
+            return;
+        }
+
         $settings = get_option( 'wp_ru_max_settings', array() );
         $sent = $this->send_post( $post, ! empty( $data['is_new'] ), $settings );
 
@@ -430,7 +439,8 @@ class WP_Ru_Max_Post_Sender {
             return;
         }
 
-        // Проверка мета: отправлять ли эту запись
+        // Общий переключатель статьи применяется ко всем автоматическим
+        // отправкам, а список исключений позволяет отключить отдельные сети.
         $skip = get_post_meta( $post->ID, 'wp_ru_max_skip', true );
         if ( $skip === '' || $skip === null || $skip === false ) {
             $legacy = get_post_meta( $post->ID, '_wp_ru_max_skip', true );
@@ -442,15 +452,21 @@ class WP_Ru_Max_Post_Sender {
         $skip_str = is_scalar( $skip ) ? trim( (string) $skip ) : '';
 
         if ( $skip_str === '' ) {
-            // Явное значение не задано — применяем глобальную настройку «По умолчанию»
-            $default_on = ! empty( $settings['auto_send_default'] );
+            $social = get_option( 'wp_ru_max_social', array() );
+            $default_on = array_key_exists( 'auto_send_default', $social )
+                ? ! empty( $social['auto_send_default'] )
+                : ! empty( $settings['auto_send_default'] );
             if ( ! $default_on ) {
-                WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — автоотправка отключена для этой статьи (глобальный По умолчанию: ВЫКЛ).", array( 'post_id' => $post->ID ) );
+                WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — автоотправка отключена (общий По умолчанию: ВЫКЛ).", array( 'post_id' => $post->ID ) );
                 return;
             }
-            // Глобальный По умолчанию: ВКЛ — продолжаем отправку
         } elseif ( $skip_str !== '0' ) {
-            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — автоотправка отключена для этой статьи (тумблер: ВЫКЛ).", array( 'post_id' => $post->ID, 'skip' => $skip ) );
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — общая автоотправка выключена в настройках статьи.", array( 'post_id' => $post->ID, 'skip' => $skip ) );
+            return;
+        }
+
+        if ( $this->is_network_excluded( $post->ID, 'max' ) ) {
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена для MAX — сеть исключена в настройках статьи.", array( 'post_id' => $post->ID, 'network' => 'max' ) );
             return;
         }
 
@@ -523,6 +539,14 @@ class WP_Ru_Max_Post_Sender {
                 'due'     => gmdate( 'Y-m-d H:i:s', $due ),
             ) );
         }
+    }
+
+    private function is_network_excluded( $post_id, $network ) {
+        $excluded = get_post_meta( $post_id, 'wp_ru_max_autopost_excluded_networks', true );
+        if ( ! is_array( $excluded ) ) {
+            return false;
+        }
+        return in_array( sanitize_key( $network ), array_map( 'sanitize_key', $excluded ), true );
     }
 
     /**
@@ -755,8 +779,8 @@ class WP_Ru_Max_Post_Sender {
         $pt_label = $pt_obj ? $pt_obj->label : $post->post_type;
 
         $excerpt_max_chars = isset( $settings['excerpt_max_chars'] ) ? intval( $settings['excerpt_max_chars'] ) : 300;
-        if ( $excerpt_max_chars > 0 && mb_strlen( $excerpt ) > $excerpt_max_chars ) {
-            $excerpt = mb_substr( $excerpt, 0, $excerpt_max_chars ) . '…';
+        if ( $excerpt_max_chars > 0 && wp_ru_max_strlen( $excerpt ) > $excerpt_max_chars ) {
+            $excerpt = wp_ru_max_substr( $excerpt, 0, $excerpt_max_chars ) . '…';
         }
 
         $template = isset( $settings['post_message_template'] ) ? trim( $settings['post_message_template'] ) : '';
