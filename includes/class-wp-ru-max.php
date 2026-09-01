@@ -37,6 +37,7 @@ class WP_Ru_Max {
         WP_Ru_Max_License::recheck_if_needed();
         WP_Ru_Max_Admin::instance();
         WP_Ru_Max_Post_Sender::instance();
+        WP_Ru_Max_Auto_Posting::instance();
         WP_Ru_Max_Notifications::instance();
         WP_Ru_Max_Chat_Widget::instance();
         WP_Ru_Max_Logger::instance();
@@ -54,7 +55,7 @@ class WP_Ru_Max {
      * Создаёт таблицу истории при добавлении нового подсайта (WP 5.1+).
      */
     public function on_new_site( $site ) {
-        if ( is_plugin_active_for_network( WP_RU_MAX_PLUGIN_BASENAME ) ) {
+        if ( $this->is_network_active() ) {
             $blog_id = is_object( $site ) ? (int) $site->blog_id : (int) $site;
             switch_to_blog( $blog_id );
             self::create_table();
@@ -67,12 +68,20 @@ class WP_Ru_Max {
      * Совместимость с WP < 5.1 — хук wpmu_new_blog.
      */
     public function on_new_blog_legacy( $blog_id, $user_id, $domain, $path, $site_id, $meta ) {
-        if ( is_plugin_active_for_network( WP_RU_MAX_PLUGIN_BASENAME ) ) {
+        if ( $this->is_network_active() ) {
             switch_to_blog( $blog_id );
             self::create_table();
             self::maybe_add_default_options();
             restore_current_blog();
         }
+    }
+
+    /**
+     * Checks network activation without relying on wp-admin-only helpers.
+     */
+    private function is_network_active() {
+        $active_plugins = get_site_option( 'active_sitewide_plugins', array() );
+        return is_array( $active_plugins ) && isset( $active_plugins[ WP_RU_MAX_PLUGIN_BASENAME ] );
     }
 
     // ─── Создание таблицы ────────────────────────────────────────────────────
@@ -196,10 +205,12 @@ class WP_Ru_Max {
             foreach ( $sites as $site ) {
                 switch_to_blog( (int) $site->blog_id );
                 wp_clear_scheduled_hook( WP_Ru_Max_Post_Sender::QUEUE_WORKER_HOOK );
+                wp_clear_scheduled_hook( WP_Ru_Max_Auto_Posting::CRON_HOOK );
                 restore_current_blog();
             }
         } else {
             wp_clear_scheduled_hook( WP_Ru_Max_Post_Sender::QUEUE_WORKER_HOOK );
+            wp_clear_scheduled_hook( WP_Ru_Max_Auto_Posting::CRON_HOOK );
         }
     }
 
@@ -220,6 +231,9 @@ class WP_Ru_Max {
                     delete_option( 'wp_ru_max_settings' );
                     delete_option( 'wp_ru_max_social' );
                     delete_option( 'wp_ru_max_queue' );
+                    delete_option( WP_Ru_Max_Auto_Posting::QUEUE_OPTION );
+                    delete_option( WP_Ru_Max_Auto_Posting::SETTINGS_OPTION );
+                    delete_option( WP_Ru_Max_Auto_Posting::LOCK_OPTION );
                     delete_option( 'wp_ru_max_license' );
                     delete_option( 'wp_ru_max_license_attempts' );
                     delete_option( 'wp_ru_max_skip_meta_migrated_v1' );
@@ -239,6 +253,9 @@ class WP_Ru_Max {
                 delete_option( 'wp_ru_max_settings' );
                 delete_option( 'wp_ru_max_social' );
                 delete_option( 'wp_ru_max_queue' );
+                delete_option( WP_Ru_Max_Auto_Posting::QUEUE_OPTION );
+                delete_option( WP_Ru_Max_Auto_Posting::SETTINGS_OPTION );
+                delete_option( WP_Ru_Max_Auto_Posting::LOCK_OPTION );
                 delete_option( 'wp_ru_max_license' );
                 delete_option( 'wp_ru_max_license_attempts' );
                 delete_option( 'wp_ru_max_skip_meta_migrated_v1' );
