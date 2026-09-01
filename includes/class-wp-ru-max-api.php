@@ -25,18 +25,20 @@ class WP_Ru_Max_API {
      */
     private function sanitize_utf8( $value, $truncate = false ) {
         if ( is_string( $value ) ) {
-            $value = @mb_convert_encoding( $value, 'UTF-8', 'UTF-8' );
+            $value = wp_ru_max_utf8( $value );
             $original = (string) $value;
             $value    = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $original );
             if ( null === $value ) {
                 // preg_replace вернул null (ошибка regex) — передаём оригинал, а не null.
-                $value = iconv( 'UTF-8', 'UTF-8//IGNORE', $original );
+                $value = function_exists( 'iconv' )
+                    ? @iconv( 'UTF-8', 'UTF-8//IGNORE', $original )
+                    : $original;
                 if ( false === $value ) {
-                    $value = '';
+                    $value = $original;
                 }
             }
-            if ( $truncate && mb_strlen( $value, 'UTF-8' ) > 4096 ) {
-                $value = mb_substr( $value, 0, 4090, 'UTF-8' ) . "\n...";
+            if ( $truncate && wp_ru_max_strlen( $value, 'UTF-8' ) > 4096 ) {
+                $value = wp_ru_max_substr( $value, 0, 4090, 'UTF-8' ) . "\n...";
             }
             return $value;
         }
@@ -62,10 +64,9 @@ class WP_Ru_Max_API {
                 'Content-Type'  => 'application/json',
             ),
             'timeout'   => 20,
-            // platform-api2.max.ru использует сертификат Минцифры России,
-            // который не входит в стандартный CA-bundle WordPress/cURL.
-            // sslverify отключён для корректной работы с новым адресом API.
-            'sslverify' => false,
+            // Никогда не отключаем проверку сертификата: это позволяет
+            // подменить ответы API и токеном отправлять данные не туда.
+            'sslverify' => true,
         );
 
         if ( $body ) {
@@ -93,18 +94,19 @@ class WP_Ru_Max_API {
         $http_code = wp_remote_retrieve_response_code( $response );
         $body_raw  = wp_remote_retrieve_body( $response );
         $data      = json_decode( $body_raw, true );
+        $is_success = $http_code >= 200 && $http_code < 300;
 
         $settings = get_option( 'wp_ru_max_settings', array() );
         if ( ! empty( $settings['enable_bot_api_log'] ) ) {
-            WP_Ru_Max_Logger::log( 'api', $http_code === 200 ? 'success' : 'error', "[$method $endpoint] HTTP $http_code", array(
+            WP_Ru_Max_Logger::log( 'api', $is_success ? 'success' : 'error', "[$method $endpoint] HTTP $http_code", array(
                 'request'      => $body,
                 'response_raw' => $body_raw,
                 'response'     => $data,
             ) );
         }
 
-        if ( $http_code !== 200 ) {
-            $error_msg = isset( $data['message'] ) ? $data['message'] : "HTTP $http_code";
+        if ( ! $is_success ) {
+            $error_msg = is_array( $data ) && isset( $data['message'] ) ? (string) $data['message'] : "HTTP $http_code";
             WP_Ru_Max_Logger::log( 'api', 'error', "[$method $endpoint] Ошибка HTTP $http_code: $error_msg", array(
                 'endpoint'     => $endpoint,
                 'http_code'    => $http_code,
@@ -112,6 +114,18 @@ class WP_Ru_Max_API {
                 'response'     => $data,
             ) );
             return new WP_Error( 'api_error', $error_msg, array( 'http_code' => $http_code, 'body' => $data ) );
+        }
+
+        if ( 204 === $http_code ) {
+            return array();
+        }
+
+        if ( ! is_array( $data ) || JSON_ERROR_NONE !== json_last_error() ) {
+            $json_error = function_exists( 'json_last_error_msg' ) ? json_last_error_msg() : 'некорректный JSON';
+            return new WP_Error( 'invalid_api_response', 'MAX API вернул некорректный JSON: ' . $json_error, array(
+                'http_code' => $http_code,
+                'body'      => wp_ru_max_substr( $body_raw, 0, 500 ),
+            ) );
         }
 
         return $data;
@@ -140,7 +154,7 @@ class WP_Ru_Max_API {
 
         $response = wp_remote_post( $url, array(
             'timeout'   => 60,
-            'sslverify' => false,
+            'sslverify' => true,
             'headers'   => array(
                 'Authorization' => $this->token,
                 'Content-Type'  => 'multipart/form-data; boundary=' . $boundary,
@@ -160,8 +174,9 @@ class WP_Ru_Max_API {
         $http_code = wp_remote_retrieve_response_code( $response );
         $body_raw  = wp_remote_retrieve_body( $response );
         $data      = json_decode( $body_raw, true );
+        $is_success = $http_code >= 200 && $http_code < 300;
 
-        WP_Ru_Max_Logger::log( 'api', $http_code === 200 ? 'success' : 'error', "[MULTIPART POST $endpoint] HTTP $http_code", array(
+        WP_Ru_Max_Logger::log( 'api', $is_success ? 'success' : 'error', "[MULTIPART POST $endpoint] HTTP $http_code", array(
             'filename'     => $filename,
             'content_type' => $content_type,
             'http_code'    => $http_code,
@@ -169,9 +184,17 @@ class WP_Ru_Max_API {
             'response'     => $data,
         ) );
 
-        if ( $http_code !== 200 ) {
-            $error_msg = isset( $data['message'] ) ? $data['message'] : "HTTP $http_code: $body_raw";
+        if ( ! $is_success ) {
+            $error_msg = is_array( $data ) && isset( $data['message'] ) ? (string) $data['message'] : "HTTP $http_code: $body_raw";
             return new WP_Error( 'multipart_error', $error_msg, array( 'http_code' => $http_code, 'body' => $data ) );
+        }
+
+        if ( ! is_array( $data ) || JSON_ERROR_NONE !== json_last_error() ) {
+            $json_error = function_exists( 'json_last_error_msg' ) ? json_last_error_msg() : 'некорректный JSON';
+            return new WP_Error( 'invalid_multipart_response', 'MAX API вернул некорректный JSON: ' . $json_error, array(
+                'http_code' => $http_code,
+                'body'      => wp_ru_max_substr( $body_raw, 0, 500 ),
+            ) );
         }
 
         return $data;
@@ -211,11 +234,11 @@ class WP_Ru_Max_API {
         if ( empty( $this->token ) ) {
             return '(не задан)';
         }
-        $len = mb_strlen( $this->token );
+        $len = wp_ru_max_strlen( $this->token );
         if ( $len <= 10 ) {
             return str_repeat( '*', $len );
         }
-        return mb_substr( $this->token, 0, 6 ) . '***' . mb_substr( $this->token, -4 );
+        return wp_ru_max_substr( $this->token, 0, 6 ) . '***' . wp_ru_max_substr( $this->token, -4 );
     }
 
     public function get_me() {
@@ -311,7 +334,11 @@ class WP_Ru_Max_API {
      * Возвращает размер в байтах или false если не удалось определить.
      */
     public function check_image_size( $image_url ) {
-        $response = wp_remote_head( $image_url, array( 'timeout' => 8, 'sslverify' => false ) );
+        if ( ! $this->validate_image_url( $image_url ) ) {
+            return false;
+        }
+
+        $response = wp_remote_head( $image_url, array( 'timeout' => 8, 'sslverify' => true ) );
         if ( is_wp_error( $response ) ) {
             return false;
         }
@@ -331,7 +358,20 @@ class WP_Ru_Max_API {
         if ( $limit_mb <= 0 ) {
             $limit_mb = 5;
         }
+        $limit_mb = min( 50, $limit_mb );
         return $limit_mb * 1024 * 1024;
+    }
+
+    /**
+     * Validate a remote image URL using WordPress' built-in SSRF checks.
+     */
+    private function validate_image_url( $image_url ) {
+        $image_url = esc_url_raw( (string) $image_url );
+        if ( '' === $image_url || ! function_exists( 'wp_http_validate_url' ) ) {
+            return false;
+        }
+
+        return (bool) wp_http_validate_url( $image_url );
     }
 
     /**
@@ -346,14 +386,20 @@ class WP_Ru_Max_API {
      * возвращал upload URL, а токен никогда не находился.
      */
     public function upload_image_binary( $image_url ) {
+        if ( ! $this->validate_image_url( $image_url ) ) {
+            return new WP_Error( 'invalid_image_url', 'URL изображения недействителен или заблокирован политикой безопасности WordPress.' );
+        }
+
+        $size_limit = $this->get_image_size_limit();
         WP_Ru_Max_Logger::log( 'api', 'info', 'Начало загрузки изображения в MAX.', array(
             'image_url' => $image_url,
         ) );
 
         // Шаг 1: Скачать изображение с сайта WordPress
         $image_response = wp_remote_get( $image_url, array(
-            'timeout'   => 30,
-            'sslverify' => false,
+            'timeout'             => 30,
+            'sslverify'           => true,
+            'limit_response_size' => $size_limit + 1,
         ) );
 
         if ( is_wp_error( $image_response ) ) {
@@ -365,14 +411,32 @@ class WP_Ru_Max_API {
         $image_code = wp_remote_retrieve_response_code( $image_response );
         $image_body = wp_remote_retrieve_body( $image_response );
 
-        if ( $image_code !== 200 || empty( $image_body ) ) {
+        if ( $image_code < 200 || $image_code >= 300 || empty( $image_body ) ) {
             $err = "Ошибка скачивания изображения (HTTP {$image_code}). URL: {$image_url}";
             WP_Ru_Max_Logger::log( 'api', 'error', $err );
             return new WP_Error( 'download_failed', $err );
         }
 
+        $image_size = strlen( $image_body );
+        if ( $image_size > $size_limit ) {
+            $err = sprintf(
+                'Изображение слишком большое: %s МБ. Максимум: %s МБ.',
+                round( $image_size / 1048576, 2 ),
+                round( $size_limit / 1048576, 2 )
+            );
+            WP_Ru_Max_Logger::log( 'api', 'warning', $err );
+            return new WP_Error( 'image_too_large', $err );
+        }
+
+        if ( function_exists( 'getimagesizefromstring' ) ) {
+            $image_info = @getimagesizefromstring( $image_body );
+            if ( false === $image_info || empty( $image_info['mime'] ) ) {
+                return new WP_Error( 'invalid_image', 'Полученный файл не является изображением.' );
+            }
+        }
+
         WP_Ru_Max_Logger::log( 'api', 'info', 'Изображение скачано успешно.', array(
-            'size_bytes' => strlen( $image_body ),
+            'size_bytes' => $image_size,
             'http_code'  => $image_code,
         ) );
 
@@ -415,6 +479,9 @@ class WP_Ru_Max_API {
             WP_Ru_Max_Logger::log( 'api', 'error', $err, array( 'response' => $upload_info ) );
             return new WP_Error( 'upload_url_missing', $err );
         }
+        if ( ! $this->validate_image_url( $upload_url ) ) {
+            return new WP_Error( 'invalid_upload_url', 'MAX API вернул небезопасный upload URL.' );
+        }
 
         // Шаг 2: загрузить файл на полученный upload URL (поле "data")
         $boundary = '----WPRuMaxBoundary' . md5( microtime() );
@@ -427,7 +494,7 @@ class WP_Ru_Max_API {
 
         $upload_response = wp_remote_post( $upload_url, array(
             'timeout'   => 60,
-            'sslverify' => false,
+            'sslverify' => true,
             'headers'   => array(
                 'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
             ),
@@ -444,13 +511,14 @@ class WP_Ru_Max_API {
         $upload_raw  = wp_remote_retrieve_body( $upload_response );
         $upload_data = json_decode( $upload_raw, true );
 
-        WP_Ru_Max_Logger::log( 'api', $upload_code === 200 ? 'info' : 'warning', "Загрузка на upload URL завершена (HTTP {$upload_code}).", array(
+        $upload_success = $upload_code >= 200 && $upload_code < 300;
+        WP_Ru_Max_Logger::log( 'api', $upload_success ? 'info' : 'warning', "Загрузка на upload URL завершена (HTTP {$upload_code}).", array(
             'http_code'    => $upload_code,
             'response_raw' => $upload_raw,
             'response'     => $upload_data,
         ) );
 
-        if ( $upload_code === 200 ) {
+        if ( $upload_success && is_array( $upload_data ) && JSON_ERROR_NONE === json_last_error() ) {
             $token = $this->extract_upload_token( $upload_data );
 
             if ( $token ) {
