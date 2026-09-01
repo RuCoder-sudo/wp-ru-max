@@ -44,8 +44,8 @@ class WP_Ru_Max_Social_Poster {
             );
         }
 
-        $message = self::build_message( $post, 'vk', $social );
         $url     = self::decorate_url( get_permalink( $post ), 'vk', $social );
+        $message = self::build_message( $post, 'vk', $social, $url );
         /*
          * VK API 5.199 может отклонять обычный URL в attachments ошибкой
          * link_photo_sizing_rule: для такого вложения VK ожидает фотографию.
@@ -54,6 +54,13 @@ class WP_Ru_Max_Social_Poster {
          */
         if ( '' !== $url && false === strpos( $message, $url ) ) {
             $message .= "\n\n" . $url;
+        }
+        if ( ! empty( $social['social_readmore_vk'] ) && '' !== $url ) {
+            $readmore_text = trim( (string) ( $social['social_readmore_text_vk'] ?? '' ) );
+            $readmore_text = '' !== $readmore_text ? $readmore_text : 'Читать далее';
+            // В VK wall.post нет API для inline-кнопок. Оставляем отдельную
+            // кликабельную ссылку с пользовательским текстом под сообщением.
+            $message .= "\n\n" . sanitize_text_field( $readmore_text ) . ': ' . $url;
         }
 
         // Авторизация выполняется для сообщества, поэтому VK требует
@@ -64,11 +71,13 @@ class WP_Ru_Max_Social_Poster {
         }
 
         // VK не импортирует картинку страницы по URL автоматически.
+        $photo_access_token = self::get_vk_photo_access_token( $social );
         $photo_attachment = self::upload_vk_post_photo(
-            get_the_post_thumbnail_url( $post->ID, 'large' ),
+            self::get_vk_post_image_url( $post ),
             $owner_id,
-            $access_token,
-            $post->ID
+            $photo_access_token,
+            $post->ID,
+            $social
         );
 
         // Параметры wall.post с опциональным главным изображением.
@@ -112,9 +121,10 @@ class WP_Ru_Max_Social_Poster {
             $hints = array(
                 5   => 'Токен устарел или недействителен — авторизуйтесь заново.',
                 7   => 'Нет прав на публикацию в стену (нужны права: wall, groups).',
-                15  => 'Нет доступа к стене (группа закрыта или требует разрешения).',
+                15  => 'Токен не имеет нужных прав. Для загрузки фото повторите авторизацию VK ID с правами photos, wall и groups.',
                 214 => 'Стена закрыта: в настройках группы разрешена запись только руководителям.',
                 220 => 'Нет прав на публикацию: для этого приложения стена ограничена.',
+                27  => 'VK отклонил авторизацию сообщества. Для wall.post нужен Community Access Token, а для загрузки фото — отдельный пользовательский токен.',
                 28  => 'Используется сервисный ключ приложения. Нажмите «Авторизовать сообщество VK» заново, чтобы получить токен сообщества.',
             );
             if ( isset( $hints[ $err_code ] ) ) {
@@ -141,27 +151,67 @@ class WP_Ru_Max_Social_Poster {
      *
      * @return string|false Например: photo-189154877_123456789
      */
-    private static function upload_vk_post_photo( $image_url, $owner_id, $access_token, $post_id = 0 ) {
+    private static function upload_vk_post_photo( $image_url, $owner_id, $access_token, $post_id = 0, $social = array() ) {
         if ( empty( $image_url ) ) {
+            WP_Ru_Max_Logger::log(
+                'social',
+                'info',
+                '[VK] Изображение пропущено: у записи нет миниатюры или изображения в содержимом.',
+                array( 'post_id' => $post_id )
+            );
+            return false;
+        }
+        if ( empty( $access_token ) ) {
+            WP_Ru_Max_Logger::log(
+                'social',
+                'info',
+                '[VK] Изображение пропущено: для загрузки фото нужен пользовательский VK-токен. Текст публикации будет отправлен.',
+                array( 'post_id' => $post_id )
+            );
             return false;
         }
         if ( ! function_exists( 'download_url' ) && defined( 'ABSPATH' ) ) {
             require_once ABSPATH . 'wp-admin/includes/file.php';
         }
-        if ( ! function_exists( 'download_url' ) || ! class_exists( 'CURLFile' ) ) {
+        if ( ! function_exists( 'download_url' ) ) {
             self::log_vk_photo_warning( $post_id, 'WordPress или PHP не поддерживает загрузку изображения в VK.' );
             return false;
         }
+        /*
+         * Не читаем $social из воздуха: раньше эта переменная существовала
+         * только в post_to_vk(), из-за чего проверка прав фото-токена
+         * выполнялась с warning и не давала полезной диагностики.
+         */
+        $scopes_raw = is_array( $social ) ? ( $social['vk_user_scopes'] ?? '' ) : '';
+        if ( is_array( $scopes_raw ) ) {
+            $scopes_raw = implode( ',', $scopes_raw );
+        }
+        $scopes = preg_split( '/[\s,]+/', strtolower( trim( (string) $scopes_raw ) ), -1, PREG_SPLIT_NO_EMPTY );
+        if ( ! empty( $scopes ) && ! in_array( 'photos', $scopes, true ) ) {
+            self::log_vk_photo_warning(
+                $post_id,
+                'Пользовательский VK-токен не содержит право photos (полученные права: ' .
+                implode( ', ', $scopes ) .
+                '). Повторите авторизацию VK ID с правами photos, wall и groups.'
+            );
+            return false;
+        }
 
-        $upload_server_url = add_query_arg(
-            array(
-                'owner_id'     => $owner_id,
-                'access_token' => $access_token,
-                'v'            => '5.199',
-            ),
-            'https://api.vk.com/method/photos.getWallUploadServer'
+        // Для стены сообщества VK ожидает положительный group_id. Старый
+        // вариант с отрицательным owner_id приводил к ответу без upload_url.
+        $upload_params = array(
+            'access_token' => $access_token,
+            'v'            => '5.199',
         );
-        $server_response = wp_remote_get( $upload_server_url, array( 'timeout' => 20 ) );
+        if ( (int) $owner_id < 0 ) {
+            $upload_params['group_id'] = absint( $owner_id );
+        } else {
+            $upload_params['owner_id'] = (int) $owner_id;
+        }
+        $server_response = wp_remote_post( 'https://api.vk.com/method/photos.getWallUploadServer', array(
+            'timeout' => 20,
+            'body'    => $upload_params,
+        ) );
         if ( is_wp_error( $server_response ) ) {
             self::log_vk_photo_warning( $post_id, 'Не удалось получить сервер загрузки изображения: ' . $server_response->get_error_message() );
             return false;
@@ -170,7 +220,22 @@ class WP_Ru_Max_Social_Poster {
         $server_data = json_decode( wp_remote_retrieve_body( $server_response ), true );
         $upload_url  = $server_data['response']['upload_url'] ?? '';
         if ( empty( $upload_url ) ) {
-            self::log_vk_photo_warning( $post_id, 'VK не вернул URL загрузки изображения.' );
+            $vk_error = $server_data['error'] ?? array();
+            if ( ! empty( $vk_error ) ) {
+                $details = sprintf(
+                    ' код %s: %s',
+                    (string) ( $vk_error['error_code'] ?? 'unknown' ),
+                    (string) ( $vk_error['error_msg'] ?? 'неизвестная ошибка' )
+                );
+                self::log_vk_photo_warning( $post_id, 'VK не предоставил сервер загрузки изображения.' . $details . ' Публикация продолжится без изображения.' );
+            } else {
+                WP_Ru_Max_Logger::log(
+                    'social',
+                    'info',
+                    '[VK] Изображение пропущено: VK не предоставил URL сервера загрузки. Публикация продолжится без изображения.',
+                    array( 'post_id' => $post_id, 'http_code' => (int) wp_remote_retrieve_response_code( $server_response ) )
+                );
+            }
             return false;
         }
 
@@ -184,12 +249,33 @@ class WP_Ru_Max_Social_Poster {
         try {
             $mime = function_exists( 'mime_content_type' ) ? mime_content_type( $tmp_file ) : 'image/jpeg';
             $path = parse_url( $image_url, PHP_URL_PATH );
-            $name = $path ? basename( $path ) : 'image.jpg';
+            $name = $path ? sanitize_file_name( basename( $path ) ) : 'image.jpg';
+            $name = '' !== $name ? $name : 'image.jpg';
+            $file_contents = file_get_contents( $tmp_file );
+            if ( false === $file_contents ) {
+                self::log_vk_photo_warning( $post_id, 'Не удалось прочитать скачанное изображение.' );
+                return false;
+            }
+
+            /*
+             * Передаём multipart явно. WP_Http в ряде версий преобразует
+             * массив body в application/x-www-form-urlencoded и превращает
+             * CURLFile в строку, из-за чего VK получает не изображение.
+             */
+            $boundary = '--------------------------' . wp_generate_password( 24, false, false );
+            $multipart = '--' . $boundary . "\r\n"
+                . 'Content-Disposition: form-data; name="photo"; filename="' . str_replace( '"', '', $name ) . '"' . "\r\n"
+                . 'Content-Type: ' . ( $mime ?: 'image/jpeg' ) . "\r\n\r\n"
+                . $file_contents . "\r\n"
+                . '--' . $boundary . "--\r\n";
+
             $upload_response = wp_remote_post( $upload_url, array(
                 'timeout' => 30,
-                'body'    => array(
-                    'photo' => new CURLFile( $tmp_file, $mime ?: 'image/jpeg', $name ),
+                'headers' => array(
+                    'Content-Type'   => 'multipart/form-data; boundary=' . $boundary,
+                    'Content-Length' => (string) strlen( $multipart ),
                 ),
+                'body'    => $multipart,
             ) );
 
             if ( is_wp_error( $upload_response ) ) {
@@ -200,16 +286,21 @@ class WP_Ru_Max_Social_Poster {
                 $server      = $upload_data['server'] ?? '';
                 $hash        = $upload_data['hash'] ?? '';
                 if ( '' !== (string) $photo && '' !== (string) $server && '' !== (string) $hash ) {
+                    $save_params = array(
+                        'photo'        => $photo,
+                        'server'       => $server,
+                        'hash'         => $hash,
+                        'access_token' => $access_token,
+                        'v'            => '5.199',
+                    );
+                    if ( (int) $owner_id < 0 ) {
+                        $save_params['group_id'] = absint( $owner_id );
+                    } else {
+                        $save_params['user_id'] = (int) $owner_id;
+                    }
                     $save_response = wp_remote_post( 'https://api.vk.com/method/photos.saveWallPhoto', array(
                         'timeout' => 20,
-                        'body'    => array(
-                            'photo'        => $photo,
-                            'server'       => $server,
-                            'hash'         => $hash,
-                            'owner_id'     => $owner_id,
-                            'access_token' => $access_token,
-                            'v'            => '5.199',
-                        ),
+                        'body'    => $save_params,
                     ) );
                     $save_data = is_wp_error( $save_response )
                         ? array()
@@ -218,7 +309,15 @@ class WP_Ru_Max_Social_Poster {
                     if ( empty( $save_data['error'] ) && ! empty( $saved_photo['id'] ) ) {
                         $attachment = 'photo' . $owner_id . '_' . absint( $saved_photo['id'] );
                     } else {
-                        self::log_vk_photo_warning( $post_id, 'VK не сохранил изображение на стене сообщества.' );
+                        $save_error = $save_data['error'] ?? array();
+                        $details = ! empty( $save_error )
+                            ? sprintf(
+                                ' код %s: %s',
+                                (string) ( $save_error['error_code'] ?? 'unknown' ),
+                                (string) ( $save_error['error_msg'] ?? 'неизвестная ошибка' )
+                            )
+                            : '';
+                        self::log_vk_photo_warning( $post_id, 'VK не сохранил изображение на стене.' . $details );
                     }
                 } else {
                     self::log_vk_photo_warning( $post_id, 'VK не принял файл изображения.' );
@@ -231,6 +330,104 @@ class WP_Ru_Max_Social_Poster {
         }
 
         return $attachment;
+    }
+
+    /**
+     * Возвращает изображение записи для вложения в публикацию VK.
+     *
+     * Приоритет у стандартной миниатюры WordPress. Если она не назначена,
+     * берём первую обычную картинку из содержимого записи — это важно для
+     * записей, где изображение вставлено редактором прямо в текст.
+     *
+     * @param WP_Post $post WordPress-запись.
+     * @return string
+     */
+    private static function get_vk_post_image_url( $post ) {
+        $thumbnail_url = get_the_post_thumbnail_url( $post->ID, 'large' );
+        if ( ! empty( $thumbnail_url ) ) {
+            return esc_url_raw( $thumbnail_url );
+        }
+
+        $content = (string) ( $post->post_content ?? '' );
+        if ( '' === $content || ! preg_match_all(
+            '/<img\b[^>]*(?:src|data-src|data-lazy-src)\s*=\s*["\']([^"\']+)["\'][^>]*>/i',
+            $content,
+            $matches
+        ) ) {
+            return '';
+        }
+
+        foreach ( $matches[1] as $candidate ) {
+            $candidate = esc_url_raw( html_entity_decode( $candidate, ENT_QUOTES, get_bloginfo( 'charset' ) ?: 'UTF-8' ) );
+            if ( '' !== $candidate && 0 !== strpos( strtolower( $candidate ), 'data:' ) ) {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Возвращает пользовательский токен для методов загрузки фото VK.
+     * Токен сообщества подходит для wall.post, но VK запрещает им
+     * photos.getWallUploadServer/photos.saveWallPhoto. Не используем
+     * vk_access_token как запасной вариант: в новых установках это токен
+     * сообщества, и такой fallback снова приводит к ошибке 27.
+     */
+    private static function get_vk_photo_access_token( $social ) {
+        $token = self::extract_vk_token( $social['vk_user_access_token'] ?? '' );
+        if ( '' === $token ) {
+            WP_Ru_Max_Logger::log(
+                'social',
+                'info',
+                '[VK] Изображение пропущено: не найден пользовательский VK-токен. Авторизуйте VK заново, чтобы загрузка фото не выполнялась токеном сообщества.',
+                array()
+            );
+            return '';
+        }
+
+        $expires_at = (int) ( $social['vk_user_expires_at'] ?? 0 );
+        $refresh = trim( (string) ( $social['vk_user_refresh_token'] ?? '' ) );
+        if ( '' === $refresh || 0 === $expires_at || $expires_at > time() + 60 ) {
+            return $token;
+        }
+
+        // Пользовательский VK ID-токен был выдан Web-приложению, а не
+        // приложению сообщества, поэтому refresh тоже должен использовать
+        // отдельный client_id.
+        $app_id = trim( (string) ( $social['vk_user_app_id'] ?? '' ) );
+        if ( '' === $app_id ) {
+            return $token;
+        }
+        $body = array(
+            'grant_type'    => 'refresh_token',
+            'refresh_token' => $refresh,
+            'client_id'     => $app_id,
+        );
+        if ( ! empty( $social['vk_device_id'] ) ) {
+            $body['device_id'] = $social['vk_device_id'];
+        }
+        $response = wp_remote_post( 'https://id.vk.ru/oauth2/auth', array(
+            'timeout' => 20,
+            'headers' => array( 'Content-Type' => 'application/x-www-form-urlencoded' ),
+            'body'    => $body,
+        ) );
+        if ( is_wp_error( $response ) ) {
+            return $token;
+        }
+        $data = json_decode( wp_remote_retrieve_body( $response ), true );
+        if ( ! is_array( $data ) || empty( $data['access_token'] ) ) {
+            return $token;
+        }
+
+        $social['vk_user_access_token']  = sanitize_text_field( $data['access_token'] );
+        $social['vk_user_refresh_token'] = sanitize_text_field( $data['refresh_token'] ?? $refresh );
+        $social['vk_user_expires_at']    = time() + max( 0, (int) ( $data['expires_in'] ?? 0 ) );
+        if ( isset( $data['scope'] ) ) {
+            $social['vk_user_scopes'] = sanitize_text_field( $data['scope'] );
+        }
+        update_option( 'wp_ru_max_social', $social );
+        return $social['vk_user_access_token'];
     }
 
     private static function log_vk_photo_warning( $post_id, $message ) {
@@ -664,6 +861,7 @@ class WP_Ru_Max_Social_Poster {
      *   {title}      — заголовок записи
      *   {excerpt}    — анонс / первые слова текста
      *   {url}        — ссылка на запись (с UTM, если настроено)
+     *   {image}      — URL главного изображения записи
      *   {author}     — имя автора
      *   {date}       — дата публикации в формате дд.мм.гггг
      *   {terms}      — хэштеги из таксономий (настраиваются в «Настройках»)
@@ -680,7 +878,7 @@ class WP_Ru_Max_Social_Poster {
      * @param array|null $social Настройки wp_ru_max_social (null = автозагрузка)
      * @return string
      */
-    public static function build_message( $post, $net, $social = null ) {
+    public static function build_message( $post, $net, $social = null, $url = null ) {
         if ( null === $social ) {
             $social = get_option( 'wp_ru_max_social', array() );
         }
@@ -691,7 +889,8 @@ class WP_Ru_Max_Social_Poster {
             : "{title}\n\n{excerpt}\n\n{url}";
 
         $title   = get_the_title( $post );
-        $url     = self::decorate_url( get_permalink( $post ), $net, $social );
+        $url     = null !== $url ? (string) $url : self::decorate_url( get_permalink( $post ), $net, $social );
+        $image   = (string) ( get_the_post_thumbnail_url( $post->ID, 'large' ) ?: '' );
         $excerpt = has_excerpt( $post )
             ? get_the_excerpt( $post )
             : wp_trim_words( strip_tags( $post->post_content ), 50 );
@@ -742,12 +941,13 @@ class WP_Ru_Max_Social_Poster {
             $categories = htmlspecialchars( $categories, $esc, $enc );
             $tags_str   = htmlspecialchars( $tags_str,   $esc, $enc );
             $terms_str  = htmlspecialchars( $terms_str,  $esc, $enc );
+            $image      = htmlspecialchars( $image,      $esc, $enc );
             // URL не экранируем — он может корректно использоваться в href=""
         }
 
         $msg = str_replace(
-            array( '{title}', '{excerpt}', '{url}', '{author}', '{date}', '{terms}', '{categories}', '{tags}', '{site_name}' ),
-            array(  $title,    $excerpt,    $url,    $author,    $date,    $terms_str, $categories,   $tags_str, $site        ),
+            array( '{title}', '{excerpt}', '{url}', '{image}', '{author}', '{date}', '{terms}', '{categories}', '{tags}', '{site_name}' ),
+            array(  $title,    $excerpt,    $url,    $image,   $author,    $date,    $terms_str, $categories,   $tags_str, $site        ),
             $tpl
         );
 
@@ -756,12 +956,34 @@ class WP_Ru_Max_Social_Poster {
         if ( ! empty( $social[ $cut_key ] ) ) {
             $limits = array( 'tg' => 4096, 'vk' => 16384, 'ok' => 32000, 'dzen' => 100000 );
             $limit  = $limits[ $net ] ?? 4096;
-            if ( mb_strlen( $msg, 'UTF-8' ) > $limit ) {
-                $msg = mb_substr( $msg, 0, $limit - 3, 'UTF-8' ) . '...';
+            if ( wp_ru_max_strlen( $msg, 'UTF-8' ) > $limit ) {
+                $msg = wp_ru_max_substr( $msg, 0, $limit - 3, 'UTF-8' ) . '...';
             }
         }
 
         return $msg;
+    }
+
+    /**
+     * Сохраняет пользовательский шаблон с поддерживаемыми HTML-тегами.
+     * sanitize_textarea_field() удаляет эти теги, поэтому шаблон нельзя
+     * обрабатывать как обычное текстовое поле.
+     *
+     * @param string $value Шаблон из формы администратора.
+     * @return string
+     */
+    public static function sanitize_template( $value ) {
+        return wp_kses(
+            (string) $value,
+            array(
+                'b' => array(),
+                'i' => array(),
+                'u' => array(),
+                'a' => array(
+                    'href' => true,
+                ),
+            )
+        );
     }
 
     /**
