@@ -113,6 +113,13 @@ function wp_ru_max_pro_settings() {
         );
     }
 
+    // Эти варианты больше не показываются в настройках. Старые сохранённые
+    // значения переводим в доступный вариант, чтобы они не возвращались на
+    // сайт после обновления плагина.
+    if ( ! in_array( $settings['style']['layout'] ?? '', array( 'circle', 'grid', 'corner', 'menu', 'stack', 'rows' ), true ) ) {
+        $settings['style']['layout'] = $defaults['style']['layout'];
+    }
+
     $settings['chat']['faq'] = is_array( $settings['chat']['faq'] ?? null ) ? $settings['chat']['faq'] : $defaults['chat']['faq'];
     $settings['chat']['quick_buttons'] = is_array( $settings['chat']['quick_buttons'] ?? null ) ? $settings['chat']['quick_buttons'] : $defaults['chat']['quick_buttons'];
 
