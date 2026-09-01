@@ -1,4 +1,79 @@
+.wprmp-chat-settings-head{display:flex;flex-direction:column!important;justify-content:flex-start;gap:12px;align-items:flex-start!important}
 /* WP Ru-max Admin Styles */
+
+/* Scheduled social autoposting */
+.wp-ru-max-autopost-hero{display:flex;align-items:center;justify-content:space-between;gap:20px;background:linear-gradient(120deg,#f5f3ff,#fff);border-bottom:1px solid #e8e5ff}
+.wp-ru-max-autopost-hero h2{margin:5px 0 4px}
+.wp-ru-max-autopost-hero p{margin:0;color:#64748b}
+.wp-ru-max-autopost-stats{display:flex;gap:12px;flex-wrap:wrap}
+.wp-ru-max-autopost-stats span{padding:10px 14px;background:#fff;border:1px solid #e4e7ef;border-radius:10px;color:#64748b;font-size:12px}
+.wp-ru-max-autopost-stats strong{display:block;color:#312e81;font-size:20px;line-height:1.1}
+.wp-ru-max-autopost-tabs{display:flex;gap:4px;padding:14px 24px 0;border-bottom:1px solid #e5e7eb}
+.wp-ru-max-autopost-tabs button{border:0;border-bottom:3px solid transparent;background:transparent;color:#64748b;padding:10px 13px;cursor:pointer;font-weight:600}
+.wp-ru-max-autopost-tabs button:hover,.wp-ru-max-autopost-tabs button.is-active{color:#4f46e5}
+.wp-ru-max-autopost-tabs button.is-active{border-bottom-color:#6366f1}
+.wp-ru-max-autopost-pane{display:none}.wp-ru-max-autopost-pane.is-active{display:block}
+.wp-ru-max-autopost-steps{padding-left:20px;line-height:1.8}
+.wp-ru-max-autopost-result{display:none;margin-top:12px;padding:9px 12px;border-left:4px solid #16a34a;background:#f0fdf4;color:#166534}
+.wp-ru-max-autopost-result.error{border-left-color:#dc2626;background:#fef2f2;color:#991b1b}
+.wp-ru-max-social-tabs{display:flex;gap:4px;padding:14px 24px 0;border-bottom:1px solid #e5e7eb;overflow-x:auto}
+.wp-ru-max-social-tabs button{border:0;border-bottom:3px solid transparent;background:transparent;color:#64748b;padding:10px 13px;cursor:pointer;font-weight:600;white-space:nowrap}
+.wp-ru-max-social-tabs button:hover,.wp-ru-max-social-tabs button.is-active{color:#4f46e5}
+.wp-ru-max-social-tabs button.is-active{border-bottom-color:#6366f1}
+.wp-ru-max-social-pane{display:none}
+.wp-ru-max-social-pane.is-active{display:block}
+.wp-ru-max-social-pane[hidden]{display:none}
+.wp-ru-max-instruction-tabs,.wp-ru-max-template-tabs{display:flex;gap:4px;padding:14px 24px 0;border-bottom:1px solid #e5e7eb;overflow-x:auto}
+.wp-ru-max-instruction-tabs button,.wp-ru-max-template-tabs button{border:0;border-bottom:3px solid transparent;background:transparent;color:#64748b;padding:10px 13px;cursor:pointer;font-weight:600;white-space:nowrap}
+.wp-ru-max-instruction-tabs button:hover,.wp-ru-max-instruction-tabs button.is-active,.wp-ru-max-template-tabs button:hover,.wp-ru-max-template-tabs button.is-active{color:#4f46e5}
+.wp-ru-max-instruction-tabs button.is-active,.wp-ru-max-template-tabs button.is-active{border-bottom-color:#6366f1}
+.wp-ru-max-instruction-pane,.wp-ru-max-template-pane{display:none}
+.wp-ru-max-instruction-pane.is-active,.wp-ru-max-template-pane.is-active{display:block}
+.wp-ru-max-instruction-pane[hidden],.wp-ru-max-template-pane[hidden]{display:none}
+.wp-ru-max-calendar-toolbar{display:flex;align-items:center;gap:8px}
+.wp-ru-max-calendar-toolbar h3{flex:1;text-align:center;margin:0}
+.wp-ru-max-calendar{margin-top:18px}
+.wp-ru-max-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-top:1px solid #e5e7eb;border-left:1px solid #e5e7eb}
+.wp-ru-max-calendar-weekday{padding:9px 7px;text-align:center;background:#f8fafc;border-right:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;color:#64748b;font-size:11px;font-weight:700}
+.wp-ru-max-calendar-day{min-height:105px;padding:6px;border-right:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;background:#fff;transition:background .15s}
+.wp-ru-max-calendar-day:not(.is-empty){cursor:pointer}
+.wp-ru-max-calendar-day:not(.is-empty):hover{background:#fafaff}
+.wp-ru-max-calendar-day.is-empty{background:#f8fafc}
+.wp-ru-max-calendar-day.is-today{background:#fafaff}
+.wp-ru-max-calendar-day.is-drop-target{background:#eef2ff;box-shadow:inset 0 0 0 2px #818cf8}
+.wp-ru-max-calendar-day-number{font-size:12px;font-weight:700;color:#475569;margin-bottom:5px}
+.is-today .wp-ru-max-calendar-day-number{color:#4f46e5}
+.wp-ru-max-calendar-event{position:relative;margin:3px 0;padding:4px 5px;border-radius:5px;font-size:10px;line-height:1.25;overflow:hidden;word-break:break-word}
+.wp-ru-max-calendar-event.is-scheduled{background:#fff;border-left:3px solid #4f46e5;color:#111827;cursor:grab;padding-right:25px}
+.wp-ru-max-calendar-event.is-completed{background:#fff;border-left:3px solid #49af30;color:#111827}
+.wp-ru-max-calendar-event.is-error{background:#fff;border-left:3px solid #dc2626;color:#111827}
+.wp-ru-max-calendar-event.is-published{background:#fff;border-left:3px solid #4f46e5;color:#111827}
+.wp-ru-max-calendar-event.is-dragging{opacity:.45}
+.wp-ru-max-calendar-event-time{font-weight:700}
+.wp-ru-max-calendar-event-actions{position:absolute;right:2px;top:3px;display:flex;flex-direction:column}
+.wp-ru-max-calendar-event-actions button{border:0;background:transparent;color:#6366f1;padding:0 2px;cursor:pointer;font-size:12px;line-height:12px}
+.wp-ru-max-calendar-event-actions button:hover{color:#dc2626}
+.wp-ru-max-calendar-modal{position:fixed;z-index:100000;inset:0;display:flex;align-items:center;justify-content:center;padding:20px}
+.wp-ru-max-calendar-modal-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.42)}
+.wp-ru-max-calendar-modal-card{position:relative;width:min(460px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:24px;border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:0 20px 60px rgba(15,23,42,.25)}
+.wp-ru-max-calendar-modal-card h3{margin:0 0 5px;border:0;padding:0}
+.wp-ru-max-calendar-modal-close{position:absolute;right:12px;top:10px;border:0;background:transparent;color:#64748b;font-size:24px;line-height:1;cursor:pointer}
+.wp-ru-max-calendar-modal-field{display:block;margin-top:16px;color:#374151;font-size:13px;font-weight:600}
+.wp-ru-max-calendar-modal-field select,.wp-ru-max-calendar-modal-field input[type=datetime-local]{display:block;box-sizing:border-box;width:100%;margin-top:6px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff}
+.wp-ru-max-calendar-network-list{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.wp-ru-max-calendar-network{padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;font-weight:400;cursor:pointer}
+.wp-ru-max-calendar-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:22px}
+.wp-ru-max-classic-autopost{border-top:1px solid #ddd;margin-top:10px;padding-top:9px}
+.wp-ru-max-autopost-network-list{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin:5px 0 8px}
+.wp-ru-max-autopost-datetime-label{display:flex;align-items:center;justify-content:space-between;gap:5px;font-size:12px}
+.wp-ru-max-autopost-datetime-label input{max-width:155px}
+@media (max-width:782px){
+    .wp-ru-max-autopost-hero{display:block}.wp-ru-max-autopost-stats{margin-top:14px}
+    .wp-ru-max-autopost-tabs{padding-left:10px;overflow:auto}.wp-ru-max-autopost-tabs button{white-space:nowrap}
+    .wp-ru-max-calendar-day{min-height:78px;padding:3px}.wp-ru-max-calendar-event{font-size:9px}
+    .wp-ru-max-calendar-network-list{grid-template-columns:1fr}
+    .wp-ru-max-calendar-event-actions{display:none}.wp-ru-max-autopost-network-list{grid-template-columns:1fr}
+}
 
 .wp-ru-max-wrap {
     max-width: 1100px;
