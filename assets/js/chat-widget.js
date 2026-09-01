@@ -460,7 +460,7 @@
     }
     icon.addEventListener('click', function (event) {
         event.preventDefault();
-        event.stopImmediatePropagation();
+        event.stopPropagation();
         menu.classList.contains('is-open') ? closeMenu() : openMenu();
     }, true);
     icon.setAttribute('aria-haspopup', 'dialog');
