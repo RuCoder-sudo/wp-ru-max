@@ -95,6 +95,7 @@ if ( ! defined( 'WP_RU_MAX_PRO_LICENSE_OPTION' ) ) define( 'WP_RU_MAX_PRO_LICENS
 require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max.php';
 require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-api.php';
 require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-post-sender.php';
+require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-auto-posting.php';
 require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-notifications.php';
 require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-chat-widget.php';
 require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-logger.php';
