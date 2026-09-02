@@ -1,4 +1,4 @@
-/* WP Ru-max PRO frontend v1.0.58. */
+/* WP Ru-max PRO frontend v1.0.59. */
 (function () {
   var menu = document.getElementById('wp-ru-max-pro-menu');
   var icon = document.getElementById('wp-ru-max-icon');
