@@ -9,6 +9,7 @@ class WP_Ru_Max_API {
     private $token;
 
     const DEFAULT_IMAGE_SIZE_LIMIT = 5242880; // 5 * 1024 * 1024
+    const MAX_CA_BUNDLE = 'assets/max-russian-trusted-ca-bundle.pem';
 
     public function __construct( $token = null ) {
         if ( $token ) {
@@ -57,7 +58,7 @@ class WP_Ru_Max_API {
         }
 
         $url  = WP_RU_MAX_API_BASE . $endpoint;
-        $args = array(
+        $args = array_merge( array(
             'method'    => $method,
             'headers'   => array(
                 'Authorization' => $this->token,
@@ -66,8 +67,7 @@ class WP_Ru_Max_API {
             'timeout'   => 20,
             // Никогда не отключаем проверку сертификата: это позволяет
             // подменить ответы API и токеном отправлять данные не туда.
-            'sslverify' => true,
-        );
+        ), $this->get_max_ssl_args( $url ) );
 
         if ( $body ) {
             $body_clean = $this->sanitize_utf8( $body );
@@ -152,15 +152,14 @@ class WP_Ru_Max_API {
         $multipart .= $file_data . "\r\n";
         $multipart .= "--{$boundary}--\r\n";
 
-        $response = wp_remote_post( $url, array(
+        $response = wp_remote_post( $url, array_merge( array(
             'timeout'   => 60,
-            'sslverify' => true,
             'headers'   => array(
                 'Authorization' => $this->token,
                 'Content-Type'  => 'multipart/form-data; boundary=' . $boundary,
             ),
             'body' => $multipart,
-        ) );
+        ), $this->get_max_ssl_args( $url ) ) );
 
         if ( is_wp_error( $response ) ) {
             WP_Ru_Max_Logger::log( 'api', 'error', "[MULTIPART POST $endpoint] HTTP Error: " . $response->get_error_message(), array(
@@ -239,6 +238,33 @@ class WP_Ru_Max_API {
             return str_repeat( '*', $len );
         }
         return wp_ru_max_substr( $this->token, 0, 6 ) . '***' . wp_ru_max_substr( $this->token, -4 );
+    }
+
+    /**
+     * MAX uses the Russian Trusted CA chain. Keep peer verification enabled,
+     * but provide the public CA bundle on hosts whose system bundle does not
+     * include that chain. The bundle is used only for MAX API hosts.
+     */
+    private function get_max_ssl_args( $url ) {
+        $args = array( 'sslverify' => true );
+        $api_host = strtolower( (string) wp_parse_url( WP_RU_MAX_API_BASE, PHP_URL_HOST ) );
+        $url_host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+
+        $is_max_host = $api_host !== '' && $url_host === $api_host;
+        $is_max_subdomain = strlen( $url_host ) > strlen( '.max.ru' )
+            && substr( $url_host, -strlen( '.max.ru' ) ) === '.max.ru';
+
+        if (
+            ( $is_max_host || $is_max_subdomain )
+            && defined( 'WP_RU_MAX_PLUGIN_DIR' )
+        ) {
+            $ca_file = trailingslashit( WP_RU_MAX_PLUGIN_DIR ) . self::MAX_CA_BUNDLE;
+            if ( is_readable( $ca_file ) ) {
+                $args['sslcertificates'] = $ca_file;
+            }
+        }
+
+        return $args;
     }
 
     public function get_me() {
@@ -492,14 +518,13 @@ class WP_Ru_Max_API {
         $multipart .= $image_body . "\r\n";
         $multipart .= "--{$boundary}--\r\n";
 
-        $upload_response = wp_remote_post( $upload_url, array(
+        $upload_response = wp_remote_post( $upload_url, array_merge( array(
             'timeout'   => 60,
-            'sslverify' => true,
             'headers'   => array(
                 'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
             ),
             'body' => $multipart,
-        ) );
+        ), $this->get_max_ssl_args( $upload_url ) ) );
 
         if ( is_wp_error( $upload_response ) ) {
             $err = 'Ошибка загрузки на upload URL: ' . $upload_response->get_error_message();
