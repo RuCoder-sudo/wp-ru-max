@@ -37,7 +37,19 @@ class WP_Ru_Max {
         WP_Ru_Max_License::recheck_if_needed();
         WP_Ru_Max_Admin::instance();
         WP_Ru_Max_Post_Sender::instance();
-        WP_Ru_Max_Auto_Posting::instance();
+        // An incomplete update or a legacy add-on can leave this class
+        // unavailable even though the main plugin file is still loaded.
+        // Retry from this file's own directory and never take down the site
+        // just because the optional scheduling module is unavailable.
+        if ( ! class_exists( 'WP_Ru_Max_Auto_Posting', false ) ) {
+            $autopost_file = __DIR__ . '/class-wp-ru-max-auto-posting.php';
+            if ( is_readable( $autopost_file ) ) {
+                require_once $autopost_file;
+            }
+        }
+        if ( class_exists( 'WP_Ru_Max_Auto_Posting', false ) ) {
+            WP_Ru_Max_Auto_Posting::instance();
+        }
         WP_Ru_Max_Notifications::instance();
         WP_Ru_Max_Chat_Widget::instance();
         WP_Ru_Max_Logger::instance();
@@ -209,8 +221,12 @@ class WP_Ru_Max {
                 restore_current_blog();
             }
         } else {
-            wp_clear_scheduled_hook( WP_Ru_Max_Post_Sender::QUEUE_WORKER_HOOK );
-            wp_clear_scheduled_hook( WP_Ru_Max_Auto_Posting::CRON_HOOK );
+            if ( class_exists( 'WP_Ru_Max_Post_Sender', false ) ) {
+                wp_clear_scheduled_hook( WP_Ru_Max_Post_Sender::QUEUE_WORKER_HOOK );
+            }
+            if ( class_exists( 'WP_Ru_Max_Auto_Posting', false ) ) {
+                wp_clear_scheduled_hook( WP_Ru_Max_Auto_Posting::CRON_HOOK );
+            }
         }
     }
 
@@ -231,9 +247,11 @@ class WP_Ru_Max {
                     delete_option( 'wp_ru_max_settings' );
                     delete_option( 'wp_ru_max_social' );
                     delete_option( 'wp_ru_max_queue' );
-                    delete_option( WP_Ru_Max_Auto_Posting::QUEUE_OPTION );
-                    delete_option( WP_Ru_Max_Auto_Posting::SETTINGS_OPTION );
-                    delete_option( WP_Ru_Max_Auto_Posting::LOCK_OPTION );
+                    if ( class_exists( 'WP_Ru_Max_Auto_Posting', false ) ) {
+                        delete_option( WP_Ru_Max_Auto_Posting::QUEUE_OPTION );
+                        delete_option( WP_Ru_Max_Auto_Posting::SETTINGS_OPTION );
+                        delete_option( WP_Ru_Max_Auto_Posting::LOCK_OPTION );
+                    }
                     delete_option( 'wp_ru_max_license' );
                     delete_option( 'wp_ru_max_license_attempts' );
                     delete_option( 'wp_ru_max_skip_meta_migrated_v1' );
@@ -253,9 +271,11 @@ class WP_Ru_Max {
                 delete_option( 'wp_ru_max_settings' );
                 delete_option( 'wp_ru_max_social' );
                 delete_option( 'wp_ru_max_queue' );
-                delete_option( WP_Ru_Max_Auto_Posting::QUEUE_OPTION );
-                delete_option( WP_Ru_Max_Auto_Posting::SETTINGS_OPTION );
-                delete_option( WP_Ru_Max_Auto_Posting::LOCK_OPTION );
+                if ( class_exists( 'WP_Ru_Max_Auto_Posting', false ) ) {
+                    delete_option( WP_Ru_Max_Auto_Posting::QUEUE_OPTION );
+                    delete_option( WP_Ru_Max_Auto_Posting::SETTINGS_OPTION );
+                    delete_option( WP_Ru_Max_Auto_Posting::LOCK_OPTION );
+                }
                 delete_option( 'wp_ru_max_license' );
                 delete_option( 'wp_ru_max_license_attempts' );
                 delete_option( 'wp_ru_max_skip_meta_migrated_v1' );
