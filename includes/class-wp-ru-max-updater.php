@@ -192,10 +192,21 @@ class WP_Ru_Max_Updater {
         }
 
         $plugin_folder = WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . dirname( $this->plugin_slug );
+        $destination   = isset( $result['destination'] ) && is_string( $result['destination'] )
+            ? $result['destination']
+            : '';
 
         // Проверяем результат переименования — без этого при ошибке плагин
         // остался бы в папке с временным именем и стал бы недоступен.
-        if ( ! $wp_filesystem->move( $result['destination'], $plugin_folder ) ) {
+        // WordPress can already install an update into the existing plugin
+        // directory. Moving a directory onto itself fails on some filesystem
+        // adapters, so only move when the paths are actually different.
+        if ( '' === $destination ) {
+            return new WP_Error( 'destination_missing', 'WP Ru-max: WordPress не вернул папку установленного обновления.' );
+        }
+        $normalized_destination = untrailingslashit( wp_normalize_path( $destination ) );
+        $normalized_plugin_dir  = untrailingslashit( wp_normalize_path( $plugin_folder ) );
+        if ( $normalized_destination !== $normalized_plugin_dir && ! $wp_filesystem->move( $destination, $plugin_folder ) ) {
             return new WP_Error( 'rename_failed', 'WP Ru-max: не удалось переименовать папку плагина после обновления.' );
         }
 
