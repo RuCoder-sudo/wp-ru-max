@@ -1,305 +1,280 @@
 <?php
+/**
+ * Plugin Name:       WP Ru-max
+ * Plugin URI:        https://fixcoder.ru/wp-ru-max/
+ * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Jetpack / Elementor и настраиваемый чат-виджет с анимацией и звуком. Поддерживает WordPress Multisite (мультисайт) и поддомены.
+ * Version:           1.0.58
+ * Author:            Сергей Солошенко (RuCoder)
+ * Author URI:        https://fixcoder.ru/
+ * License:           GPL v2 or later
+ * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:       wp-ru-max
+ * Domain Path:       /languages
+ * Requires at least: 5.8
+ * Tested up to:      6.7
+ * Requires PHP:      7.4
+ * Network:           true
+ *
+ * -----------------------------------------------------------------------
+ * Разработчик:        Сергей Солошенко | РуКодер
+ * Специализация:      Веб-разработка с 2018 года | WordPress / Full Stack
+ * Принцип работы:     «Сайт — как для себя»
+ * -----------------------------------------------------------------------
+ * Телефон / WhatsApp: +7 (985) 985-53-97
+ * Email:              support@fixcoder.ru
+ * Telegram:           @RussCoder
+ * Портфолио:          https://fixcoder.ru
+ * GitHub:             https://github.com/RuCoder-sudo
+ * -----------------------------------------------------------------------
+ *
+ * Installation:
+ * 1. Загрузите папку `wp-ru-max` в директорию `/wp-content/plugins/`
+ * 2. Активируйте плагин через меню «Плагины» в WordPress
+ *    (или «Сеть → Плагины» для сетевой активации на всех сайтах)
+ * 3. Перейдите в «Ru-max → Активация»
+ * 4. Введите лицензионный ключ или запросите его на вкладке «Активация»
+ * 5. После активации настройте токен бота MAX на вкладке «Главная»
+ * 6. Проверьте подключение кнопкой «Проверить подключение»
+ *
+ * Multisite / Поддомены:
+ * - Плагин поддерживает WordPress Multisite (сеть сайтов)
+ * - Может быть активирован сетевым администратором для всей сети
+ * - Каждый подсайт имеет свои независимые настройки
+ * - Сетевая лицензия автоматически распространяется на все подсайты сети
+ * - Для поддоменов (sub.domain.ru) достаточно лицензии на корневой домен
+ *
+ * FAQ:
+ * Q: Где взять токен бота MAX?
+ * A: На платформе MAX для партнёров: https://business.max.ru → «Чат-боты» → «Интеграция» → «Получить токен».
+ *
+ * Q: Как узнать ID канала или группы?
+ * A: Для публичного канала — никнейм с @ (например, @my_channel).
+ *    Для группы — числовой ID (получить через бота @get_id_bot в мессенджере MAX).
+ *
+ * Q: Работает ли плагин с WooCommerce?
+ * A: Да. Плагин перехватывает все email-уведомления WooCommerce (новый заказ,
+ *    смена статуса и т.д.) и пересылает их в личный чат с ботом MAX.
+ *
+ * Q: Поддерживаются ли Contact Form 7, Elementor Forms, Gravity Forms?
+ * A: Да. Плагин работает с любыми формами, отправляющими уведомления через wp_mail().
+ *
+ * Q: Что делает чат-виджет?
+ * A: Добавляет плавающую кнопку MAX на сайт с приветственным сообщением,
+ *    анимацией, звуковым уведомлением и настраиваемой задержкой появления.
+ *
+ * Q: Как работает лицензия в Multisite?
+ * A: Сетевой администратор может ввести одну лицензию в сетевых настройках
+ *    (Сеть → Плагины → WP Ru-max), и она автоматически распространится
+ *    на все подсайты сети. Либо каждый подсайт может иметь свою лицензию.
+ * -----------------------------------------------------------------------
+ */
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class WP_Ru_Max {
+// A versioned copy can remain active after a manual upload or an interrupted
+// update. Never execute this bootstrap twice: the plugin uses global class and
+// function names, so a second copy would otherwise end in a redeclaration
+// fatal before WordPress can render the recovery screen.
+if ( class_exists( 'WP_Ru_Max', false ) || defined( 'WP_RU_MAX_BOOTSTRAPPED' ) ) {
+    return;
+}
+if ( ! defined( 'WP_RU_MAX_BOOTSTRAPPED' ) ) define( 'WP_RU_MAX_BOOTSTRAPPED', true );
 
-    private static $instance = null;
+if ( ! defined( 'WP_RU_MAX_VERSION' ) ) define( 'WP_RU_MAX_VERSION', '1.0.58' );
+if ( ! defined( 'WP_RU_MAX_PLUGIN_FILE' ) ) define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
+if ( ! defined( 'WP_RU_MAX_PLUGIN_DIR' ) ) define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+if ( ! defined( 'WP_RU_MAX_PLUGIN_URL' ) ) define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+if ( ! defined( 'WP_RU_MAX_PLUGIN_BASENAME' ) ) define( 'WP_RU_MAX_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
+if ( ! defined( 'WP_RU_MAX_API_BASE' ) ) define( 'WP_RU_MAX_API_BASE', 'https://platform-api2.max.ru' );
 
-    public static function instance() {
-        if ( null === self::$instance ) {
-            self::$instance = new self();
+// PRO is bundled into the main plugin. The option names stay compatible with
+// the standalone add-on so existing settings and conversations are preserved.
+if ( ! defined( 'WP_RU_MAX_PRO_BUNDLED' ) ) define( 'WP_RU_MAX_PRO_BUNDLED', true );
+// Version 1.0.58: the bundled module uses the same cache-busting version as
+// the main plugin, so all updated CSS/JS files are refreshed together.
+if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.58' );
+if ( ! defined( 'WP_RU_MAX_PRO_FILE' ) ) define( 'WP_RU_MAX_PRO_FILE', __FILE__ );
+if ( ! defined( 'WP_RU_MAX_PRO_DIR' ) ) define( 'WP_RU_MAX_PRO_DIR', WP_RU_MAX_PLUGIN_DIR );
+if ( ! defined( 'WP_RU_MAX_PRO_URL' ) ) define( 'WP_RU_MAX_PRO_URL', WP_RU_MAX_PLUGIN_URL . 'assets/pro/' );
+if ( ! defined( 'WP_RU_MAX_PRO_OPTION' ) ) define( 'WP_RU_MAX_PRO_OPTION', 'wp_ru_max_pro_settings' );
+if ( ! defined( 'WP_RU_MAX_PRO_LICENSE_OPTION' ) ) define( 'WP_RU_MAX_PRO_LICENSE_OPTION', 'wp_ru_max_pro_license' );
+
+/**
+ * Detect the former standalone PRO add-on before loading the bundled copy.
+ *
+ * The old add-on and the bundled module expose the same global function and
+ * class names. Checking only function_exists() is not enough because the
+ * active plugins can be loaded in either order; when the main plugin loads
+ * first, the later add-on would otherwise cause a redeclaration fatal error.
+ */
+if ( ! function_exists( 'wp_ru_max_has_legacy_pro_addon' ) ) {
+    function wp_ru_max_has_legacy_pro_addon() {
+        if (
+            function_exists( 'wp_ru_max_pro_settings' )
+            || class_exists( 'WP_Ru_Max_Pro_Admin', false )
+            || class_exists( 'WP_Ru_Max_Pro_Widget', false )
+        ) {
+            return true;
         }
-        return self::$instance;
-    }
 
-    private function __construct() {
-        $this->init_hooks();
-    }
+        $active_plugins  = function_exists( 'get_option' )
+            ? (array) get_option( 'active_plugins', array() )
+            : array();
+        $network_plugins = function_exists( 'get_site_option' )
+            ? array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) )
+            : array();
+        $current_plugin  = plugin_basename( __FILE__ );
 
-    private function init_hooks() {
-        add_action( 'init', array( $this, 'init' ) );
-        add_action( 'plugins_loaded', array( $this, 'load_textdomain' ) );
-
-        // Multisite: создаём таблицу при добавлении нового подсайта
-        if ( function_exists( 'is_multisite' ) && is_multisite() ) {
-            // WordPress 5.1+
-            add_action( 'wp_initialize_site', array( $this, 'on_new_site' ), 10, 1 );
-            // Совместимость с более старыми версиями
-            add_action( 'wpmu_new_blog', array( $this, 'on_new_blog_legacy' ), 10, 6 );
-        }
-    }
-
-    public function init() {
-        if ( class_exists( 'WP_Ru_Max_License', false ) ) {
-            WP_Ru_Max_License::instance();
-            WP_Ru_Max_License::recheck_if_needed();
-        }
-        if ( class_exists( 'WP_Ru_Max_Admin', false ) ) {
-            WP_Ru_Max_Admin::instance();
-        }
-        if ( class_exists( 'WP_Ru_Max_Post_Sender', false ) ) {
-            WP_Ru_Max_Post_Sender::instance();
-        }
-        // An incomplete update or a legacy add-on can leave this class
-        // unavailable even though the main plugin file is still loaded.
-        // Retry from this file's own directory and never take down the site
-        // just because the optional scheduling module is unavailable.
-        if ( ! class_exists( 'WP_Ru_Max_Auto_Posting', false ) ) {
-            $autopost_file = __DIR__ . '/class-wp-ru-max-auto-posting.php';
-            if ( is_readable( $autopost_file ) ) {
-                require_once $autopost_file;
+        foreach ( array_unique( array_merge( $active_plugins, $network_plugins ) ) as $plugin_file ) {
+            if ( ! is_string( $plugin_file ) || $plugin_file === $current_plugin ) {
+                continue;
+            }
+            if ( preg_match( '#(?:^|/)wp-ru-max-pro(?:[-/]|\.php$)#i', $plugin_file ) ) {
+                return true;
             }
         }
-        if ( class_exists( 'WP_Ru_Max_Auto_Posting', false ) ) {
-            WP_Ru_Max_Auto_Posting::instance();
-        }
-        if ( class_exists( 'WP_Ru_Max_Notifications', false ) ) {
-            WP_Ru_Max_Notifications::instance();
-        }
-        if ( class_exists( 'WP_Ru_Max_Chat_Widget', false ) ) {
-            WP_Ru_Max_Chat_Widget::instance();
-        }
-        if ( class_exists( 'WP_Ru_Max_Logger', false ) ) {
-            WP_Ru_Max_Logger::instance();
-        }
-        if ( class_exists( 'WP_Ru_Max_Share', false ) ) {
-            WP_Ru_Max_Share::instance();
-        }
-        if ( class_exists( 'WP_Ru_Max_OAuth', false ) ) {
-            WP_Ru_Max_OAuth::instance();
-        }
+
+        return false;
     }
+}
 
-    public function load_textdomain() {
-        load_plugin_textdomain( 'wp-ru-max', false, dirname( WP_RU_MAX_PLUGIN_BASENAME ) . '/languages' );
+// Always load PHP files from the directory of this plugin file. A legacy
+// add-on or a second copy of the plugin may have defined the old generic
+// path constant before this file is loaded.
+$wp_ru_max_includes_dir = __DIR__ . '/includes/';
+$wp_ru_max_legacy_pro   = wp_ru_max_has_legacy_pro_addon();
+
+foreach (
+    array(
+        'class-wp-ru-max.php',
+        'class-wp-ru-max-compat.php',
+        'class-wp-ru-max-api.php',
+        'class-wp-ru-max-post-sender.php',
+        'class-wp-ru-max-auto-posting.php',
+        'class-wp-ru-max-notifications.php',
+        'class-wp-ru-max-chat-widget.php',
+        'class-wp-ru-max-logger.php',
+        'class-wp-ru-max-license.php',
+        'class-wp-ru-max-admin.php',
+        'class-wp-ru-max-updater.php',
+        'class-wp-ru-max-share.php',
+        'class-wp-ru-max-oauth.php',
+        'class-wp-ru-max-telegram-api.php',
+        'class-wp-ru-max-social-poster.php',
+    ) as $wp_ru_max_file
+) {
+    $wp_ru_max_path = $wp_ru_max_includes_dir . $wp_ru_max_file;
+    if ( is_readable( $wp_ru_max_path ) ) {
+        require_once $wp_ru_max_path;
     }
+}
 
-    // ─── Multisite: новый подсайт (WP 5.1+) ─────────────────────────────────
+// The former add-on contained a compatible contacts implementation too.
+// Loading both copies would redeclare its helpers/classes, so keep the
+// standalone implementation in charge when it is active.
+$wp_ru_max_contacts_file = $wp_ru_max_includes_dir . 'class-wp-ru-max-contacts.php';
+if (
+    ! $wp_ru_max_legacy_pro
+    && ! function_exists( 'wp_ru_max_contacts_settings' )
+    && ! class_exists( 'WP_Ru_Max_Contacts', false )
+    && is_readable( $wp_ru_max_contacts_file )
+) {
+    require_once $wp_ru_max_contacts_file;
+}
 
-    /**
-     * Создаёт таблицу истории при добавлении нового подсайта (WP 5.1+).
-     */
-    public function on_new_site( $site ) {
-        if ( $this->is_network_active() ) {
-            $blog_id = is_object( $site ) ? (int) $site->blog_id : (int) $site;
-            switch_to_blog( $blog_id );
-            self::create_table();
-            self::maybe_add_default_options();
-            restore_current_blog();
-        }
-    }
-
-    /**
-     * Совместимость с WP < 5.1 — хук wpmu_new_blog.
-     */
-    public function on_new_blog_legacy( $blog_id, $user_id, $domain, $path, $site_id, $meta ) {
-        if ( $this->is_network_active() ) {
-            switch_to_blog( $blog_id );
-            self::create_table();
-            self::maybe_add_default_options();
-            restore_current_blog();
-        }
-    }
-
-    /**
-     * Checks network activation without relying on wp-admin-only helpers.
-     */
-    private function is_network_active() {
-        $active_plugins = get_site_option( 'active_sitewide_plugins', array() );
-        return is_array( $active_plugins ) && isset( $active_plugins[ WP_RU_MAX_PLUGIN_BASENAME ] );
-    }
-
-    // ─── Создание таблицы ────────────────────────────────────────────────────
-
-    /**
-     * Создаёт таблицу ru_max_history для текущего блога.
-     * Безопасно вызывать повторно (IF NOT EXISTS).
-     */
-    public static function create_table() {
-        global $wpdb;
-        $table_name      = $wpdb->prefix . 'ru_max_history';
-        $charset_collate = $wpdb->get_charset_collate();
-        $sql = "CREATE TABLE IF NOT EXISTS $table_name (
-            id mediumint(9) NOT NULL AUTO_INCREMENT,
-            event_time datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
-            event_type varchar(50) NOT NULL,
-            event_data longtext NOT NULL,
-            status varchar(20) NOT NULL DEFAULT 'info',
-            details longtext,
-            PRIMARY KEY (id)
-        ) $charset_collate;";
-        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-        dbDelta( $sql );
-    }
-
-    /**
-     * Добавляет настройки по умолчанию для текущего блога, если они ещё не заданы.
-     */
-    public static function maybe_add_default_options() {
-        if ( false === get_option( 'wp_ru_max_settings' ) ) {
-            add_option( 'wp_ru_max_settings', array(
-                'bot_token'              => '',
-                'bot_name'               => '',
-                'post_sender_enabled'    => false,
-                'channels'               => array(),
-                'send_new_post'          => true,
-                'send_updated_post'      => false,
-                'show_read_more'         => true,
-                'post_types'             => array( 'post' ),
-                'filter_categories'      => array(),
-                'filter_tags'            => array(),
-                'send_delay_seconds'     => 0,
-                'retry_count'            => 2,
-                'retry_delay_seconds'    => 5,
-                'image_size_limit_mb'    => 5,
-                'notifications_enabled'  => false,
-                // Независимые правила для системных и клиентских писем.
-                'notify_user_registration' => true,
-                'notify_customer_order' => true,
-                'notify_from_email'      => 'any',
-                'notify_chat_ids'        => array(),
-                'notify_template'        => "<b>{email_subject}</b>\n{email_message}",
-                'notify_format'          => 'html',
-                'send_files_by_url'      => true,
-                'multisite_enabled'      => false,
-                'enable_bot_api_log'     => false,
-                'enable_post_sender_log' => false,
-                'delete_on_uninstall'    => false,
-                'chat_widget_enabled'    => false,
-                'chat_widget_size'       => 'medium',
-                'chat_widget_url'        => '',
-                'chat_widget_message_enabled' => true,
-                'chat_widget_message'    => 'Здравствуйте! У вас есть вопросы!? Мы всегда на связи. Кликните, чтобы нам написать!',
-                'chat_widget_position'   => 'right',
-                'chat_widget_retention_enabled' => false,
-                'chat_widget_retention_title'   => 'Специальное предложение!',
-                'chat_widget_retention_message' => 'Уже уходите? Получите скидку 10% на первый заказ, если ответим на ваш вопрос в течение 5 минут!',
-                'chat_widget_retention_text_align'    => 'left',
-                'chat_widget_retention_buttons_align' => 'right',
-                'chat_widget_retention_btn_radius'    => 8,
-                'chat_widget_retention_stay_text'     => 'Остаться',
-                'chat_widget_retention_leave_text'    => 'Все равно уйти',
-                'chat_widget_retention_stay_bg'       => '#4a90d9',
-                'chat_widget_retention_stay_color'    => '#ffffff',
-                'chat_widget_retention_leave_bg'      => '#f0f0f0',
-                'chat_widget_retention_leave_color'   => '#555555',
-            ) );
-        }
-        // «Связь с клиентами» стала встроенной частью основного плагина.
-        // Создаём совместимую опцию сразу при активации, чтобы виджет не
-        // зависел от отдельно установленного PRO-аддона.
-        if ( false === get_option( WP_RU_MAX_PRO_OPTION ) && function_exists( 'wp_ru_max_pro_settings' ) ) {
-            add_option( WP_RU_MAX_PRO_OPTION, wp_ru_max_pro_settings() );
-        }
-    }
-
-    // ─── Активация / деактивация ─────────────────────────────────────────────
-
-    /**
-     * Вызывается при активации плагина.
-     * Поддерживает как обычную активацию, так и сетевую (Multisite).
-     *
-     * @param bool $network_wide true если активирован для всей сети.
-     */
-    public static function activate( $network_wide = false ) {
-        if ( $network_wide && function_exists( 'is_multisite' ) && is_multisite() ) {
-            // Активация для всей сети — создаём таблицы на каждом подсайте
-            $sites = get_sites( array( 'number' => 0 ) );
-            foreach ( $sites as $site ) {
-                switch_to_blog( (int) $site->blog_id );
-                self::create_table();
-                self::maybe_add_default_options();
-                restore_current_blog();
-            }
-        } else {
-            // Обычная активация — только текущий сайт
-            self::create_table();
-            self::maybe_add_default_options();
-        }
-        if ( function_exists( 'wp_ru_max_register_vk_callback_route' ) ) {
-            wp_ru_max_register_vk_callback_route();
-        }
-        flush_rewrite_rules( false );
-    }
-
-    public static function deactivate( $network_wide = false ) {
-        // Данные сохраняются, но фоновые события не должны продолжать
-        // запускаться, пока плагин отключён.
-        if ( $network_wide && function_exists( 'is_multisite' ) && is_multisite() ) {
-            $sites = get_sites( array( 'number' => 0 ) );
-            foreach ( $sites as $site ) {
-                switch_to_blog( (int) $site->blog_id );
-                if ( class_exists( 'WP_Ru_Max_Post_Sender', false ) ) {
-                    wp_clear_scheduled_hook( WP_Ru_Max_Post_Sender::QUEUE_WORKER_HOOK );
-                }
-                if ( class_exists( 'WP_Ru_Max_Auto_Posting', false ) ) {
-                    wp_clear_scheduled_hook( WP_Ru_Max_Auto_Posting::CRON_HOOK );
-                }
-                restore_current_blog();
-            }
-        } else {
-            if ( class_exists( 'WP_Ru_Max_Post_Sender', false ) ) {
-                wp_clear_scheduled_hook( WP_Ru_Max_Post_Sender::QUEUE_WORKER_HOOK );
-            }
-            if ( class_exists( 'WP_Ru_Max_Auto_Posting', false ) ) {
-                wp_clear_scheduled_hook( WP_Ru_Max_Auto_Posting::CRON_HOOK );
-            }
-        }
-    }
-
-    /**
-     * Полное удаление данных плагина (вызывается из uninstall.php).
-     * Поддерживает Multisite.
-     */
-    public static function uninstall() {
-        global $wpdb;
-
-        if ( function_exists( 'is_multisite' ) && is_multisite() ) {
-            $sites = get_sites( array( 'number' => 0 ) );
-            foreach ( $sites as $site ) {
-                switch_to_blog( (int) $site->blog_id );
-                $settings = get_option( 'wp_ru_max_settings', array() );
-                if ( ! empty( $settings['delete_on_uninstall'] ) ) {
-                    $wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}ru_max_history" );
-                    delete_option( 'wp_ru_max_settings' );
-                    delete_option( 'wp_ru_max_social' );
-                    delete_option( 'wp_ru_max_queue' );
-                    if ( class_exists( 'WP_Ru_Max_Auto_Posting', false ) ) {
-                        delete_option( WP_Ru_Max_Auto_Posting::QUEUE_OPTION );
-                        delete_option( WP_Ru_Max_Auto_Posting::SETTINGS_OPTION );
-                        delete_option( WP_Ru_Max_Auto_Posting::LOCK_OPTION );
-                    }
-                    delete_option( 'wp_ru_max_license' );
-                    delete_option( 'wp_ru_max_license_attempts' );
-                    delete_option( 'wp_ru_max_skip_meta_migrated_v1' );
-                }
-                restore_current_blog();
-            }
-            // Удаляем сетевые настройки
-            $network_settings = get_site_option( 'wp_ru_max_network_settings', array() );
-            if ( ! empty( $network_settings['delete_on_uninstall'] ) ) {
-                delete_site_option( 'wp_ru_max_network_settings' );
-                delete_site_option( 'wp_ru_max_network_license' );
-            }
-        } else {
-            $settings = get_option( 'wp_ru_max_settings', array() );
-            if ( ! empty( $settings['delete_on_uninstall'] ) ) {
-                $wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}ru_max_history" );
-                delete_option( 'wp_ru_max_settings' );
-                delete_option( 'wp_ru_max_social' );
-                delete_option( 'wp_ru_max_queue' );
-                if ( class_exists( 'WP_Ru_Max_Auto_Posting', false ) ) {
-                    delete_option( WP_Ru_Max_Auto_Posting::QUEUE_OPTION );
-                    delete_option( WP_Ru_Max_Auto_Posting::SETTINGS_OPTION );
-                    delete_option( WP_Ru_Max_Auto_Posting::LOCK_OPTION );
-                }
-                delete_option( 'wp_ru_max_license' );
-                delete_option( 'wp_ru_max_license_attempts' );
-                delete_option( 'wp_ru_max_skip_meta_migrated_v1' );
-            }
+// If the old add-on was loaded first or is active elsewhere in the request,
+// let it own the compatible PRO functions/classes and skip the bundled copy.
+if (
+    ! $wp_ru_max_legacy_pro
+    && ! function_exists( 'wp_ru_max_pro_settings' )
+    && ! class_exists( 'WP_Ru_Max_Pro_Admin', false )
+    && ! class_exists( 'WP_Ru_Max_Pro_Widget', false )
+) {
+    foreach (
+        array(
+            'class-wp-ru-max-pro.php',
+            'class-wp-ru-max-pro-license.php',
+            'class-wp-ru-max-pro-admin.php',
+            'class-wp-ru-max-pro-widget.php',
+        ) as $wp_ru_max_pro_file
+    ) {
+        $wp_ru_max_pro_path = $wp_ru_max_includes_dir . $wp_ru_max_pro_file;
+        if ( is_readable( $wp_ru_max_pro_path ) ) {
+            require_once $wp_ru_max_pro_path;
         }
     }
 }
+
+function wp_ru_max() {
+    return class_exists( 'WP_Ru_Max', false ) ? WP_Ru_Max::instance() : null;
+}
+
+/**
+ * VK ID requires a trusted redirect URL without an action query parameter.
+ * Keep the callback on a normal WordPress path and let VK append only its
+ * response parameters (code, state and device_id).
+ */
+function wp_ru_max_register_vk_callback_route() {
+    add_rewrite_rule(
+        '^wp-ru-max-vk-callback/?$',
+        'index.php?wp_ru_max_vk_callback=1',
+        'top'
+    );
+}
+add_action( 'init', 'wp_ru_max_register_vk_callback_route', 1 );
+
+function wp_ru_max_register_vk_callback_query_var( $vars ) {
+    $vars[] = 'wp_ru_max_vk_callback';
+    return $vars;
+}
+add_filter( 'query_vars', 'wp_ru_max_register_vk_callback_query_var' );
+
+function wp_ru_max_handle_vk_callback_route() {
+    $is_callback = '1' === (string) get_query_var( 'wp_ru_max_vk_callback' );
+    if ( ! $is_callback && ! empty( $_SERVER['REQUEST_URI'] ) ) {
+        $request_path = (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH );
+        $callback_path = (string) wp_parse_url( home_url( '/wp-ru-max-vk-callback/' ), PHP_URL_PATH );
+        $is_callback = untrailingslashit( $request_path ) === untrailingslashit( $callback_path );
+    }
+    if ( ! $is_callback ) {
+        return;
+    }
+    if ( class_exists( 'WP_Ru_Max_Admin', false ) ) {
+        WP_Ru_Max_Admin::instance()->vk_oauth_callback();
+    }
+}
+add_action( 'template_redirect', 'wp_ru_max_handle_vk_callback_route', 1 );
+
+wp_ru_max();
+
+// Инициализируем апдейтер только в контексте wp-admin, иначе он добавляет
+// фильтры и обращается к transient-кешу на каждом фронтенд-запросе.
+if ( is_admin() && class_exists( 'WP_Ru_Max_Updater', false ) ) {
+    new WP_Ru_Max_Updater( WP_RU_MAX_PLUGIN_FILE, WP_RU_MAX_VERSION );
+}
+
+// Хуки активации/деактивации
+if ( class_exists( 'WP_Ru_Max', false ) ) {
+    register_activation_hook( __FILE__, array( 'WP_Ru_Max', 'activate' ) );
+    register_deactivation_hook( __FILE__, array( 'WP_Ru_Max', 'deactivate' ) );
+}
+
+// Загружаем сетевой класс для Multisite
+if ( function_exists( 'is_multisite' ) && is_multisite() && ! class_exists( 'WP_Ru_Max_Network_Admin', false ) ) {
+    require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-network-admin.php';
+    if ( class_exists( 'WP_Ru_Max_Network_Admin', false ) ) {
+        WP_Ru_Max_Network_Admin::instance();
+    }
+}
+
+// Existing installations need one rewrite flush after upgrading to the
+// clean VK callback route. The flag keeps this from running on every request.
+add_action( 'admin_init', function() {
+    if ( '1' === (string) get_option( 'wp_ru_max_vk_callback_rewrite_v1' ) ) {
+        return;
+    }
+    flush_rewrite_rules( false );
+    update_option( 'wp_ru_max_vk_callback_rewrite_v1', '1' );
+} );
