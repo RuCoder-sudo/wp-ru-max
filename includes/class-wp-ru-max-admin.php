@@ -1264,7 +1264,7 @@ jQuery(function($){
             <h3>История версий</h3>
             <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
 
-            <h4 style="margin-bottom:4px;">v1.0.56</h4>
+            <h4 style="margin-bottom:4px;">v1.0.57</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
                 <li><strong>Исправлено:</strong> OAuth VK ID теперь использует отдельное Web-приложение, а приложение сообщества больше не подставляется в пользовательский поток.</li>
                 <li><strong>Исправлено:</strong> пользовательский VK ID-токен сохраняется отдельно для загрузки фото, а Community Access Token сохраняется для публикации на стене.</li>
