@@ -3,7 +3,7 @@
  * Plugin Name:       WP Ru-max
  * Plugin URI:        https://fixcoder.ru/wp-ru-max/
  * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Jetpack / Elementor и настраиваемый чат-виджет с анимацией и звуком. Поддерживает WordPress Multisite (мультисайт) и поддомены.
- * Version:           1.0.55
+ * Version:           1.0.56
  * Author:            Сергей Солошенко (RuCoder)
  * Author URI:        https://fixcoder.ru/
  * License:           GPL v2 or later
@@ -73,7 +73,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-if ( ! defined( 'WP_RU_MAX_VERSION' ) ) define( 'WP_RU_MAX_VERSION', '1.0.55' );
+if ( ! defined( 'WP_RU_MAX_VERSION' ) ) define( 'WP_RU_MAX_VERSION', '1.0.56' );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_FILE' ) ) define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_DIR' ) ) define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_URL' ) ) define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -83,9 +83,9 @@ if ( ! defined( 'WP_RU_MAX_API_BASE' ) ) define( 'WP_RU_MAX_API_BASE', 'https://
 // PRO is bundled into the main plugin. The option names stay compatible with
 // the standalone add-on so existing settings and conversations are preserved.
 if ( ! defined( 'WP_RU_MAX_PRO_BUNDLED' ) ) define( 'WP_RU_MAX_PRO_BUNDLED', true );
-// Version 1.0.55: the bundled module uses the same cache-busting version as
+// Version 1.0.56: the bundled module uses the same cache-busting version as
 // the main plugin, so all updated CSS/JS files are refreshed together.
-if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.55' );
+if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.56' );
 if ( ! defined( 'WP_RU_MAX_PRO_FILE' ) ) define( 'WP_RU_MAX_PRO_FILE', __FILE__ );
 if ( ! defined( 'WP_RU_MAX_PRO_DIR' ) ) define( 'WP_RU_MAX_PRO_DIR', WP_RU_MAX_PLUGIN_DIR );
 if ( ! defined( 'WP_RU_MAX_PRO_URL' ) ) define( 'WP_RU_MAX_PRO_URL', WP_RU_MAX_PLUGIN_URL . 'assets/pro/' );
@@ -113,10 +113,38 @@ require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-share.php';
 require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-oauth.php';
 require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-telegram-api.php';
 require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-social-poster.php';
-// If the old add-on was loaded first, let it own the compatible PRO classes
-// for this request. If the main plugin was loaded first, the add-on exits via
-// its guard and these bundled classes are used.
-if ( ! function_exists( 'wp_ru_max_pro_settings' ) ) {
+/**
+ * Detect the former standalone PRO add-on before loading the bundled copy.
+ *
+ * The old add-on and the bundled module expose the same global function and
+ * class names. Checking only function_exists() is not enough because the
+ * active plugins can be loaded in either order; when the main plugin loads
+ * first, the later add-on would otherwise cause a redeclaration fatal error.
+ */
+function wp_ru_max_has_legacy_pro_addon() {
+    $active_plugins = function_exists( 'get_option' )
+        ? (array) get_option( 'active_plugins', array() )
+        : array();
+    $network_plugins = function_exists( 'get_site_option' )
+        ? array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) )
+        : array();
+    $current_plugin = plugin_basename( __FILE__ );
+
+    foreach ( array_unique( array_merge( $active_plugins, $network_plugins ) ) as $plugin_file ) {
+        if ( ! is_string( $plugin_file ) || $plugin_file === $current_plugin ) {
+            continue;
+        }
+        if ( preg_match( '#(?:^|/)wp-ru-max-pro(?:[-/]|\.php$)#i', $plugin_file ) ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// If the old add-on was loaded first or is active elsewhere in the request,
+// let it own the compatible PRO functions/classes and skip the bundled copy.
+if ( ! function_exists( 'wp_ru_max_pro_settings' ) && ! wp_ru_max_has_legacy_pro_addon() ) {
     require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-pro.php';
     require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-pro-license.php';
     require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-pro-admin.php';
