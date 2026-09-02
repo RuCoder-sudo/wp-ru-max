@@ -214,19 +214,20 @@ class WP_Ru_Max_License {
             wp_send_json_error( 'Нет прав доступа.' );
         }
 
-        $name           = isset( $_POST['req_name'] )           ? sanitize_text_field( wp_unslash( $_POST['req_name'] ) )           : '';
-        $email          = isset( $_POST['req_email'] )          ? sanitize_email( wp_unslash( $_POST['req_email'] ) )               : '';
-        $site           = isset( $_POST['req_site'] )           ? esc_url_raw( wp_unslash( $_POST['req_site'] ) )                   : '';
-        $social         = isset( $_POST['req_social'] )         ? sanitize_text_field( wp_unslash( $_POST['req_social'] ) )         : '';
-        $consent        = isset( $_POST['consent'] )            ? filter_var( wp_unslash( $_POST['consent'] ), FILTER_VALIDATE_BOOLEAN )         : false;
-        $mailing        = isset( $_POST['mailing'] )            ? filter_var( wp_unslash( $_POST['mailing'] ), FILTER_VALIDATE_BOOLEAN )         : false;
-        $bot_confirmed  = isset( $_POST['bot_info_confirmed'] ) ? filter_var( wp_unslash( $_POST['bot_info_confirmed'] ), FILTER_VALIDATE_BOOLEAN ) : false;
+        $name           = isset( $_POST['req_name'] )            ? sanitize_text_field( wp_unslash( $_POST['req_name'] ) )            : '';
+        $email          = isset( $_POST['req_email'] )           ? sanitize_email( wp_unslash( $_POST['req_email'] ) )                : '';
+        $site           = isset( $_POST['req_site'] )            ? esc_url_raw( wp_unslash( $_POST['req_site'] ) )                    : '';
+        $inn            = isset( $_POST['req_inn'] )             ? sanitize_text_field( wp_unslash( $_POST['req_inn'] ) )             : '';
+        $phone          = isset( $_POST['req_phone'] )           ? sanitize_text_field( wp_unslash( $_POST['req_phone'] ) )           : '';
+        $social         = isset( $_POST['req_social'] )          ? sanitize_text_field( wp_unslash( $_POST['req_social'] ) )          : '';
+        $consent        = isset( $_POST['consent'] )             ? filter_var( wp_unslash( $_POST['consent'] ), FILTER_VALIDATE_BOOLEAN )         : false;
+        $mailing        = isset( $_POST['mailing'] )             ? filter_var( wp_unslash( $_POST['mailing'] ), FILTER_VALIDATE_BOOLEAN )         : false;
+        $bot_confirmed  = isset( $_POST['bot_info_confirmed'] )  ? filter_var( wp_unslash( $_POST['bot_info_confirmed'] ), FILTER_VALIDATE_BOOLEAN ) : false;
 
         if ( empty( $name ) )        wp_send_json_error( 'Укажите ваше имя.' );
         if ( ! is_email( $email ) )  wp_send_json_error( 'Укажите корректный email.' );
         if ( empty( $site ) )        wp_send_json_error( 'Укажите ссылку на ваш сайт.' );
         if ( ! $consent )            wp_send_json_error( 'Необходимо дать согласие на обработку персональных данных.' );
-        if ( ! $mailing )            wp_send_json_error( 'Необходимо дать согласие на получение уведомлений.' );
 
         $domain   = self::get_current_domain();
         $site_url = get_site_url();
@@ -237,6 +238,8 @@ class WP_Ru_Max_License {
         $body .= "Имя:    " . $name . "\n";
         $body .= "Email:  " . $email . "\n";
         $body .= "Сайт заявителя: " . ( $site !== '' ? $site : '— не указано —' ) . "\n";
+        $body .= "ИНН:    " . ( $inn !== '' ? $inn : '— не указано —' ) . "\n";
+        $body .= "Телефон: " . ( $phone !== '' ? $phone : '— не указано —' ) . "\n";
         $body .= "Соцсеть/мессенджер: " . ( $social !== '' ? $social : '— не указано —' ) . "\n";
         $body .= "Сайт WP (auto): " . $site_url . $is_ms . "\n";
         $body .= "Домен:  " . $domain . "\n\n";
@@ -251,12 +254,25 @@ class WP_Ru_Max_License {
             'Reply-To: ' . $name . ' <' . $email . '>',
         );
 
+        $mail_error = '';
+        $mail_failed = function ( $error ) use ( &$mail_error ) {
+            if ( is_wp_error( $error ) ) {
+                $mail_error = $error->get_error_message();
+            }
+        };
+        add_action( 'wp_mail_failed', $mail_failed, 10, 1 );
         $sent = wp_mail( self::OWNER_EMAIL, $subject, $body, $headers );
+        remove_action( 'wp_mail_failed', $mail_failed, 10 );
 
         if ( $sent ) {
             wp_send_json_success( 'Запрос отправлен! Владелец пришлёт ключ на ' . $email . ' в ближайшее время.' );
         } else {
-            wp_send_json_error( 'Не удалось отправить запрос. Напишите напрямую: ' . self::OWNER_EMAIL );
+            if ( class_exists( 'WP_Ru_Max_Logger', false ) ) {
+                WP_Ru_Max_Logger::log( 'license', 'error', 'Не удалось отправить запрос лицензии через wp_mail().', array(
+                    'error' => $mail_error,
+                ) );
+            }
+            wp_send_json_error( 'Не удалось отправить запрос с сайта. Проверьте настройки SMTP или напишите напрямую: ' . self::OWNER_EMAIL );
         }
     }
 
