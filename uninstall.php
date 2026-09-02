@@ -7,7 +7,9 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 // Загружаем классы из папки текущей установки. Это также позволяет удалить
 // старую неполную установку без fatal error из-за отсутствующего автопостинга.
 $wp_ru_max_includes_dir = __DIR__ . '/includes/';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-auto-posting.php';
+if ( is_readable( $wp_ru_max_includes_dir . 'class-wp-ru-max-auto-posting.php' ) ) {
+    require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-auto-posting.php';
+}
 require_once $wp_ru_max_includes_dir . 'class-wp-ru-max.php';
 
 WP_Ru_Max::uninstall();
