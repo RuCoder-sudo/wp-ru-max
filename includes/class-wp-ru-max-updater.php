@@ -13,6 +13,8 @@ class WP_Ru_Max_Updater {
     private $current_version;
     private $cache_key;
     private $cache_ttl = 43200; // 12 часов
+    private $was_active = false;
+    private $was_network_active = false;
 
     public function __construct( $plugin_file, $current_version ) {
         $this->plugin_file     = $plugin_file;
@@ -29,6 +31,7 @@ class WP_Ru_Max_Updater {
 
         add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'check_update' ) );
         add_filter( 'plugins_api',                           array( $this, 'plugin_info' ), 10, 3 );
+        add_filter( 'upgrader_pre_install',                  array( $this, 'before_install' ), 9, 2 );
         add_filter( 'upgrader_post_install',                 array( $this, 'after_install' ), 10, 3 );
     }
 
@@ -105,6 +108,12 @@ class WP_Ru_Max_Updater {
         $latest_version = $this->normalize_version( $release['tag_name'] );
 
         if ( version_compare( $latest_version, $this->current_version, '>' ) ) {
+            if ( isset( $transient->no_update ) && is_array( $transient->no_update ) ) {
+                unset( $transient->no_update[ $this->plugin_slug ] );
+            }
+            if ( ! isset( $transient->response ) || ! is_array( $transient->response ) ) {
+                $transient->response = array();
+            }
             $transient->response[ $this->plugin_slug ] = (object) array(
                 'id'           => $this->plugin_slug,
                 'slug'         => dirname( $this->plugin_slug ),
@@ -118,16 +127,24 @@ class WP_Ru_Max_Updater {
                 'banners'      => array(),
             );
         } else {
-            if ( isset( $transient->no_update ) ) {
-                $transient->no_update[ $this->plugin_slug ] = (object) array(
-                    'id'          => $this->plugin_slug,
-                    'slug'        => dirname( $this->plugin_slug ),
-                    'plugin'      => $this->plugin_slug,
-                    'new_version' => $this->current_version,
-                    'url'         => "https://github.com/{$this->github_user}/{$this->github_repo}",
-                    'package'     => '',
-                );
+            // WordPress may retain the previous response entry in the site
+            // transient after a successful update. Remove it explicitly;
+            // otherwise the same update is offered again until the second
+            // manual click refreshes the transient.
+            if ( isset( $transient->response ) && is_array( $transient->response ) ) {
+                unset( $transient->response[ $this->plugin_slug ] );
             }
+            if ( ! isset( $transient->no_update ) || ! is_array( $transient->no_update ) ) {
+                $transient->no_update = array();
+            }
+            $transient->no_update[ $this->plugin_slug ] = (object) array(
+                'id'          => $this->plugin_slug,
+                'slug'        => dirname( $this->plugin_slug ),
+                'plugin'      => $this->plugin_slug,
+                'new_version' => $this->current_version,
+                'url'         => "https://github.com/{$this->github_user}/{$this->github_repo}",
+                'package'     => '',
+            );
         }
 
         return $transient;
@@ -171,12 +188,38 @@ class WP_Ru_Max_Updater {
     }
 
     /**
+     * Запомнить состояние плагина до того, как WordPress временно отключит его.
+     */
+    public function before_install( $response, $hook_extra ) {
+        if ( ! isset( $hook_extra['plugin'] ) || $hook_extra['plugin'] !== $this->plugin_slug ) {
+            return $response;
+        }
+
+        if ( ! function_exists( 'is_plugin_active' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $this->was_active = is_plugin_active( $this->plugin_slug );
+        if ( is_multisite() && function_exists( 'is_plugin_active_for_network' ) ) {
+            $this->was_network_active = is_plugin_active_for_network( $this->plugin_slug );
+        }
+
+        return $response;
+    }
+
+    /**
      * После установки — переименовать папку в правильное имя
-     * и реактивировать плагин автоматически.
+     * и при необходимости вернуть его в активное состояние.
      */
     public function after_install( $response, $hook_extra, $result ) {
         if ( ! isset( $hook_extra['plugin'] ) || $hook_extra['plugin'] !== $this->plugin_slug ) {
             return $response;
+        }
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+        if ( ! is_array( $result ) ) {
+            return new WP_Error( 'install_result_missing', 'WP Ru-max: WordPress не вернул результат установки обновления.' );
         }
 
         global $wp_filesystem;
@@ -210,15 +253,25 @@ class WP_Ru_Max_Updater {
             return new WP_Error( 'rename_failed', 'WP Ru-max: не удалось переименовать папку плагина после обновления.' );
         }
 
-        $result['destination'] = $plugin_folder;
-
-        // Реактивируем плагин. Проверяем ошибку, но не прерываем —
-        // папка уже переименована корректно, плагин можно включить вручную.
-        $activate_result = activate_plugin( $this->plugin_slug );
-        if ( is_wp_error( $activate_result ) ) {
-            error_log( 'WP Ru-max updater: реактивация не удалась — ' . $activate_result->get_error_message() );
+        // Возвращаем только прежнее состояние. Обновление не должно
+        // неожиданно активировать плагин, который был отключён администратором.
+        if ( $this->was_active ) {
+            if ( ! function_exists( 'activate_plugin' ) ) {
+                require_once ABSPATH . 'wp-admin/includes/plugin.php';
+            }
+            $activate_result = activate_plugin( $this->plugin_slug, '', $this->was_network_active );
+            if ( is_wp_error( $activate_result ) ) {
+                error_log( 'WP Ru-max updater: реактивация не удалась — ' . $activate_result->get_error_message() );
+            }
         }
 
-        return $result;
+        // Do not leave the old response object in the site transient. Core
+        // normally refreshes it too, but custom update filters and older
+        // WordPress versions can otherwise show the same release again.
+        delete_site_transient( 'update_plugins' );
+
+        // The third argument is input install-result data. The filter itself
+        // must return the response value, not that data array.
+        return $response;
     }
 }
