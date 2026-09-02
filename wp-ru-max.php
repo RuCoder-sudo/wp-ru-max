@@ -3,7 +3,7 @@
  * Plugin Name:       WP Ru-max
  * Plugin URI:        https://fixcoder.ru/wp-ru-max/
  * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Jetpack / Elementor и настраиваемый чат-виджет с анимацией и звуком. Поддерживает WordPress Multisite (мультисайт) и поддомены.
- * Version:           1.0.54
+ * Version:           1.0.55
  * Author:            Сергей Солошенко (RuCoder)
  * Author URI:        https://fixcoder.ru/
  * License:           GPL v2 or later
@@ -73,47 +73,54 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'WP_RU_MAX_VERSION', '1.0.54' );
-define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
-define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
-define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
-define( 'WP_RU_MAX_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
-define( 'WP_RU_MAX_API_BASE', 'https://platform-api2.max.ru' );
+if ( ! defined( 'WP_RU_MAX_VERSION' ) ) define( 'WP_RU_MAX_VERSION', '1.0.55' );
+if ( ! defined( 'WP_RU_MAX_PLUGIN_FILE' ) ) define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
+if ( ! defined( 'WP_RU_MAX_PLUGIN_DIR' ) ) define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+if ( ! defined( 'WP_RU_MAX_PLUGIN_URL' ) ) define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+if ( ! defined( 'WP_RU_MAX_PLUGIN_BASENAME' ) ) define( 'WP_RU_MAX_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
+if ( ! defined( 'WP_RU_MAX_API_BASE' ) ) define( 'WP_RU_MAX_API_BASE', 'https://platform-api2.max.ru' );
 
 // PRO is bundled into the main plugin. The option names stay compatible with
 // the standalone add-on so existing settings and conversations are preserved.
-define( 'WP_RU_MAX_PRO_BUNDLED', true );
-// Version 1.0.54: the bundled module uses the same cache-busting version as
+if ( ! defined( 'WP_RU_MAX_PRO_BUNDLED' ) ) define( 'WP_RU_MAX_PRO_BUNDLED', true );
+// Version 1.0.55: the bundled module uses the same cache-busting version as
 // the main plugin, so all updated CSS/JS files are refreshed together.
-if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.54' );
+if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.55' );
 if ( ! defined( 'WP_RU_MAX_PRO_FILE' ) ) define( 'WP_RU_MAX_PRO_FILE', __FILE__ );
 if ( ! defined( 'WP_RU_MAX_PRO_DIR' ) ) define( 'WP_RU_MAX_PRO_DIR', WP_RU_MAX_PLUGIN_DIR );
 if ( ! defined( 'WP_RU_MAX_PRO_URL' ) ) define( 'WP_RU_MAX_PRO_URL', WP_RU_MAX_PLUGIN_URL . 'assets/pro/' );
 if ( ! defined( 'WP_RU_MAX_PRO_OPTION' ) ) define( 'WP_RU_MAX_PRO_OPTION', 'wp_ru_max_pro_settings' );
 if ( ! defined( 'WP_RU_MAX_PRO_LICENSE_OPTION' ) ) define( 'WP_RU_MAX_PRO_LICENSE_OPTION', 'wp_ru_max_pro_license' );
 
-require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max.php';
-require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-api.php';
-require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-post-sender.php';
-require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-auto-posting.php';
-require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-notifications.php';
-require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-chat-widget.php';
-require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-logger.php';
-require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-license.php';
-require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-admin.php';
-require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-updater.php';
-require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-share.php';
-require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-oauth.php';
-require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-telegram-api.php';
-require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-social-poster.php';
+// Always load PHP files from the directory of this plugin file. A legacy
+// add-on or a second copy of the plugin may have defined the old generic
+// path constant before this file is loaded.
+$wp_ru_max_includes_dir = __DIR__ . '/includes/';
+
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-compat.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-api.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-post-sender.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-auto-posting.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-notifications.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-chat-widget.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-logger.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-license.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-admin.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-contacts.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-updater.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-share.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-oauth.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-telegram-api.php';
+require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-social-poster.php';
 // If the old add-on was loaded first, let it own the compatible PRO classes
 // for this request. If the main plugin was loaded first, the add-on exits via
 // its guard and these bundled classes are used.
 if ( ! function_exists( 'wp_ru_max_pro_settings' ) ) {
-    require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-pro.php';
-    require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-pro-license.php';
-    require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-pro-admin.php';
-    require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-pro-widget.php';
+    require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-pro.php';
+    require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-pro-license.php';
+    require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-pro-admin.php';
+    require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-pro-widget.php';
 }
 
 function wp_ru_max() {
@@ -168,7 +175,7 @@ register_deactivation_hook( __FILE__, array( 'WP_Ru_Max', 'deactivate' ) );
 
 // Загружаем сетевой класс для Multisite
 if ( function_exists( 'is_multisite' ) && is_multisite() ) {
-    require_once WP_RU_MAX_PLUGIN_DIR . 'includes/class-wp-ru-max-network-admin.php';
+    require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-network-admin.php';
     WP_Ru_Max_Network_Admin::instance();
 }
 
