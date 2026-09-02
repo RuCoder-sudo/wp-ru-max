@@ -33,10 +33,16 @@ class WP_Ru_Max {
     }
 
     public function init() {
-        WP_Ru_Max_License::instance();
-        WP_Ru_Max_License::recheck_if_needed();
-        WP_Ru_Max_Admin::instance();
-        WP_Ru_Max_Post_Sender::instance();
+        if ( class_exists( 'WP_Ru_Max_License', false ) ) {
+            WP_Ru_Max_License::instance();
+            WP_Ru_Max_License::recheck_if_needed();
+        }
+        if ( class_exists( 'WP_Ru_Max_Admin', false ) ) {
+            WP_Ru_Max_Admin::instance();
+        }
+        if ( class_exists( 'WP_Ru_Max_Post_Sender', false ) ) {
+            WP_Ru_Max_Post_Sender::instance();
+        }
         // An incomplete update or a legacy add-on can leave this class
         // unavailable even though the main plugin file is still loaded.
         // Retry from this file's own directory and never take down the site
@@ -50,11 +56,21 @@ class WP_Ru_Max {
         if ( class_exists( 'WP_Ru_Max_Auto_Posting', false ) ) {
             WP_Ru_Max_Auto_Posting::instance();
         }
-        WP_Ru_Max_Notifications::instance();
-        WP_Ru_Max_Chat_Widget::instance();
-        WP_Ru_Max_Logger::instance();
-        WP_Ru_Max_Share::instance();
-        WP_Ru_Max_OAuth::instance();
+        if ( class_exists( 'WP_Ru_Max_Notifications', false ) ) {
+            WP_Ru_Max_Notifications::instance();
+        }
+        if ( class_exists( 'WP_Ru_Max_Chat_Widget', false ) ) {
+            WP_Ru_Max_Chat_Widget::instance();
+        }
+        if ( class_exists( 'WP_Ru_Max_Logger', false ) ) {
+            WP_Ru_Max_Logger::instance();
+        }
+        if ( class_exists( 'WP_Ru_Max_Share', false ) ) {
+            WP_Ru_Max_Share::instance();
+        }
+        if ( class_exists( 'WP_Ru_Max_OAuth', false ) ) {
+            WP_Ru_Max_OAuth::instance();
+        }
     }
 
     public function load_textdomain() {
