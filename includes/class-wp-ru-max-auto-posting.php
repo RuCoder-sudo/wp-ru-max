@@ -347,9 +347,81 @@ class WP_Ru_Max_Auto_Posting {
         update_option( self::QUEUE_OPTION, $queue, false );
     }
 
+    /**
+     * Восстанавливает очередь по расписанию, сохранённому в метаданных записи.
+     *
+     * Ранние версии календаря могли сохранить расписание записи, но не
+     * создать соответствующий элемент в QUEUE_OPTION. В таком случае событие
+     * видно в календаре, однако cron и счётчики очереди его не видят.
+     */
+    private function sync_queue_from_post_meta() {
+        $queue = $this->get_queue();
+        $changed = false;
+        $post_ids = get_posts( array(
+            'post_type'      => 'post',
+            'post_status'    => array( 'publish', 'future', 'draft', 'pending' ),
+            'posts_per_page' => -1,
+            'fields'         => 'ids',
+        ) );
+
+        foreach ( (array) $post_ids as $post_id ) {
+            $post_id = (int) $post_id;
+            if ( ! $post_id ) {
+                continue;
+            }
+
+            $config = $this->get_post_config( $post_id );
+            $key = $this->job_key( $post_id );
+            if ( empty( $config['networks'] ) || empty( $config['datetime'] ) ) {
+                continue;
+            }
+
+            $run_at = $this->datetime_to_timestamp( $config['datetime'] );
+            if ( ! $run_at ) {
+                continue;
+            }
+
+            $completed = true;
+            foreach ( $config['networks'] as $network ) {
+                if ( ! in_array( $config['status'][ $network ] ?? '', array( 'sent', 'skipped' ), true ) ) {
+                    $completed = false;
+                    break;
+                }
+            }
+
+            if ( $completed ) {
+                if ( isset( $queue[ $key ] ) ) {
+                    unset( $queue[ $key ] );
+                    $changed = true;
+                }
+                continue;
+            }
+
+            if ( ! isset( $queue[ $key ] ) ) {
+                $queue[ $key ] = array(
+                    'post_id'  => $post_id,
+                    'run_at'   => $run_at,
+                    'networks' => $config['networks'],
+                    'statuses' => $config['status'],
+                    'attempts' => array(),
+                    'errors'   => array(),
+                    'updated'  => current_time( 'mysql' ),
+                );
+                $changed = true;
+            }
+        }
+
+        if ( $changed ) {
+            $this->save_queue( $queue );
+            wp_clear_scheduled_hook( self::CRON_HOOK );
+            $this->ensure_worker();
+        }
+    }
+
     public static function get_queue_summary() {
-        $queue = get_option( self::QUEUE_OPTION, array() );
-        $queue = is_array( $queue ) ? $queue : array();
+        $instance = self::instance();
+        $instance->sync_queue_from_post_meta();
+        $queue = $instance->get_queue();
         $pending = 0;
         $errors  = 0;
         foreach ( $queue as $job ) {
