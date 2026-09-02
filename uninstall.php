@@ -10,9 +10,13 @@ $wp_ru_max_includes_dir = __DIR__ . '/includes/';
 if ( is_readable( $wp_ru_max_includes_dir . 'class-wp-ru-max-auto-posting.php' ) ) {
     require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-auto-posting.php';
 }
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max.php';
+if ( is_readable( $wp_ru_max_includes_dir . 'class-wp-ru-max.php' ) ) {
+    require_once $wp_ru_max_includes_dir . 'class-wp-ru-max.php';
+}
 
-WP_Ru_Max::uninstall();
+if ( class_exists( 'WP_Ru_Max', false ) ) {
+    WP_Ru_Max::uninstall();
+}
 
 // The former extension stored these separately from the main settings.
 // Remove them only when the user explicitly enabled deletion on uninstall.
