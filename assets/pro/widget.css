@@ -1,4 +1,4 @@
-/* WP Ru-max PRO widget v1.0.54. */
+/* WP Ru-max PRO widget v1.0.57. */
 /* PRO extends the existing WP Ru-max widget. It must never create a second launcher. */
 #wp-ru-max-widget #wp-ru-max-pro-menu{position:absolute;left:0;right:0;bottom:0;height:1px;z-index:2;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;pointer-events:none}
 #wp-ru-max-widget #wp-ru-max-pro-menu .wprmp-panel{position:absolute;bottom:calc(var(--wprmp-size) + 14px);width:min(430px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:min(74vh,620px);box-sizing:border-box;overflow-y:auto;background:#fff;border:1px solid rgba(255,255,255,.7);border-radius:18px;box-shadow:0 10px 35px rgba(15,23,42,.22);padding:18px;display:none;pointer-events:auto}
