@@ -30,7 +30,7 @@ class WP_Ru_Max_Pro_Admin {
         if ( false === strpos( $hook, 'wp-ru-max' ) ) {
             return;
         }
-        // Keep the plugin release at v1.0.58, but bust browser caches when
+        // Keep the plugin release version, but bust browser caches when
         // the bundled admin assets change between maintenance updates.
         $asset_versions = array();
         foreach ( array( 'admin.css', 'preview.css', 'admin.js' ) as $asset ) {
