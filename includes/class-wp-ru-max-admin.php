@@ -3336,6 +3336,14 @@ jQuery(function($){
                             </td>
                         </tr>
                         <tr>
+                            <th scope="row"><label for="req_inn">ИНН</label></th>
+                            <td><input type="text" id="req_inn" name="req_inn" class="regular-text" inputmode="numeric" placeholder="ИНН организации или ИП" /></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="req_phone">Телефон</label></th>
+                            <td><input type="tel" id="req_phone" name="req_phone" class="regular-text" placeholder="+7 900 000-00-00" /></td>
+                        </tr>
+                        <tr>
                             <th scope="row"><label for="req_social">Контакт для быстрой связи</label></th>
                             <td><input type="text" id="req_social" name="req_social" class="regular-text" placeholder="Telegram @username, MAX, WhatsApp +7..." /></td>
                         </tr>
@@ -3353,7 +3361,7 @@ jQuery(function($){
                                 <br /><br />
                                 <label class="wp-ru-max-checkbox-label">
                                     <input type="checkbox" id="consent_mailing" name="consent_mailing" value="1" />
-                                    Согласен(а) получать информационные рассылки.
+                                    Согласен(а) получать информационные рассылки (необязательно).
                                 </label>
                             </td>
                         </tr>
@@ -3431,7 +3439,6 @@ jQuery(function($){
 
             function updateRequestBtn(){
                 var ok = $('#consent_personal').is(':checked') &&
-                         $('#consent_mailing').is(':checked') &&
                          $('#bot_info_confirmed').is(':checked');
                 $('#request_license_btn').prop('disabled', !ok);
             }
@@ -3450,6 +3457,8 @@ jQuery(function($){
                 $.post(wpRuMax.ajaxUrl, {
                     action: 'wp_ru_max_request_license', nonce: wpRuMax.nonce,
                     req_name: name, req_email: email, req_site: site,
+                    req_inn: $('#req_inn').val().trim(),
+                    req_phone: $('#req_phone').val().trim(),
                     req_social: $('#req_social').val().trim(),
                     consent: $('#consent_personal').is(':checked') ? 1 : 0,
                     mailing: $('#consent_mailing').is(':checked') ? 1 : 0,
@@ -3457,7 +3466,7 @@ jQuery(function($){
                 }, function(resp){
                     if (resp.success) {
                         showResult('#license_request_result', true, resp.data);
-                        $('#req_name, #req_email, #req_site, #req_social').val('');
+                        $('#req_name, #req_email, #req_site, #req_inn, #req_phone, #req_social').val('');
                         $('#consent_personal, #consent_mailing').prop('checked', false);
                         $btn.prop('disabled', true).text('Отправить запрос');
                     } else {
