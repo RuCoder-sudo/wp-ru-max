@@ -1,343 +1,228 @@
 <?php
 /**
- * Кнопка «Поделиться в MAX» — добавляет кнопку в конец контента статьи.
+ * Bundled WP Ru-max PRO functionality.
  *
- * Принцип работы:
- *  - На мобильных (Web Share API доступен): открывает нативный диалог ОС —
- *    пользователь выбирает приложение MAX из списка.
- *  - На всех остальных устройствах: показывает мини-попап под кнопкой с двумя
- *    действиями:
- *      1) «Открыть MAX» — пытается открыть десктопное/мобильное приложение
- *         через deep link maxim://, и параллельно копирует ссылку в буфер.
- *      2) «Скопировать ссылку» — копирует URL в буфер обмена.
- *
- * Кнопка всегда выравнивается по левому краю.
+ * This file keeps the public option names and AJAX actions of the former
+ * standalone wp-ru-max-pro add-on. That makes the main plugin a drop-in
+ * replacement without losing saved settings or conversations.
  */
-
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class WP_Ru_Max_Share {
+function wp_ru_max_pro_is_available() {
+    return defined( 'WP_RU_MAX_VERSION' ) && class_exists( 'WP_Ru_Max_License' );
+}
 
-    private static $instance = null;
+function wp_ru_max_pro_is_enabled() {
+    // The customer-communication module is bundled with the main plugin.
+    // Keep the public helper for compatibility with the old add-on, but do
+    // not gate the module behind either of the former PRO licenses.
+    return wp_ru_max_pro_is_available();
+}
 
-    public static function instance() {
-        if ( null === self::$instance ) {
-            self::$instance = new self();
+/**
+ * Parse values coming from both WordPress options and AJAX form posts.
+ * jQuery serializes a false boolean as the string "false"; empty() would
+ * incorrectly treat that string as enabled.
+ */
+function wp_ru_max_pro_bool( $value, $default = false ) {
+    if ( is_bool( $value ) ) {
+        return $value;
+    }
+    if ( is_int( $value ) || is_float( $value ) ) {
+        return (bool) $value;
+    }
+    if ( is_string( $value ) ) {
+        $value = strtolower( trim( $value ) );
+        if ( in_array( $value, array( '1', 'true', 'yes', 'on' ), true ) ) {
+            return true;
         }
-        return self::$instance;
+        if ( in_array( $value, array( '', '0', 'false', 'no', 'off', 'null' ), true ) ) {
+            return false;
+        }
+    }
+    return (bool) $default;
+}
+
+function wp_ru_max_pro_settings() {
+    $defaults = array(
+        'enabled' => true,
+        'channels' => array(
+            'phone'     => array( 'enabled' => false, 'value' => '', 'icon' => 'phone-svg.svg', 'desktop' => true, 'mobile' => true ),
+            'telegram'  => array( 'enabled' => false, 'value' => '', 'icon' => 'telegram.svg', 'desktop' => true, 'mobile' => true ),
+            'vkontakte' => array( 'enabled' => false, 'value' => '', 'icon' => 'vkontakte.svg', 'desktop' => true, 'mobile' => true ),
+            'contact'   => array( 'enabled' => false, 'icon' => 'contact.svg', 'desktop' => true, 'mobile' => true ),
+            'email'     => array( 'enabled' => false, 'value' => '', 'icon' => 'email.svg', 'desktop' => true, 'mobile' => true ),
+        ),
+        'custom_channels' => array(),
+        'channel_order' => array( 'phone', 'telegram', 'vkontakte', 'contact', 'email' ),
+        'style' => array(
+            'mode' => 'chat',
+            'layout' => 'circle',
+            'icon' => 'chat',
+            'icon_background' => '#4f46e5',
+            'icon_color' => '#ffffff',
+            'position' => 'right',
+            'size' => 60,
+            'cta' => 'Написать нам',
+            'cta_behavior' => 'hover',
+            'cta_text_color' => '#ffffff',
+            'cta_background' => '#4f46e5',
+            'page_title' => '',
+            'backdrop_blur' => false,
+            'attention' => 'pulse',
+        ),
+        'chat' => array(
+            // Версия 1.0.51: живой чат можно отключить независимо от MAX и
+            // остальных каналов связи. По умолчанию сохраняем прежнее поведение.
+            'live_chat_enabled' => true,
+            'target' => '',
+            'title' => 'Живой чат',
+            'welcome' => 'Здравствуйте! Чем можем помочь?',
+            'manager_online' => false,
+            'bot_enabled' => true,
+            'schedule_enabled' => false,
+            'schedule_days' => array( 1, 2, 3, 4, 5 ),
+            'schedule_start' => '09:00',
+            'schedule_end' => '18:00',
+            'bot_name' => 'Помощник',
+            'bot_offline_message' => 'Менеджер сейчас не в сети. Я уже передал ваше сообщение команде и постараюсь помочь прямо сейчас.',
+            'faq_enabled' => true,
+            'faq' => array(
+                array( 'question' => 'Как быстро вы отвечаете?', 'answer' => 'Обычно менеджер отвечает в течение 15 минут в рабочее время.' ),
+                array( 'question' => 'Можно ли обсудить заказ?', 'answer' => 'Да, напишите нам детали — мы подключим нужного специалиста.' ),
+            ),
+            'contact_form_enabled' => true,
+            'quick_buttons' => array(
+                array( 'label' => 'Позвать менеджера', 'message' => 'Хочу поговорить с менеджером' ),
+                array( 'label' => 'Узнать стоимость', 'message' => 'Подскажите, пожалуйста, стоимость' ),
+            ),
+        ),
+    );
+
+    $saved = get_option( WP_RU_MAX_PRO_OPTION, array() );
+    $saved = is_array( $saved ) ? $saved : array();
+    $settings = wp_parse_args( $saved, $defaults );
+    $settings['enabled'] = wp_ru_max_pro_bool( $settings['enabled'] ?? $defaults['enabled'], $defaults['enabled'] );
+
+    foreach ( array( 'channels', 'style', 'chat' ) as $group ) {
+        $settings[ $group ] = wp_parse_args(
+            is_array( $saved[ $group ] ?? null ) ? $saved[ $group ] : array(),
+            $defaults[ $group ]
+        );
     }
 
-    private function __construct() {
-        $settings = get_option( 'wp_ru_max_settings', array() );
-        if ( ! empty( $settings['share_button_enabled'] ) ) {
-            add_filter( 'the_content', array( $this, 'append_share_button' ) );
-            add_action( 'wp_head',   array( $this, 'maybe_share_styles' ) );
-            add_action( 'wp_footer', array( $this, 'maybe_share_script' ) );
+    // Эти варианты больше не показываются в настройках. Старые сохранённые
+    // значения переводим в доступный вариант, чтобы они не возвращались на
+    // сайт после обновления плагина.
+    if ( ! in_array( $settings['style']['layout'] ?? '', array( 'circle', 'grid', 'corner', 'menu', 'stack', 'rows' ), true ) ) {
+        $settings['style']['layout'] = $defaults['style']['layout'];
+    }
+
+    $settings['chat']['faq'] = is_array( $settings['chat']['faq'] ?? null ) ? $settings['chat']['faq'] : $defaults['chat']['faq'];
+    $settings['chat']['quick_buttons'] = is_array( $settings['chat']['quick_buttons'] ?? null ) ? $settings['chat']['quick_buttons'] : $defaults['chat']['quick_buttons'];
+
+    foreach ( $defaults['channels'] as $key => $channel_defaults ) {
+        $settings['channels'][ $key ] = wp_parse_args(
+            is_array( $settings['channels'][ $key ] ?? null ) ? $settings['channels'][ $key ] : array(),
+            $channel_defaults
+        );
+        foreach ( array( 'enabled', 'desktop', 'mobile' ) as $bool_key ) {
+            $settings['channels'][ $key ][ $bool_key ] = wp_ru_max_pro_bool(
+                $settings['channels'][ $key ][ $bool_key ] ?? $channel_defaults[ $bool_key ],
+                $channel_defaults[ $bool_key ]
+            );
         }
     }
 
-    // ─── HTML кнопки ─────────────────────────────────────────────────────────
-
-    public function append_share_button( $content ) {
-        if ( ! is_singular() || ! in_the_loop() || ! is_main_query() ) {
-            return $content;
-        }
-
-        $url   = esc_url( get_permalink() );
-        $title = esc_attr( get_the_title() );
-        $icon  = esc_url( WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png' );
-
-        $html  = '<div class="wp-ru-max-share-wrap">';
-        $html .= '<button type="button" class="wp-ru-max-share-btn"'
-               . ' data-url="'   . $url   . '"'
-               . ' data-title="' . $title . '"'
-               . ' aria-label="Поделиться в MAX"'
-               . ' aria-haspopup="true" aria-expanded="false">';
-        $html .= '<img src="' . $icon . '" width="20" height="20" alt="">';
-        $html .= 'Поделиться в MAX';
-        $html .= '</button>';
-
-        // Попап — показывается только когда Web Share API недоступен
-        $html .= '<div class="wp-ru-max-share-popup" role="dialog" aria-label="Поделиться в MAX" hidden>';
-        $html .= '<button type="button" class="wp-ru-max-share-open-max">';
-        $html .=   '<img src="' . $icon . '" width="18" height="18" alt=""> Открыть MAX';
-        $html .= '</button>';
-        $html .= '<button type="button" class="wp-ru-max-share-copy">';
-        $html .=   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-        $html .=   ' Скопировать ссылку';
-        $html .= '</button>';
-        $html .= '<div class="wp-ru-max-share-notice" role="status" aria-live="polite"></div>';
-        $html .= '</div>';
-
-        $html .= '</div>';
-
-        return $content . $html;
+    $settings['style']['backdrop_blur'] = wp_ru_max_pro_bool(
+        $settings['style']['backdrop_blur'] ?? $defaults['style']['backdrop_blur'],
+        $defaults['style']['backdrop_blur']
+    );
+    foreach ( array( 'live_chat_enabled', 'manager_online', 'bot_enabled', 'schedule_enabled', 'faq_enabled', 'contact_form_enabled' ) as $bool_key ) {
+        $settings['chat'][ $bool_key ] = wp_ru_max_pro_bool(
+            $settings['chat'][ $bool_key ] ?? $defaults['chat'][ $bool_key ],
+            $defaults['chat'][ $bool_key ]
+        );
     }
 
-    // ─── CSS ─────────────────────────────────────────────────────────────────
-
-    public function maybe_share_styles() {
-        if ( ! is_singular() ) {
-            return;
+    $custom_channels = array();
+    foreach ( (array) ( $saved['custom_channels'] ?? array() ) as $custom ) {
+        if ( ! is_array( $custom ) ) {
+            continue;
         }
-        ?>
-<style id="wp-ru-max-share-styles">
-/* Обёртка — всегда слева */
-.wp-ru-max-share-wrap {
-    position: relative;
-    display: block;
-    text-align: left;
-    margin: 28px 0 16px;
-    padding-top: 20px;
-    border-top: 1px solid #e5e7eb;
-    float: none;
-}
-
-/* Главная кнопка */
-.wp-ru-max-share-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 11px 22px;
-    background: #0077ff;
-    color: #fff;
-    border: none;
-    border-radius: 10px;
-    font-size: 15px;
-    font-weight: 600;
-    line-height: 1;
-    cursor: pointer;
-    font-family: inherit;
-    transition: background .18s, box-shadow .18s, transform .1s;
-    box-shadow: 0 2px 10px rgba(0,119,255,.30);
-    -webkit-appearance: none;
-    appearance: none;
-    vertical-align: middle;
-}
-.wp-ru-max-share-btn img { display: block; flex-shrink: 0; }
-.wp-ru-max-share-btn:hover {
-    background: #005ee0;
-    box-shadow: 0 4px 16px rgba(0,119,255,.40);
-    transform: translateY(-1px);
-    color: #fff;
-}
-.wp-ru-max-share-btn:active { transform: translateY(0); }
-
-/* Попап-карточка */
-.wp-ru-max-share-popup {
-    position: absolute;
-    top: calc(100% - 6px);
-    left: 0;
-    z-index: 9999;
-    background: #fff;
-    border: 1px solid #e0e7ef;
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0,0,0,.15);
-    padding: 8px;
-    min-width: 230px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-.wp-ru-max-share-popup[hidden] { display: none; }
-
-/* Кнопки внутри попапа */
-.wp-ru-max-share-open-max,
-.wp-ru-max-share-copy {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 10px 14px;
-    border: none;
-    border-radius: 8px;
-    background: transparent;
-    font-size: 14px;
-    font-weight: 500;
-    font-family: inherit;
-    color: #1a1a2e;
-    cursor: pointer;
-    text-align: left;
-    transition: background .15s;
-    -webkit-appearance: none;
-    appearance: none;
-}
-.wp-ru-max-share-open-max:hover { background: #eff6ff; color: #0077ff; }
-.wp-ru-max-share-copy:hover     { background: #f3f4f6; }
-.wp-ru-max-share-open-max img   { flex-shrink: 0; }
-.wp-ru-max-share-copy svg       { flex-shrink: 0; }
-
-/* Уведомление внутри попапа */
-.wp-ru-max-share-notice {
-    font-size: 12px;
-    color: #16a34a;
-    padding: 0 14px 4px;
-    min-height: 0;
-    transition: opacity .2s;
-}
-.wp-ru-max-share-notice:empty { display: none; }
-
-@media (max-width: 480px) {
-    .wp-ru-max-share-popup {
-        position: fixed;
-        bottom: 16px;
-        left: 16px;
-        right: 16px;
-        top: auto;
-        min-width: unset;
-        border-radius: 16px;
-        padding: 12px;
-        box-shadow: 0 -4px 32px rgba(0,0,0,.18);
+        $id = sanitize_key( $custom['id'] ?? '' );
+        if ( '' === $id || in_array( $id, array_keys( $defaults['channels'] ), true ) ) {
+            continue;
+        }
+        $label = sanitize_text_field( $custom['label'] ?? '' );
+        $url = esc_url_raw( $custom['url'] ?? '' );
+        $icon_url = esc_url_raw( $custom['icon_url'] ?? '' );
+        if ( '' === $label || '' === $url || '' === $icon_url ) {
+            continue;
+        }
+        $custom_channels[ $id ] = array(
+            'id' => $id,
+            'label' => $label,
+            'url' => $url,
+            'icon_url' => $icon_url,
+            'enabled' => wp_ru_max_pro_bool( $custom['enabled'] ?? false ),
+            'desktop' => wp_ru_max_pro_bool( $custom['desktop'] ?? true, true ),
+            'mobile' => wp_ru_max_pro_bool( $custom['mobile'] ?? true, true ),
+        );
     }
+    $settings['custom_channels'] = $custom_channels;
+
+    $order = is_array( $settings['channel_order'] ?? null ) ? $settings['channel_order'] : $defaults['channel_order'];
+    $allowed_order = array_merge( array_keys( $defaults['channels'] ), array_keys( $custom_channels ) );
+    $settings['channel_order'] = array_values( array_unique( array_merge(
+        array_intersect( $order, $allowed_order ),
+        array_diff( $defaults['channel_order'], $order ),
+        array_diff( array_keys( $custom_channels ), $order )
+    ) ) );
+
+    return $settings;
 }
-</style>
-        <?php
-    }
 
-    // ─── JavaScript ──────────────────────────────────────────────────────────
-
-    public function maybe_share_script() {
-        if ( ! is_singular() ) {
-            return;
-        }
-        ?>
-<script id="wp-ru-max-share-js">
-(function () {
-    'use strict';
-
-    document.addEventListener('DOMContentLoaded', function () {
-
-        // Закрываем все открытые попапы по клику вне
-        document.addEventListener('click', function (e) {
-            if (!e.target.closest('.wp-ru-max-share-wrap')) {
-                closeAllPopups();
-            }
-        });
-
-        document.querySelectorAll('.wp-ru-max-share-wrap').forEach(function (wrap) {
-            var btn    = wrap.querySelector('.wp-ru-max-share-btn');
-            var popup  = wrap.querySelector('.wp-ru-max-share-popup');
-            var btnMax = wrap.querySelector('.wp-ru-max-share-open-max');
-            var btnCpy = wrap.querySelector('.wp-ru-max-share-copy');
-            var notice = wrap.querySelector('.wp-ru-max-share-notice');
-
-            if (!btn) return;
-
-            var url   = btn.dataset.url   || window.location.href;
-            var title = btn.dataset.title || document.title;
-
-            btn.addEventListener('click', function (e) {
-                e.stopPropagation();
-
-                // На мобильных / поддерживающих Web Share API — нативный диалог
-                if (navigator.share) {
-                    navigator.share({ title: title, url: url })
-                        .catch(function (err) {
-                            // Пользователь закрыл диалог — ничего не делаем
-                        });
-                    return;
-                }
-
-                // На ПК — показываем попап
-                var isOpen = !popup.hidden;
-                closeAllPopups();
-                if (!isOpen) {
-                    popup.hidden = false;
-                    btn.setAttribute('aria-expanded', 'true');
-                    if (notice) notice.textContent = '';
-                }
-            });
-
-            // Кнопка «Открыть MAX»
-            if (btnMax) {
-                btnMax.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    openMaxApp(url, title);
-                    // Параллельно копируем ссылку в буфер
-                    copyToClipboard(url, function (ok) {
-                        if (notice) {
-                            notice.textContent = ok
-                                ? 'MAX открывается… Ссылка также скопирована!'
-                                : 'Открываем MAX…';
-                        }
-                    });
-                    setTimeout(function () { closeAllPopups(); }, 3000);
-                });
-            }
-
-            // Кнопка «Скопировать ссылку»
-            if (btnCpy) {
-                btnCpy.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    copyToClipboard(url, function (ok) {
-                        if (notice) {
-                            notice.textContent = ok ? '✓ Ссылка скопирована!' : 'Не удалось скопировать';
-                        }
-                        setTimeout(function () { closeAllPopups(); }, 2000);
-                    });
-                });
-            }
-        });
-
-        // ─── Вспомогательные функции ─────────────────────────────────────
-
-        function closeAllPopups() {
-            document.querySelectorAll('.wp-ru-max-share-popup').forEach(function (p) {
-                p.hidden = true;
-            });
-            document.querySelectorAll('.wp-ru-max-share-btn').forEach(function (b) {
-                b.setAttribute('aria-expanded', 'false');
-            });
-        }
-
-        /**
-         * Открывает приложение MAX через deep link maxim://.
-         * Работает на ПК (Windows/macOS) и мобильных, где установлен MAX.
-         * Если приложение не установлено — браузер просто ничего не делает.
-         */
-        function openMaxApp(url, title) {
-            var text     = title + '\n' + url;
-            var deepLink = 'maxim://forward?text=' + encodeURIComponent(text);
-
-            // Используем скрытый <a> чтобы не навигировать страницу
-            var a = document.createElement('a');
-            a.href = deepLink;
-            a.style.cssText = 'display:none;position:fixed;';
-            document.body.appendChild(a);
-            try { a.click(); } catch (err) {}
-            setTimeout(function () {
-                if (a.parentNode) a.parentNode.removeChild(a);
-            }, 500);
-        }
-
-        function copyToClipboard(text, cb) {
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text).then(
-                    function () { if (cb) cb(true); },
-                    function () { legacyCopy(text, cb); }
-                );
-            } else {
-                legacyCopy(text, cb);
-            }
-        }
-
-        function legacyCopy(text, cb) {
-            var ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
-            document.body.appendChild(ta);
-            ta.focus(); ta.select();
-            var ok = false;
-            try { ok = document.execCommand('copy'); } catch (e) {}
-            document.body.removeChild(ta);
-            if (cb) cb(ok);
-        }
-
-    });
-})();
-</script>
-        <?php
-    }
+function wp_ru_max_pro_main_widget_settings() {
+    $main = get_option( 'wp_ru_max_settings', array() );
+    $sizes = array( 'small' => 32, 'medium' => 48, 'large' => 64 );
+    return array(
+        'enabled' => ! empty( $main['chat_widget_enabled'] ),
+        'size' => $sizes[ $main['chat_widget_size'] ?? 'medium' ] ?? 48,
+        'position' => 'left' === ( $main['chat_widget_position'] ?? 'right' ) ? 'left' : 'right',
+        'bottom_offset' => max( 0, min( 300, absint( $main['chat_widget_bottom_offset'] ?? 20 ) ) ),
+        'welcome_enabled' => array_key_exists( 'chat_widget_message_enabled', $main ) ? ! empty( $main['chat_widget_message_enabled'] ) : true,
+    );
 }
+
+function wp_ru_max_pro_is_live_chat_available( $chat ) {
+    if ( empty( $chat['schedule_enabled'] ) ) {
+        return true;
+    }
+    $day = (int) current_time( 'w' );
+    $days = array_map( 'absint', (array) ( $chat['schedule_days'] ?? array() ) );
+    if ( ! in_array( $day, $days, true ) ) {
+        return false;
+    }
+    $now = current_time( 'H:i' );
+    $start = preg_match( '/^\d{2}:\d{2}$/', $chat['schedule_start'] ?? '' ) ? $chat['schedule_start'] : '09:00';
+    $end = preg_match( '/^\d{2}:\d{2}$/', $chat['schedule_end'] ?? '' ) ? $chat['schedule_end'] : '18:00';
+    return $start <= $end ? ( $now >= $start && $now <= $end ) : ( $now >= $start || $now <= $end );
+}
+
+function wp_ru_max_pro_boot() {
+    if ( ! wp_ru_max_pro_is_available() ) {
+        return;
+    }
+    WP_Ru_Max_Pro_Admin::instance();
+    WP_Ru_Max_Pro_Widget::instance();
+}
+add_action( 'plugins_loaded', 'wp_ru_max_pro_boot', 20 );
+
+register_activation_hook( WP_RU_MAX_PRO_FILE, function() {
+    if ( false === get_option( WP_RU_MAX_PRO_OPTION ) ) {
+        add_option( WP_RU_MAX_PRO_OPTION, wp_ru_max_pro_settings() );
+    }
+} );
