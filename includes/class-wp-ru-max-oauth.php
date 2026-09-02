@@ -1,45 +1,12 @@
 <?php
-/**
- * MAX-авторизация через мессенджер MAX.
- *
- * ── Как работает MAX авторизация ─────────────────────────────────────────────
- * MAX не предоставляет публичный OAuth 2.0 endpoint (Client ID / Client Secret
- * для внешних сайтов не существует). Авторизация работает через систему
- * Mini App (мини-приложений) — аналогично Telegram Web App:
- *
- *   1. Настройте Mini App на платформе MAX: Чат-боты → ваш бот → «Мини-приложение»
- *      Укажите URL вашего сайта как URL мини-приложения.
- *   2. Когда пользователь открывает сайт через бота в MAX, мессенджер
- *      передаёт подписанные данные профиля (initData).
- *   3. Плагин проверяет подпись HMAC-SHA256 (ключ = Bot Token),
- *      извлекает ID / имя / аватар пользователя и выполняет вход.
- *
- * ── Алгоритм проверки подписи ────────────────────────────────────────────────
- *   secret_key = HMAC-SHA256("WebAppData", bot_token)
- *   check_str  = отсортированные пары «key=value» через «\n» (без hash)
- *   expected   = HMAC-SHA256(check_str, secret_key)
- *   compare(expected, initData.hash)
- *
- * ── Что нужно настроить ──────────────────────────────────────────────────────
- *   - Bot Token — уже задан в главных настройках плагина.
- *   - Username бота (@your_bot) — укажите в Дополнительных настройках.
- *   - Mini App URL в MAX Partner Platform = URL вашего сайта.
- *
- * ── Кнопка «Войти через MAX» ─────────────────────────────────────────────────
- *   Ссылка ведёт на страницу бота: https://max.ru/your_bot_username
- *   Когда пользователь открывает сайт из MAX — вход происходит автоматически.
- */
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class WP_Ru_Max_OAuth {
-
-    const NONCE_ACTION = 'max_miniapp_auth_nonce';
+class WP_Ru_Max_Post_Sender {
 
     private static $instance = null;
-    private $settings;
 
     public static function instance() {
         if ( null === self::$instance ) {
@@ -48,490 +15,908 @@ class WP_Ru_Max_OAuth {
         return self::$instance;
     }
 
+    const QUEUE_OPTION = 'wp_ru_max_queue';
+    const QUEUE_LOCK   = 'wp_ru_max_queue_lock';
+    const QUEUE_LOCK_TTL = 15 * MINUTE_IN_SECONDS;
+    const QUEUE_WORKER_HOOK = 'wp_ru_max_queue_worker';
+    const QUEUE_WORKER_SCHEDULE = 'wp_ru_max_every_minute';
+    const MAX_RETRY_ATTEMPTS = 6;
+
     private function __construct() {
-        $this->settings = get_option( 'wp_ru_max_settings', array() );
+        // Регистрируем хук всегда, а настройку проверяем внутри обработчика.
+        // Иначе состояние, прочитанное при создании singleton, могло оставить
+        // автопостинг без хука до следующего полного запроса WordPress.
+        add_action( 'transition_post_status', array( $this, 'on_post_status_change' ), 10, 3 );
+        // Хук для отложенной отправки через WP-Cron (основной путь)
+        add_action( 'wp_ru_max_delayed_send', array( $this, 'do_delayed_send' ), 10, 1 );
+        add_action( self::QUEUE_WORKER_HOOK, array( $this, 'run_queue_worker' ) );
+        add_filter( 'cron_schedules', array( $this, 'add_cron_schedule' ) );
 
-        if ( empty( $this->settings['max_oauth_enabled'] ) ) {
+        // Подстраховка: WP-Cron запускается только при заходе посетителя на сайт
+        // (page-load триггер), поэтому на сайтах с низким ночным трафиком
+        // или при заблокированном loopback-запросе (spawn_cron) запланированное
+        // событие может «зависнуть» и не сработать вовремя. Дополнительно
+        // проверяем очередь на каждом заходе (фронт и админка) — это не зависит
+        // от того, срабатывает ли сам WP-Cron.
+        add_action( 'init', array( $this, 'maybe_process_due_queue' ), 20 );
+        // Некоторые cron-обработчики и плагины добавляют задания после init.
+        // Повторная проверка после полной загрузки WordPress закрывает это окно;
+        // блокировка очереди не допускает двойную отправку.
+        add_action( 'wp_loaded', array( $this, 'maybe_process_due_queue' ), 999 );
+        // В административных запросах дополнительно проверяем очередь после
+        // загрузки админской части. Это помогает сайтам, где фронтенд-запросы
+        // редкие, а WP-Cron/loopback отключён или работает с задержкой.
+        add_action( 'admin_init', array( $this, 'maybe_process_due_queue' ), 999 );
+        add_action( 'init', array( $this, 'ensure_queue_worker' ), 21 );
+    }
+
+    public function add_cron_schedule( $schedules ) {
+        if ( ! isset( $schedules[ self::QUEUE_WORKER_SCHEDULE ] ) ) {
+            $schedules[ self::QUEUE_WORKER_SCHEDULE ] = array(
+                'interval' => MINUTE_IN_SECONDS,
+                'display'  => 'WP Ru-max: каждую минуту',
+            );
+        }
+        return $schedules;
+    }
+
+    public function ensure_queue_worker() {
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        if ( empty( $settings['post_sender_enabled'] ) ) {
+            return;
+        }
+        $next = wp_next_scheduled( self::QUEUE_WORKER_HOOK );
+        if ( ! $next ) {
+            wp_schedule_event( time() + MINUTE_IN_SECONDS, self::QUEUE_WORKER_SCHEDULE, self::QUEUE_WORKER_HOOK );
             return;
         }
 
-        /*
-         * Обработка initData из URL-параметров.
-         * priority 20: класс создаётся на 'init'/10 — добавляем с priority > 10.
-         */
-        add_action( 'init', array( $this, 'handle_url_initdata' ), 20 );
-
-        // AJAX — валидация initData, полученного через JavaScript MAX Mini App API
-        add_action( 'wp_ajax_nopriv_max_auth_initdata', array( $this, 'ajax_validate_initdata' ) );
-        add_action( 'wp_ajax_max_auth_initdata',        array( $this, 'ajax_validate_initdata' ) );
-
-        // Страница входа / регистрации WordPress
-        add_action( 'login_form',            array( $this, 'render_login_button' ) );
-        add_action( 'register_form',         array( $this, 'render_login_button' ) );
-        add_action( 'login_enqueue_scripts', array( $this, 'output_oauth_css' ) );
-        add_action( 'login_message',         array( $this, 'maybe_show_error' ) );
-
-        // WooCommerce (plugins_loaded уже завершён → class_exists напрямую)
-        if ( class_exists( 'WooCommerce' ) ) {
-            add_action( 'woocommerce_login_form_start',     array( $this, 'render_woo_button' ) );
-            add_action( 'woocommerce_register_form_start',  array( $this, 'render_woo_button' ) );
-            add_action( 'woocommerce_before_checkout_form', array( $this, 'render_checkout_banner' ) );
+        // После обновления плагина заменить старое пятиминутное расписание
+        // на минутное, иначе уже существующее событие не изменится само.
+        $event = function_exists( 'wp_get_scheduled_event' )
+            ? wp_get_scheduled_event( self::QUEUE_WORKER_HOOK )
+            : false;
+        if ( $event && isset( $event->schedule ) && $event->schedule !== self::QUEUE_WORKER_SCHEDULE ) {
+            wp_clear_scheduled_hook( self::QUEUE_WORKER_HOOK );
+            wp_schedule_event( time() + MINUTE_IN_SECONDS, self::QUEUE_WORKER_SCHEDULE, self::QUEUE_WORKER_HOOK );
         }
-
-        // Frontend: CSS на страницах WC + JS для детекции MAX Mini App API
-        add_action( 'wp_head',   array( $this, 'maybe_output_frontend_css' ) );
-        add_action( 'wp_footer', array( $this, 'inject_miniapp_js' ) );
     }
 
-    // ─── HMAC-SHA256 валидация initData ──────────────────────────────────────
+    public function run_queue_worker() {
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        if ( empty( $settings['post_sender_enabled'] ) ) {
+            return;
+        }
+        $this->maybe_process_due_queue();
+    }
 
     /**
-     * Проверяет подпись initData от MAX Mini App.
-     * Алгоритм идентичен Telegram Web App (MAX использует тот же стандарт).
+     * Возвращает текущую очередь отложенных отправок (job_key => данные).
+     */
+    private function get_queue() {
+        $queue = get_option( self::QUEUE_OPTION, array() );
+        return is_array( $queue ) ? $queue : array();
+    }
+
+    private function save_queue( $queue ) {
+        update_option( self::QUEUE_OPTION, $queue, false );
+    }
+
+    /**
+     * Пытается установить блокировку очереди.
      *
-     * @param string $init_data_raw URL-encoded строка из MAX (уже декодированная).
-     * @return bool
+     * В WordPress нет функции add_transient(). Для блокировки используется
+     * add_option(): добавление опции с уже существующим именем возвращает
+     * false, а уникальное имя опции защищено на уровне базы данных.
+     *
+     * В блокировке хранится срок действия, чтобы после аварийного завершения
+     * запроса очередь не осталась заблокированной навсегда.
      */
-    private function validate_init_data( $init_data_raw ) {
-        $bot_token = trim( $this->settings['bot_token'] ?? '' );
-        if ( empty( $bot_token ) || empty( $init_data_raw ) ) {
-            return false;
+    private function acquire_queue_lock( &$lock_token ) {
+        $lock_token = wp_generate_uuid4();
+        $now        = time();
+        $lock_data  = array(
+            'token'   => $lock_token,
+            'expires' => $now + self::QUEUE_LOCK_TTL,
+        );
+
+        if ( add_option( self::QUEUE_LOCK, $lock_data, '', false ) ) {
+            return true;
         }
 
-        $params = array();
-        parse_str( $init_data_raw, $params );
+        // Восстанавливаемся после запроса, который завершился до снятия
+        // блокировки. Удаляем только то значение, которое прочитали:
+        // условный DELETE не позволит удалить уже заменённую блокировку.
+        global $wpdb;
+        $existing_lock = get_option( self::QUEUE_LOCK, array() );
+        $expires = is_array( $existing_lock ) && isset( $existing_lock['expires'] )
+            ? (int) $existing_lock['expires']
+            : 0;
 
-        $provided_hash = $params['hash'] ?? '';
-        if ( empty( $provided_hash ) ) {
-            return false;
-        }
-        unset( $params['hash'] );
+        if ( $expires <= 0 || $expires <= $now ) {
+            $existing_value = maybe_serialize( $existing_lock );
+            $deleted        = $wpdb->query(
+                $wpdb->prepare(
+                    "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s LIMIT 1",
+                    self::QUEUE_LOCK,
+                    $existing_value
+                )
+            );
 
-        // Проверяем свежесть данных (не старше 1 часа)
-        if ( ! empty( $params['auth_date'] ) ) {
-            if ( ( time() - (int) $params['auth_date'] ) > 3600 ) {
-                WP_Ru_Max_Logger::log( 'api', 'warning', 'MAX Auth: initData устарел (auth_date > 1 часа).' );
-                return false;
+            if ( 1 === (int) $deleted ) {
+                wp_cache_delete( self::QUEUE_LOCK, 'options' );
+                // Если другой запрос уже занял имя, add_option() вернёт false.
+                return add_option( self::QUEUE_LOCK, $lock_data, '', false );
             }
         }
 
-        // Строка для проверки: отсортированные пары key=value через \n
-        ksort( $params );
-        $data_check_string = implode( "\n", array_map(
-            function ( $k, $v ) { return "$k=$v"; },
-            array_keys( $params ),
-            array_values( $params )
-        ) );
-
-        // secret_key = HMAC-SHA256("WebAppData", bot_token)
-        $secret_key = hash_hmac( 'sha256', $bot_token, 'WebAppData', true );
-        // expected_hash = HMAC-SHA256(check_string, secret_key)
-        $expected_hash = hash_hmac( 'sha256', $data_check_string, $secret_key );
-
-        return hash_equals( $expected_hash, $provided_hash );
+        return false;
     }
 
     /**
-     * Извлекает данные пользователя из initData.
-     * Поле 'user' содержит JSON: { id, first_name, last_name, username, photo_url }.
+     * Продлевает lease только для текущего владельца блокировки.
      */
-    private function extract_user_from_initdata( $init_data_raw ) {
-        $params = array();
-        parse_str( $init_data_raw, $params );
+    private function refresh_queue_lock( $lock_token ) {
+        global $wpdb;
 
-        $user_json = $params['user'] ?? '';
-        if ( empty( $user_json ) ) {
-            return null;
-        }
-
-        $user = json_decode( $user_json, true );
-        return is_array( $user ) ? $user : null;
-    }
-
-    // ─── Обработка initData из URL ────────────────────────────────────────────
-
-    /**
-     * Срабатывает на init/20.
-     * Когда пользователь открывает сайт из MAX, мессенджер добавляет в URL
-     * параметр initData (или init_data / max_initdata).
-     */
-    public function handle_url_initdata() {
-        if ( is_user_logged_in() ) {
-            return;
-        }
-
-        $raw = '';
-        foreach ( array( 'initData', 'init_data', 'max_initdata' ) as $key ) {
-            if ( ! empty( $_GET[ $key ] ) ) {
-                $raw = wp_unslash( $_GET[ $key ] );
-                break;
-            }
-        }
-
-        if ( empty( $raw ) ) {
-            return;
-        }
-
-        // URL-decode (браузер кодирует query string дважды при передаче через MAX)
-        $raw = urldecode( $raw );
-
-        if ( ! $this->validate_init_data( $raw ) ) {
-            WP_Ru_Max_Logger::log( 'api', 'warning', 'MAX Auth: initData (URL) не прошёл HMAC проверку.' );
-            return;
-        }
-
-        $user_info = $this->extract_user_from_initdata( $raw );
-        if ( empty( $user_info ) ) {
-            return;
-        }
-
-        $user_id = $this->login_or_create_user( $user_info );
-        if ( is_wp_error( $user_id ) ) {
-            WP_Ru_Max_Logger::log( 'api', 'error', 'MAX Auth: ' . $user_id->get_error_message() );
-            return;
-        }
-
-        wp_set_current_user( $user_id );
-        wp_set_auth_cookie( $user_id, true );
-
-        $user_obj = get_userdata( $user_id );
-        if ( $user_obj ) {
-            do_action( 'wp_login', $user_obj->user_login, $user_obj );
-        }
-
-        // Перенаправляем на чистый URL без initData
-        wp_safe_redirect( remove_query_arg( array( 'initData', 'init_data', 'max_initdata' ) ) );
-        exit;
-    }
-
-    // ─── AJAX — для JS инициализации MAX Mini App ─────────────────────────────
-
-    /**
-     * Принимает initData от клиентского JavaScript,
-     * валидирует HMAC и логинит пользователя.
-     * Вызывается из inject_miniapp_js().
-     */
-    public function ajax_validate_initdata() {
-        if ( ! check_ajax_referer( self::NONCE_ACTION, 'nonce', false ) ) {
-            wp_send_json_error( array( 'message' => 'Security check failed' ), 403 );
-        }
-
-        if ( is_user_logged_in() ) {
-            wp_send_json_success( array( 'redirect' => home_url() ) );
-        }
-
-        // ВАЖНО: НЕ использовать sanitize_text_field — она портит HMAC-подпись (удаляет спецсимволы).
-        // Для криптографических данных достаточно только wp_unslash().
-        $raw = wp_unslash( $_POST['init_data'] ?? '' );
-        if ( empty( $raw ) ) {
-            wp_send_json_error( array( 'message' => 'init_data is empty' ), 400 );
-        }
-
-        if ( ! $this->validate_init_data( $raw ) ) {
-            WP_Ru_Max_Logger::log( 'api', 'warning', 'MAX Auth: initData (JS) не прошёл HMAC проверку.' );
-            wp_send_json_error( array( 'message' => 'Invalid MAX signature' ), 403 );
-        }
-
-        $user_info = $this->extract_user_from_initdata( $raw );
-        if ( empty( $user_info ) ) {
-            wp_send_json_error( array( 'message' => 'No user data in initData' ), 400 );
-        }
-
-        $user_id = $this->login_or_create_user( $user_info );
-        if ( is_wp_error( $user_id ) ) {
-            wp_send_json_error( array( 'message' => $user_id->get_error_message() ), 500 );
-        }
-
-        wp_set_current_user( $user_id );
-        wp_set_auth_cookie( $user_id, true );
-
-        $user_obj = get_userdata( $user_id );
-        if ( $user_obj ) {
-            do_action( 'wp_login', $user_obj->user_login, $user_obj );
-        }
-
-        // Редирект — только на свой сайт
-        $redirect = home_url();
-        if ( ! empty( $_POST['redirect'] ) ) {
-            $candidate = esc_url_raw( wp_unslash( $_POST['redirect'] ) );
-            if ( strpos( $candidate, home_url() ) === 0 ) {
-                $redirect = $candidate;
-            }
-        }
-
-        wp_send_json_success( array( 'redirect' => $redirect ) );
-    }
-
-    // ─── Кнопки на фронтенде ─────────────────────────────────────────────────
-
-    private function get_bot_url() {
-        $username = trim( $this->settings['max_oauth_bot_username'] ?? '' );
-        if ( empty( $username ) ) {
-            return '';
-        }
-        return 'https://max.ru/' . ltrim( $username, '@' );
-    }
-
-    public function render_login_button() {
-        $bot_url = $this->get_bot_url();
-        $icon    = WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png';
-        ?>
-        <div class="wp-ru-max-oauth-wrap">
-            <?php if ( $bot_url ) : ?>
-            <a href="<?php echo esc_url( $bot_url ); ?>" class="wp-ru-max-oauth-btn" target="_blank" rel="noopener noreferrer">
-                <img src="<?php echo esc_url( $icon ); ?>" width="22" height="22" alt="MAX">
-                Войти через MAX
-            </a>
-            <?php else : ?>
-            <span class="wp-ru-max-oauth-btn wp-ru-max-oauth-btn-disabled">
-                <img src="<?php echo esc_url( $icon ); ?>" width="22" height="22" alt="MAX">
-                Войти через MAX
-            </span>
-            <?php endif; ?>
-            <p class="wp-ru-max-oauth-hint">Откройте сайт через бота в MAX — вход произойдёт автоматически</p>
-            <div class="wp-ru-max-oauth-divider"><span>или</span></div>
-        </div>
-        <?php
-    }
-
-    public function render_woo_button() {
-        if ( is_user_logged_in() ) {
-            return;
-        }
-        $bot_url = $this->get_bot_url();
-        $icon    = WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png';
-        ?>
-        <div class="wp-ru-max-oauth-wrap wp-ru-max-oauth-woo">
-            <?php if ( $bot_url ) : ?>
-            <a href="<?php echo esc_url( $bot_url ); ?>" class="wp-ru-max-oauth-btn" target="_blank" rel="noopener noreferrer">
-                <img src="<?php echo esc_url( $icon ); ?>" width="22" height="22" alt="MAX">
-                Войти через MAX
-            </a>
-            <?php else : ?>
-            <span class="wp-ru-max-oauth-btn wp-ru-max-oauth-btn-disabled">
-                <img src="<?php echo esc_url( $icon ); ?>" width="22" height="22" alt="MAX">
-                Войти через MAX
-            </span>
-            <?php endif; ?>
-            <p class="wp-ru-max-oauth-hint">Откройте сайт через бота в MAX — вход произойдёт автоматически</p>
-            <div class="wp-ru-max-oauth-divider"><span>или</span></div>
-        </div>
-        <?php
-    }
-
-    public function render_checkout_banner() {
-        if ( is_user_logged_in() ) {
-            return;
-        }
-        $bot_url = $this->get_bot_url();
-        if ( empty( $bot_url ) ) {
-            return;
-        }
-        $icon = WP_RU_MAX_PLUGIN_URL . 'assets/max-32x32.png';
-        ?>
-        <div class="wp-ru-max-oauth-checkout">
-            <p style="margin:0 0 10px;font-weight:600;font-size:15px;">Быстрый вход перед оформлением:</p>
-            <a href="<?php echo esc_url( $bot_url ); ?>" class="wp-ru-max-oauth-btn wp-ru-max-oauth-btn-checkout" target="_blank" rel="noopener noreferrer">
-                <img src="<?php echo esc_url( $icon ); ?>" width="22" height="22" alt="MAX">
-                Войти через MAX
-            </a>
-            <p class="wp-ru-max-oauth-hint" style="margin-top:8px;text-align:left;">Откройте сайт через бота MAX — вход произойдёт автоматически</p>
-        </div>
-        <?php
-    }
-
-    public function maybe_show_error( $message ) {
-        if ( ! empty( $_GET['max_oauth_error'] ) ) {
-            $err      = sanitize_text_field( wp_unslash( $_GET['max_oauth_error'] ) );
-            $message .= '<p class="message" style="color:#d63638;background:#fff3f3;padding:8px 12px;border-radius:4px;">'
-                . '<strong>Ошибка MAX Auth:</strong> ' . esc_html( $err ) . '</p>';
-        }
-        return $message;
-    }
-
-    // ─── CSS ─────────────────────────────────────────────────────────────────
-
-    public function output_oauth_css() {
-        $this->print_oauth_styles();
-    }
-
-    public function maybe_output_frontend_css() {
+        $current_lock = get_option( self::QUEUE_LOCK, array() );
         if (
-            ( function_exists( 'is_account_page' ) && is_account_page() ) ||
-            ( function_exists( 'is_checkout' )     && is_checkout() )
+            ! is_array( $current_lock )
+            || empty( $current_lock['token'] )
+            || ! hash_equals( (string) $current_lock['token'], (string) $lock_token )
         ) {
-            $this->print_oauth_styles();
+            return false;
+        }
+
+        $refreshed_lock = array(
+            'token'   => (string) $lock_token,
+            'expires' => time() + self::QUEUE_LOCK_TTL,
+        );
+        $updated = $wpdb->query(
+            $wpdb->prepare(
+                "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value = %s LIMIT 1",
+                maybe_serialize( $refreshed_lock ),
+                self::QUEUE_LOCK,
+                maybe_serialize( $current_lock )
+            )
+        );
+
+        wp_cache_delete( self::QUEUE_LOCK, 'options' );
+        return 1 === (int) $updated;
+    }
+
+    /**
+     * Снимает только собственную блокировку очереди.
+     */
+    private function release_queue_lock( $lock_token ) {
+        global $wpdb;
+
+        $lock = get_option( self::QUEUE_LOCK, array() );
+        if (
+            is_array( $lock )
+            && isset( $lock['token'] )
+            && hash_equals( (string) $lock['token'], (string) $lock_token )
+        ) {
+            // Условное удаление защищает от ситуации, когда другой запрос
+            // успел заменить lease между get_option() и DELETE.
+            $deleted = $wpdb->query(
+                $wpdb->prepare(
+                    "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s LIMIT 1",
+                    self::QUEUE_LOCK,
+                    maybe_serialize( $lock )
+                )
+            );
+            if ( 1 === (int) $deleted ) {
+                wp_cache_delete( self::QUEUE_LOCK, 'options' );
+            }
         }
     }
 
-    private function print_oauth_styles() {
-        ?>
-<style id="wp-ru-max-oauth-styles">
-.wp-ru-max-oauth-wrap { margin-bottom: 20px; }
-.wp-ru-max-oauth-woo  { margin-bottom: 24px; }
-.wp-ru-max-oauth-checkout {
-    margin-bottom: 24px; padding: 20px;
-    border: 1px solid #e0eaff; border-radius: 12px; background: #f5f9ff;
-}
-.wp-ru-max-oauth-btn {
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-    width: 100%; padding: 13px 20px; background: #0077ff; color: #fff !important;
-    border-radius: 10px; text-decoration: none !important; font-size: 15px;
-    font-weight: 600; line-height: 1; box-sizing: border-box; cursor: pointer; border: none;
-    transition: background .18s, box-shadow .18s, transform .1s;
-    box-shadow: 0 2px 10px rgba(0,119,255,.28);
-}
-.wp-ru-max-oauth-btn-disabled { opacity: .55; cursor: default; pointer-events: none; }
-.wp-ru-max-oauth-btn img { display: block; flex-shrink: 0; }
-.wp-ru-max-oauth-btn:not(.wp-ru-max-oauth-btn-disabled):hover {
-    background: #005ee0; color: #fff !important;
-    box-shadow: 0 4px 16px rgba(0,119,255,.40); transform: translateY(-1px);
-}
-.wp-ru-max-oauth-btn:active { transform: translateY(0); }
-.wp-ru-max-oauth-btn-checkout { font-size: 16px; padding: 14px 24px; }
-.wp-ru-max-oauth-hint { font-size: 12px; color: #6b7280; margin: 7px 0 0; text-align: center; }
-.wp-ru-max-oauth-divider {
-    position: relative; text-align: center; margin: 14px 0 0; color: #aaa; font-size: 13px;
-}
-.wp-ru-max-oauth-divider::before {
-    content: ""; position: absolute; top: 50%; left: 0; right: 0; border-top: 1px solid #ddd;
-}
-.wp-ru-max-oauth-divider span { position: relative; background: #fff; padding: 0 12px; }
-</style>
-        <?php
+    private function queue_add( $job_key, $post_id, $is_new, $due ) {
+        $queue = $this->get_queue();
+        $queue[ $job_key ] = array(
+            'post_id' => $post_id,
+            'is_new'  => $is_new,
+            'due'     => $due,
+        );
+        $this->save_queue( $queue );
     }
 
-    // ─── JavaScript: детекция MAX Mini App ───────────────────────────────────
+    /**
+     * Публичный статус очереди для админ-панели (диагностика).
+     */
+    public static function get_queue_status() {
+        $queue = get_option( self::QUEUE_OPTION, array() );
+        $queue = is_array( $queue ) ? $queue : array();
+        $now   = time();
+        $overdue = 0;
+        foreach ( $queue as $job ) {
+            if ( isset( $job['due'] ) && $job['due'] < $now ) {
+                $overdue++;
+            }
+        }
+        return array(
+            'total'   => count( $queue ),
+            'overdue' => $overdue,
+        );
+    }
 
     /**
-     * Вставляет JS на фронтенде для автоматической авторизации
-     * когда пользователь открывает сайт через MAX Mini App.
-     * Проверяет window.MaxApp.initData и window.Telegram.WebApp.initData.
+     * Проверяет очередь и обрабатывает все задания, время которых уже наступило.
+     * Вызывается на каждом 'init' (лёгкая проверка — выходит сразу, если очередь пуста),
+     * а также вручную из админки («Обработать очередь сейчас»).
      */
-    public function inject_miniapp_js() {
-        if ( is_user_logged_in() ) {
+    public function maybe_process_due_queue( $force_all = false ) {
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        if ( ! $force_all && empty( $settings['post_sender_enabled'] ) ) {
+            return 0;
+        }
+
+        $queue = $this->get_queue();
+        if ( empty( $queue ) ) {
+            return 0;
+        }
+
+        // Атомарная блокировка через add_option(). В WordPress функции
+        // add_transient() не существует.
+        $lock_token = '';
+        if ( ! $this->acquire_queue_lock( $lock_token ) ) {
+            return 0;
+        }
+
+        $now       = time();
+        $processed = 0;
+
+        try {
+            foreach ( $queue as $job_key => $data ) {
+                $is_due = $force_all || ( isset( $data['due'] ) && $data['due'] <= $now );
+                if ( $is_due ) {
+                    // Обработка поста включает сетевые запросы к MAX. Продлеваем
+                    // lease перед каждым заданием, чтобы длинная очередь не
+                    // стала доступна второму запросу во время работы первого.
+                    if ( ! $this->refresh_queue_lock( $lock_token ) ) {
+                        break;
+                    }
+                    $this->process_job( $job_key );
+                    // Снимаем оригинальное wp-cron событие, если оно ещё не сработало,
+                    // чтобы успешно обработанная запись не отправилась повторно позже.
+                    // Если отправка не удалась, process_job() оставляет задание
+                    // в очереди и планирует повтор — его удалять нельзя.
+                    $remaining_queue = $this->get_queue();
+                    wp_clear_scheduled_hook( 'wp_ru_max_delayed_send', array( $job_key ) );
+                    if ( isset( $remaining_queue[ $job_key ]['due'] ) ) {
+                        wp_schedule_single_event(
+                            (int) $remaining_queue[ $job_key ]['due'],
+                            'wp_ru_max_delayed_send',
+                            array( $job_key )
+                        );
+                    }
+                    $processed++;
+                }
+            }
+        } finally {
+            $this->release_queue_lock( $lock_token );
+        }
+
+        return $processed;
+    }
+
+    /**
+     * Обрабатывает одно задание из очереди. Идемпотентно: если задание уже было
+     * удалено из очереди (например, обработано другим триггером первым), просто
+     * ничего не делает.
+     */
+    private function process_job( $job_key ) {
+        $queue = $this->get_queue();
+        if ( ! isset( $queue[ $job_key ] ) ) {
+            return; // Уже обработано.
+        }
+        $data = $queue[ $job_key ];
+
+        $post = get_post( $data['post_id'] );
+        if ( ! $post ) {
+            unset( $queue[ $job_key ] );
+            $this->save_queue( $queue );
+            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Отложенная отправка: запись #{$data['post_id']} не найдена. Задание удалено из очереди.", array(
+                'post_id' => $data['post_id'],
+            ) );
             return;
         }
-        ?>
-<script id="wp-ru-max-miniapp-js">
-(function () {
-    'use strict';
 
-    var AJAX_URL = <?php echo wp_json_encode( esc_url( admin_url( 'admin-ajax.php' ) ) ); ?>;
-    var NONCE    = <?php echo wp_json_encode( wp_create_nonce( self::NONCE_ACTION ) ); ?>;
-    var CURRENT  = window.location.href;
+        // WordPress может запустить наше задание чуть раньше собственного
+        // cron-события публикации записи. Раньше такая запись удалялась
+        // навсегда со статусом future, поэтому автоматическая отправка
+        // терялась, хотя ручная отправка продолжала работать.
+        if ( 'future' === $post->post_status ) {
+            $settings       = get_option( 'wp_ru_max_settings', array() );
+            $send_delay     = isset( $settings['send_delay_seconds'] ) ? max( 0, (int) $settings['send_delay_seconds'] ) : 0;
+            $publish_time   = ! empty( $post->post_date_gmt ) && '0000-00-00 00:00:00' !== $post->post_date_gmt
+                ? strtotime( $post->post_date_gmt . ' UTC' )
+                : false;
+            $next_attempt   = max(
+                time() + MINUTE_IN_SECONDS,
+                $publish_time ? $publish_time + $send_delay + 15 : time() + MINUTE_IN_SECONDS
+            );
+            $data['due']    = $next_attempt;
+            $data['attempts'] = 0;
+            $queue[ $job_key ] = $data;
+            $this->save_queue( $queue );
+            wp_schedule_single_event( $next_attempt, 'wp_ru_max_delayed_send', array( $job_key ) );
 
-    // Ищем initData в возможных MAX Mini App JS API
-    var initData = null;
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Отложенная отправка: запись #{$post->ID} ещё не опубликована (future). Задание перенесено до публикации.", array(
+                'post_id'          => $post->ID,
+                'job_key'          => $job_key,
+                'post_date_gmt'    => $post->post_date_gmt,
+                'next_attempt_gmt' => gmdate( 'Y-m-d H:i:s', $next_attempt ),
+            ) );
+            return;
+        }
 
-    // Вариант 1: официальный MAX Mini App API (если MAX реализует его как window.MaxApp)
-    if (window.MaxApp && typeof window.MaxApp.initData === 'string' && window.MaxApp.initData) {
-        initData = window.MaxApp.initData;
+        if ( 'publish' !== $post->post_status ) {
+            unset( $queue[ $job_key ] );
+            $this->save_queue( $queue );
+            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Отложенная отправка: запись #{$post->ID} не отправлена — текущий статус: {$post->post_status}. Задание удалено из очереди.", array(
+                'post_id' => $post->ID,
+                'status'  => $post->post_status,
+            ) );
+            return;
+        }
+
+        if ( $this->is_network_excluded( $post->ID, 'max' ) ) {
+            unset( $queue[ $job_key ] );
+            $this->save_queue( $queue );
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Отложенная отправка записи #{$post->ID} пропущена — MAX исключён в настройках статьи.", array(
+                'post_id' => $post->ID,
+            ) );
+            return;
+        }
+
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        $sent = $this->send_post( $post, ! empty( $data['is_new'] ), $settings );
+
+        if ( $sent ) {
+            unset( $queue[ $job_key ] );
+            $this->save_queue( $queue );
+            return;
+        }
+
+        // Не теряем задание при временном отказе API, сетевой ошибке или
+        // сбое WP-Cron. Даём несколько повторных попыток с интервалом 5 минут.
+        $attempts = isset( $data['attempts'] ) ? (int) $data['attempts'] : 0;
+        if ( $attempts < self::MAX_RETRY_ATTEMPTS ) {
+            $attempts++;
+            $retry_delay = 5 * MINUTE_IN_SECONDS;
+            $data['attempts'] = $attempts;
+            $data['due']      = time() + $retry_delay;
+            $queue[ $job_key ] = $data;
+            $this->save_queue( $queue );
+            wp_schedule_single_event( $data['due'], 'wp_ru_max_delayed_send', array( $job_key ) );
+            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Отправка записи #{$post->ID} не завершена. Повторная попытка {$attempts}/" . self::MAX_RETRY_ATTEMPTS . " запланирована через 5 минут.", array(
+                'post_id'  => $post->ID,
+                'job_key'  => $job_key,
+                'attempts' => $attempts,
+            ) );
+        } else {
+            // Не теряем публикацию из-за временного сбоя API/WP-Cron после
+            // последней быстрой попытки. Оставляем её в постоянной очереди и
+            // проверяем раз в час — после исправления токена/сети она уйдёт
+            // автоматически, а администратор может также нажать flush.
+            $data['attempts']      = 0;
+            $data['due']           = time() + HOUR_IN_SECONDS;
+            $data['last_error_at'] = current_time( 'mysql' );
+            $queue[ $job_key ] = $data;
+            $this->save_queue( $queue );
+            wp_schedule_single_event( $data['due'], 'wp_ru_max_delayed_send', array( $job_key ) );
+            WP_Ru_Max_Logger::log( 'post_sender', 'error', "Отправка записи #{$post->ID} не удалась после " . self::MAX_RETRY_ATTEMPTS . " попыток. Задание оставлено в очереди и будет проверено через час.", array(
+                'post_id' => $post->ID,
+                'job_key' => $job_key,
+            ) );
+        }
     }
-    // Вариант 2: MAX может предоставлять API аналогично Telegram (window.Telegram.WebApp)
-    if (!initData && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
-        initData = window.Telegram.WebApp.initData;
-    }
 
-    if (!initData) { return; }
+    public function on_post_status_change( $new_status, $old_status, $post ) {
+        $settings = get_option( 'wp_ru_max_settings', array() );
 
-    // Отправляем initData на сервер для HMAC-валидации
-    var fd = new FormData();
-    fd.append('action',    'max_auth_initdata');
-    fd.append('nonce',     NONCE);
-    fd.append('init_data', initData);
-    fd.append('redirect',  CURRENT);
+        if ( empty( $settings['post_sender_enabled'] ) ) {
+            return;
+        }
 
-    fetch(AJAX_URL, { method: 'POST', body: fd, credentials: 'same-origin' })
-        .then(function (r) { return r.json(); })
-        .then(function (resp) {
-            if (resp && resp.success && resp.data && resp.data.redirect) {
-                window.location.href = resp.data.redirect;
+        $post_types = isset( $settings['post_types'] ) ? (array) $settings['post_types'] : array( 'post' );
+        if ( ! in_array( $post->post_type, $post_types, true ) ) {
+            return;
+        }
+
+        $is_new     = ( $old_status !== 'publish' && $new_status === 'publish' );
+        $is_updated = ( $old_status === 'publish' && $new_status === 'publish' );
+
+        if ( $is_new && empty( $settings['send_new_post'] ) ) {
+            return;
+        }
+        if ( $is_updated && empty( $settings['send_updated_post'] ) ) {
+            return;
+        }
+        if ( ! $is_new && ! $is_updated ) {
+            return;
+        }
+
+        // Общий переключатель статьи применяется ко всем автоматическим
+        // отправкам, а список исключений позволяет отключить отдельные сети.
+        $skip = get_post_meta( $post->ID, 'wp_ru_max_skip', true );
+        if ( $skip === '' || $skip === null || $skip === false ) {
+            $legacy = get_post_meta( $post->ID, '_wp_ru_max_skip', true );
+            if ( $legacy !== '' && $legacy !== null && $legacy !== false ) {
+                $skip = $legacy;
             }
-        })
-        .catch(function () { /* silent */ });
-})();
-</script>
-        <?php
+        }
+
+        $skip_str = is_scalar( $skip ) ? trim( (string) $skip ) : '';
+
+        if ( $skip_str === '' ) {
+            $social = get_option( 'wp_ru_max_social', array() );
+            $default_on = array_key_exists( 'auto_send_default', $social )
+                ? ! empty( $social['auto_send_default'] )
+                : ! empty( $settings['auto_send_default'] );
+            if ( ! $default_on ) {
+                WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — автоотправка отключена (общий По умолчанию: ВЫКЛ).", array( 'post_id' => $post->ID ) );
+                return;
+            }
+        } elseif ( $skip_str !== '0' ) {
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — общая автоотправка выключена в настройках статьи.", array( 'post_id' => $post->ID, 'skip' => $skip ) );
+            return;
+        }
+
+        if ( $this->is_network_excluded( $post->ID, 'max' ) ) {
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена для MAX — сеть исключена в настройках статьи.", array( 'post_id' => $post->ID, 'network' => 'max' ) );
+            return;
+        }
+
+        // Фильтр по категориям
+        if ( ! $this->matches_category_filter( $post->ID, $settings ) ) {
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} пропущена — не подходит под фильтр категорий/тегов.", array( 'post_id' => $post->ID ) );
+            return;
+        }
+
+        $channels = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
+        if ( empty( $channels ) ) {
+            WP_Ru_Max_Logger::log( 'post_sender', 'warning', 'Нет настроенных каналов для отправки публикации.', array( 'post_id' => $post->ID ) );
+            return;
+        }
+
+        // Отложенная отправка
+        $delay = isset( $settings['send_delay_seconds'] ) ? (int) $settings['send_delay_seconds'] : 0;
+
+        if ( $delay > 0 ) {
+            // Запись данных для отложенного запуска. Храним задание в постоянной
+            // опции (а не только в transient), чтобы её можно было перебрать и
+            // обработать даже если само wp-cron событие не сработает вовремя.
+            $job_key = $this->get_or_create_job_key( $post->ID, $is_new );
+            $due     = time() + $delay;
+            $this->queue_add( $job_key, $post->ID, $is_new, $due );
+
+            // Стабильный ключ не допускает накопления одинаковых заданий при
+            // повторном переходе записи в publish или повторном сохранении.
+            $scheduled_event = wp_next_scheduled( 'wp_ru_max_delayed_send', array( $job_key ) );
+            if ( ! $scheduled_event || (int) $scheduled_event !== (int) $due ) {
+                if ( $scheduled_event ) {
+                    wp_clear_scheduled_hook( 'wp_ru_max_delayed_send', array( $job_key ) );
+                }
+                wp_schedule_single_event( $due, 'wp_ru_max_delayed_send', array( $job_key ) );
+            }
+            $scheduled_event = wp_next_scheduled( 'wp_ru_max_delayed_send', array( $job_key ) );
+
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Запись #{$post->ID} поставлена в очередь на отправку через {$delay} сек.", array(
+                'post_id'         => $post->ID,
+                'delay'           => $delay,
+                'job_key'         => $job_key,
+                'published_at'    => $post->post_date,
+                'published_at_gmt'=> $post->post_date_gmt,
+                'queue_due_gmt'   => gmdate( 'Y-m-d H:i:s', $due ),
+                'cron_event_time' => $scheduled_event ? gmdate( 'Y-m-d H:i:s', $scheduled_event ) : null,
+                'cron_scheduled'  => (bool) $scheduled_event,
+            ) );
+            if ( ! $scheduled_event ) {
+                WP_Ru_Max_Logger::log( 'post_sender', 'error', "Не удалось запланировать WP-Cron для записи #{$post->ID}. Задание сохранено в очереди и будет обработано при следующем запуске сайта.", array(
+                    'post_id' => $post->ID,
+                    'job_key' => $job_key,
+                    'due'     => $due,
+                ) );
+            }
+            return;
+        }
+
+        // Немедленная отправка. Не теряем публикацию при единичной ошибке
+        // API: сохраняем её в той же постоянной очереди, что и отложенные
+        // задания, и передаём WP-Cron несколько попыток.
+        $sent = $this->send_post( $post, $is_new, $settings );
+        if ( ! $sent ) {
+            $job_key = $this->get_or_create_job_key( $post->ID, $is_new );
+            $due     = time() + 5 * MINUTE_IN_SECONDS;
+            $this->queue_add( $job_key, $post->ID, $is_new, $due );
+            wp_schedule_single_event( $due, 'wp_ru_max_delayed_send', array( $job_key ) );
+            WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Автоматическая отправка записи #{$post->ID} не завершена. Задание сохранено для повторной попытки через 5 минут.", array(
+                'post_id' => $post->ID,
+                'job_key' => $job_key,
+                'due'     => gmdate( 'Y-m-d H:i:s', $due ),
+            ) );
+        }
     }
 
-    // ─── Создание / вход пользователя ────────────────────────────────────────
+    private function is_network_excluded( $post_id, $network ) {
+        $excluded = get_post_meta( $post_id, 'wp_ru_max_autopost_excluded_networks', true );
+        if ( ! is_array( $excluded ) ) {
+            return false;
+        }
+        return in_array( sanitize_key( $network ), array_map( 'sanitize_key', $excluded ), true );
+    }
 
     /**
-     * Находит или создаёт пользователя WordPress по данным из MAX initData.
-     * initData.user формат: { id, first_name, last_name, username, photo_url }
+     * Возвращает существующее задание этой записи или создаёт стабильный ключ.
+     * Это устраняет дубли после повторного transition_post_status и позволяет
+     * новому переходу future → publish восстановить задание, удалённое старой
+     * версией плагина.
      */
-    private function login_or_create_user( $user_info ) {
-        $max_id  = (string) ( $user_info['id'] ?? '' );
-        $fname   = sanitize_text_field( $user_info['first_name'] ?? '' );
-        $lname   = sanitize_text_field( $user_info['last_name']  ?? '' );
-        $uname   = sanitize_text_field( $user_info['username']   ?? '' );
-        $avatar  = esc_url_raw( $user_info['photo_url'] ?? '' );
-
-        $display = trim( $fname . ' ' . $lname );
-        if ( ! $display ) {
-            $display = $uname ?: 'MAX User';
-        }
-
-        // 1. Найти существующего пользователя по MAX ID
-        if ( $max_id ) {
-            $found = get_users( array(
-                'meta_key'   => 'wp_ru_max_oauth_id',
-                'meta_value' => $max_id,
-                'number'     => 1,
-                'fields'     => 'ids',
-            ) );
-            if ( ! empty( $found ) ) {
-                $uid = (int) $found[0];
-                if ( $avatar ) update_user_meta( $uid, 'wp_ru_max_avatar_url', $avatar );
-                // Обновляем имя, если оно изменилось
-                wp_update_user( array(
-                    'ID'           => $uid,
-                    'display_name' => $display,
-                    'first_name'   => $fname,
-                    'last_name'    => $lname,
-                ) );
-                return $uid;
+    private function get_or_create_job_key( $post_id, $is_new ) {
+        $queue = $this->get_queue();
+        foreach ( $queue as $job_key => $job ) {
+            if (
+                isset( $job['post_id'] ) && (int) $job['post_id'] === (int) $post_id
+                && ! empty( $job['is_new'] ) === ! empty( $is_new )
+            ) {
+                return $job_key;
             }
         }
 
-        // 2. Создать нового пользователя
-        $username  = $this->make_unique_username( $uname ?: $display );
-        $user_data = array(
-            'user_login'   => $username,
-            'user_pass'    => wp_generate_password( 24, true, true ),
-            'display_name' => $display,
-            'first_name'   => $fname,
-            'last_name'    => $lname,
-            'role'         => get_option( 'default_role', 'subscriber' ),
-        );
-
-        $user_id = wp_insert_user( $user_data );
-        if ( is_wp_error( $user_id ) ) {
-            return $user_id;
-        }
-
-        if ( $max_id )  update_user_meta( $user_id, 'wp_ru_max_oauth_id', $max_id );
-        if ( $avatar )  update_user_meta( $user_id, 'wp_ru_max_avatar_url', $avatar );
-
-        WP_Ru_Max_Logger::log( 'api', 'info',
-            sprintf( 'MAX Auth: создан пользователь #%d (%s, MAX ID: %s)', $user_id, $username, $max_id )
-        );
-
-        return $user_id;
+        return 'wp_ru_max_post_' . (int) $post_id . '_' . ( $is_new ? 'new' : 'update' );
     }
 
-    private function make_unique_username( $base_name ) {
-        $base = sanitize_user( strtolower( str_replace( array( ' ', '-', '.' ), '_', $base_name ) ), true );
-        if ( empty( $base ) ) {
-            $base = 'max_user';
+    /**
+     * Обработчик отложенной отправки (WP-Cron). Основной путь срабатывания —
+     * если по какой-то причине WP-Cron не вызвал этот хук вовремя, то же самое
+     * задание всё равно будет подхвачено и отправлено через maybe_process_due_queue()
+     * при следующем заходе на сайт (см. хук 'init' в конструкторе).
+     */
+    public function do_delayed_send( $job_key ) {
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        if ( empty( $settings['post_sender_enabled'] ) ) {
+            return 0;
         }
-        $username = $base;
-        $i = 1;
-        while ( username_exists( $username ) ) {
-            $username = $base . '_' . $i;
-            $i++;
+
+        // WP-Cron и резервный запуск через init могут прийти одновременно.
+        // Используем ту же блокировку, чтобы одно задание не ушло дважды.
+        $lock_token = '';
+        if ( ! $this->acquire_queue_lock( $lock_token ) ) {
+            return 0;
         }
-        return $username;
+
+        $processed = 0;
+        try {
+            if ( $this->refresh_queue_lock( $lock_token ) ) {
+                $this->process_job( $job_key );
+                $processed = 1;
+            }
+        } finally {
+            $this->release_queue_lock( $lock_token );
+        }
+
+        return $processed;
+    }
+
+    /**
+     * Отправляет запись во все настроенные каналы.
+     */
+    private function send_post( $post, $is_new, $settings ) {
+        $channels   = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
+        $message    = $this->build_post_message( $post, $is_new, $settings );
+        $buttons    = $this->get_buttons( $settings, $post );
+        $api        = new WP_Ru_Max_API();
+        $send_image = isset( $settings['send_post_image'] ) ? (bool) $settings['send_post_image'] : true;
+
+        // Настройки retry
+        $max_retries = isset( $settings['retry_count'] ) ? (int) $settings['retry_count'] : 2;
+        $retry_delay = isset( $settings['retry_delay_seconds'] ) ? (int) $settings['retry_delay_seconds'] : 5;
+        $all_sent = true;
+
+        foreach ( $channels as $channel ) {
+            $chat_id = trim( $channel );
+            if ( empty( $chat_id ) ) {
+                continue;
+            }
+
+            $thumbnail_url = $send_image ? $this->get_post_image_url( $post ) : false;
+
+            if ( $thumbnail_url && $send_image ) {
+                // Используем send_with_retry с изображением
+                $result = $api->send_with_retry(
+                    $chat_id,
+                    $message,
+                    'html',
+                    $buttons,
+                    $thumbnail_url,
+                    $max_retries,
+                    $retry_delay
+                );
+            } else {
+                $result = $api->send_with_retry(
+                    $chat_id,
+                    $message,
+                    'html',
+                    $buttons,
+                    false,
+                    $max_retries,
+                    $retry_delay
+                );
+            }
+
+            if ( is_wp_error( $result ) ) {
+                $all_sent = false;
+                WP_Ru_Max_Logger::log( 'post_sender', 'error', "Ошибка отправки записи #{$post->ID} в канал $chat_id: " . $result->get_error_message(), array(
+                    'post_id' => $post->ID,
+                    'chat_id' => $chat_id,
+                    'is_new'  => $is_new,
+                ) );
+            } else {
+                WP_Ru_Max_Logger::log( 'post_sender', 'success', "Запись #{$post->ID} успешно отправлена в канал $chat_id.", array(
+                    'post_id' => $post->ID,
+                    'chat_id' => $chat_id,
+                    'is_new'  => $is_new,
+                ) );
+            }
+        }
+
+        return $all_sent && ! empty( $channels );
+    }
+
+    /**
+     * Проверяет, подходит ли запись под фильтр категорий/тегов.
+     * Если фильтр не настроен — пропускает все записи.
+     */
+    private function matches_category_filter( $post_id, $settings ) {
+        $filter_cats = isset( $settings['filter_categories'] ) ? array_filter( array_map( 'intval', (array) $settings['filter_categories'] ) ) : array();
+        $filter_tags = isset( $settings['filter_tags'] ) ? array_filter( array_map( 'intval', (array) $settings['filter_tags'] ) ) : array();
+
+        // Если оба фильтра пустые — отправляем все
+        if ( empty( $filter_cats ) && empty( $filter_tags ) ) {
+            return true;
+        }
+
+        // Проверяем категории
+        if ( ! empty( $filter_cats ) ) {
+            $post_cats = wp_get_post_categories( $post_id, array( 'fields' => 'ids' ) );
+            if ( array_intersect( $filter_cats, $post_cats ) ) {
+                return true;
+            }
+        }
+
+        // Проверяем теги
+        if ( ! empty( $filter_tags ) ) {
+            $post_tags = wp_get_post_tags( $post_id, array( 'fields' => 'ids' ) );
+            if ( array_intersect( $filter_tags, $post_tags ) ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Получить кнопки из настроек с заменой плейсхолдеров в URL.
+     */
+    private function get_buttons( $settings, $post = null ) {
+        $buttons = isset( $settings['post_buttons'] ) ? (array) $settings['post_buttons'] : array();
+        $buttons = array_values( array_filter( $buttons, function( $b ) {
+            return ! empty( $b['text'] ) && ! empty( $b['url'] );
+        } ) );
+
+        if ( empty( $buttons ) || ! $post ) {
+            return $buttons;
+        }
+
+        $title     = get_the_title( $post );
+        $url       = get_permalink( $post );
+        $author    = get_the_author_meta( 'display_name', $post->post_author );
+        $date      = get_the_date( 'd.m.Y', $post );
+        $home_url  = home_url();
+        $site_name = get_bloginfo( 'name' );
+
+        foreach ( $buttons as &$btn ) {
+            $btn['url'] = str_replace(
+                array( '{url}', '{title}', '{author}', '{date}', '{home_url}', '{site_name}' ),
+                array( $url, $title, $author, $date, $home_url, $site_name ),
+                $btn['url']
+            );
+            $btn['url'] = $this->replace_field_placeholders( $btn['url'], $post );
+
+            $btn['url'] = preg_replace_callback( '/\{encode:([^}]+)\}/', function( $m ) {
+                return urlencode( $m[1] );
+            }, $btn['url'] );
+        }
+        unset( $btn );
+
+        return $buttons;
+    }
+
+    /**
+     * Заменяет плейсхолдеры {meta_KEY} и {acf_KEY} в строке шаблона.
+     */
+    private function replace_field_placeholders( $text, $post ) {
+        // Значения meta/ACF экранируются htmlspecialchars, чтобы символы <, >, &
+        // не ломали HTML-разметку при отправке сообщений с parse_mode=html.
+        $text = preg_replace_callback( '/\{meta_([a-zA-Z0-9_\-]+)\}/', function( $m ) use ( $post ) {
+            $val = get_post_meta( $post->ID, $m[1], true );
+            return is_scalar( $val ) ? htmlspecialchars( (string) $val, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' ) : '';
+        }, $text );
+
+        $text = preg_replace_callback( '/\{acf_([a-zA-Z0-9_\-]+)\}/', function( $m ) use ( $post ) {
+            if ( function_exists( 'get_field' ) ) {
+                $val = get_field( $m[1], $post->ID );
+                if ( is_array( $val ) ) {
+                    $val = implode( ', ', $val );
+                }
+                return is_scalar( $val ) ? htmlspecialchars( (string) $val, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' ) : '';
+            }
+            return '';
+        }, $text );
+
+        return $text;
+    }
+
+    /**
+     * Построить сообщение для записи.
+     */
+    private function build_post_message( $post, $is_new, $settings = array() ) {
+        if ( empty( $settings ) ) {
+            $settings = get_option( 'wp_ru_max_settings', array() );
+        }
+
+        $title    = get_the_title( $post );
+        $url      = get_permalink( $post );
+        $excerpt  = has_excerpt( $post ) ? get_the_excerpt( $post ) : wp_trim_words( strip_tags( $post->post_content ), 100 );
+        $excerpt  = wp_strip_all_tags( $excerpt );
+        $author   = get_the_author_meta( 'display_name', $post->post_author );
+        $date     = get_the_date( 'd.m.Y', $post );
+        $action   = $is_new ? 'Новая публикация' : 'Обновлённая публикация';
+        $pt_obj   = get_post_type_object( $post->post_type );
+        $pt_label = $pt_obj ? $pt_obj->label : $post->post_type;
+
+        $excerpt_max_chars = isset( $settings['excerpt_max_chars'] ) ? intval( $settings['excerpt_max_chars'] ) : 300;
+        if ( $excerpt_max_chars > 0 && wp_ru_max_strlen( $excerpt ) > $excerpt_max_chars ) {
+            $excerpt = wp_ru_max_substr( $excerpt, 0, $excerpt_max_chars ) . '…';
+        }
+
+        $template = isset( $settings['post_message_template'] ) ? trim( $settings['post_message_template'] ) : '';
+
+        if ( ! empty( $template ) ) {
+            $msg = str_replace(
+                array( '{title}', '{excerpt}', '{url}', '{author}', '{date}', '{status}', '{site_name}', '{post_type}' ),
+                array( $title, $excerpt, $url, $author, $date, $action, get_bloginfo( 'name' ), $pt_label ),
+                $template
+            );
+            $msg = $this->replace_field_placeholders( $msg, $post );
+            return $msg;
+        }
+
+        $show_read_more    = isset( $settings['show_read_more'] ) ? (bool) $settings['show_read_more'] : true;
+        $show_action_label = isset( $settings['show_action_label'] ) ? (bool) $settings['show_action_label'] : true;
+        $show_author_date  = isset( $settings['show_author_date'] ) ? (bool) $settings['show_author_date'] : true;
+
+        // Экранируем спецсимволы HTML (&, <, >) в динамических полях,
+        // иначе они сломают парсинг HTML-разметки на стороне MAX/Telegram.
+        $title_h  = htmlspecialchars( $title,  ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $author_h = htmlspecialchars( $author, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $date_h   = htmlspecialchars( $date,   ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $url_h    = esc_url( $url );
+
+        $msg = '';
+        if ( $show_action_label ) {
+            $msg .= "<b>$action</b>\n\n";
+        }
+        $msg .= "<b>$title_h</b>\n";
+
+        if ( $excerpt ) {
+            $msg .= "\n" . $excerpt . "\n";
+        }
+
+        if ( $show_author_date ) {
+            $msg .= "\nАвтор: $author_h";
+            $msg .= "\nДата: $date_h";
+        }
+
+        if ( $show_read_more ) {
+            $msg .= "\n\n<a href=\"$url_h\">Читать полностью</a>";
+        }
+
+        return $msg;
+    }
+
+    public function send_post_manually( $post ) {
+        $settings   = get_option( 'wp_ru_max_settings', array() );
+        $channels   = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
+
+        if ( empty( $channels ) ) {
+            return new WP_Error( 'no_channels', 'Нет настроенных каналов. Добавьте канал на вкладке «Отправка публикаций».' );
+        }
+
+        $message    = $this->build_post_message( $post, false, $settings );
+        $buttons    = $this->get_buttons( $settings, $post );
+        $api        = new WP_Ru_Max_API();
+        $send_image = isset( $settings['send_post_image'] ) ? (bool) $settings['send_post_image'] : true;
+        $max_retries = isset( $settings['retry_count'] ) ? (int) $settings['retry_count'] : 2;
+        $retry_delay = isset( $settings['retry_delay_seconds'] ) ? (int) $settings['retry_delay_seconds'] : 5;
+        $errors     = array();
+
+        foreach ( $channels as $channel ) {
+            $chat_id = trim( $channel );
+            if ( empty( $chat_id ) ) {
+                continue;
+            }
+
+            $thumbnail_url = $send_image ? $this->get_post_image_url( $post ) : false;
+            $result = $api->send_with_retry( $chat_id, $message, 'html', $buttons, $thumbnail_url ?: false, $max_retries, $retry_delay );
+
+            if ( is_wp_error( $result ) ) {
+                $errors[] = $chat_id . ': ' . $result->get_error_message();
+                WP_Ru_Max_Logger::log( 'post_sender', 'error', "Ручная отправка записи #{$post->ID} в канал $chat_id НЕУДАЧНА: " . $result->get_error_message() );
+            } else {
+                WP_Ru_Max_Logger::log( 'post_sender', 'success', "Ручная отправка записи #{$post->ID} в канал $chat_id успешна." );
+            }
+        }
+
+        if ( count( $errors ) === count( $channels ) && ! empty( $errors ) ) {
+            return new WP_Error( 'send_failed', implode( '; ', $errors ) );
+        }
+
+        return true;
+    }
+
+    public function send_test( $chat_id ) {
+        $message = "<b>Тестовое сообщение WP Ru-max</b>\n\nОтправка публикаций настроена и работает корректно!\n\nСайт: " . get_bloginfo( 'url' );
+        $api     = new WP_Ru_Max_API();
+        return $api->send_message( $chat_id, $message, 'html' );
+    }
+
+    /**
+     * Получить URL изображения для записи.
+     *
+     * Порядок поиска:
+     *   1. Миниатюра записи (Featured Image)
+     *   2. Первый <img> из тела записи
+     *   3. Первое прикреплённое изображение (медиабиблиотека)
+     *
+     * Возвращает URL строкой или false если ничего не найдено.
+     */
+    private function get_post_image_url( $post ) {
+        // 1. Миниатюра записи
+        $url = get_the_post_thumbnail_url( $post->ID, 'large' );
+        if ( $url ) {
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Изображение для записи #{$post->ID}: миниатюра.", array( 'url' => $url ) );
+            return $url;
+        }
+
+        // 2. Первый <img> из тела записи
+        if ( ! empty( $post->post_content ) ) {
+            preg_match( '/<img[^>]+src=["\']([^"\']+)["\'][^>]*>/i', $post->post_content, $matches );
+            if ( ! empty( $matches[1] ) ) {
+                $url = $matches[1];
+                // Пропускаем иконки и служебные изображения (меньше 50px обычно emoji/иконки)
+                if ( strpos( $url, 'data:' ) === false && strpos( $url, 'emoji' ) === false ) {
+                    WP_Ru_Max_Logger::log( 'post_sender', 'info', "Изображение для записи #{$post->ID}: первый <img> из контента.", array( 'url' => $url ) );
+                    return $url;
+                }
+            }
+        }
+
+        // 3. Первое прикреплённое изображение
+        $attachments = get_attached_media( 'image', $post->ID );
+        if ( ! empty( $attachments ) ) {
+            $first      = reset( $attachments );
+            $attach_url = wp_get_attachment_url( $first->ID );
+            if ( $attach_url ) {
+                WP_Ru_Max_Logger::log( 'post_sender', 'info', "Изображение для записи #{$post->ID}: прикреплённый файл.", array( 'url' => $attach_url ) );
+                return $attach_url;
+            }
+        }
+
+        WP_Ru_Max_Logger::log( 'post_sender', 'info', "Изображение для записи #{$post->ID} не найдено — отправка без картинки." );
+        return false;
     }
 }
