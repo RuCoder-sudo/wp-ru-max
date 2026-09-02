@@ -9,7 +9,7 @@
   
 **WP Ru-max** Плагин для WordPress, который подключает ваш сайт к российскому мессенджеру **MAX (max.ru)**. Автоматическая публикация записей, личные уведомления с любых форм и красивый чат-виджет.
 
-![Version](https://img.shields.io/badge/version-1.0.58-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.59-blue?style=flat-square)
 ![WordPress](https://img.shields.io/badge/WordPress-5.8%2B-21759b?style=flat-square&logo=wordpress)
 ![WooCommerce](https://img.shields.io/badge/WooCommerce-4.0%2B-96588a?style=flat-square)
 ![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4?style=flat-square&logo=php)
@@ -86,6 +86,11 @@
 | Звуковое уведомление | 3 варианта (синтез через Web Audio API) |
 | Задержка появления | 0 / 5 / 8 / 10 / 15 секунд |
 | Отступ от края | Слайдер 0–200 px |
+
+### Новое в версии 1.0.59
+
+- Исправлена совместимость проверки лицензии со старыми CA-пакетами PHP/cURL после перехода сервера лицензий на новую цепочку Let's Encrypt.
+- SSL-проверка остаётся включённой; для `fixcoder.ru` используется актуальный публичный Root YR.
 
 ### Новое в версии 1.0.58
 
@@ -181,6 +186,10 @@
 ---
 
 ## Changelog
+
+### 1.0.59
+* Исправлено: старые PHP/cURL больше не должны выдавать `cURL error 60` при проверке лицензии через новую цепочку Let's Encrypt.
+* Безопасность: проверка сертификата остаётся включённой, добавлен только доверенный публичный Root YR для сервера лицензий.
 
 ### 1.0.58
 * Исправлено: запрос лицензии больше не блокируется, если пользователь не согласен на рекламную рассылку.
