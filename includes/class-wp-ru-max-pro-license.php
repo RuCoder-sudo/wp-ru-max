@@ -5,6 +5,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class WP_Ru_Max_Pro_License {
     const VERIFY_URL = 'https://fixcoder.ru/wp-json/wp-ru-max-km/v1/verify';
+    const VERIFY_CA = 'assets/fixcoder-root-yr.pem';
     const SYNC_TRANSIENT = 'wp_ru_max_pro_license_sync';
     private static $instance;
 
@@ -36,14 +37,20 @@ class WP_Ru_Max_Pro_License {
             return false;
         }
 
-        $response = wp_remote_post( self::VERIFY_URL, array(
+        $request_args = array(
             'timeout' => 15,
+            'sslverify' => true,
             'headers' => array(
                 'Content-Type' => 'application/json',
                 'X-WPRM-Secret' => defined( 'WP_Ru_Max_License::API_SECRET' ) ? WP_Ru_Max_License::API_SECRET : '',
             ),
             'body' => wp_json_encode( array( 'key' => $key ) ),
-        ) );
+        );
+        $ca_file = defined( 'WP_RU_MAX_PLUGIN_DIR' ) ? WP_RU_MAX_PLUGIN_DIR . self::VERIFY_CA : '';
+        if ( $ca_file && is_readable( $ca_file ) ) {
+            $request_args['sslcertificates'] = $ca_file;
+        }
+        $response = wp_remote_post( self::VERIFY_URL, $request_args );
         $body = ! is_wp_error( $response ) ? json_decode( wp_remote_retrieve_body( $response ), true ) : array();
         if ( is_wp_error( $response ) || ! is_array( $body ) || ! array_key_exists( 'valid', $body ) ) {
             return false;
