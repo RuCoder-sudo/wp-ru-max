@@ -3,7 +3,7 @@
  * Plugin Name:       WP Ru-max
  * Plugin URI:        https://fixcoder.ru/wp-ru-max/
  * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Jetpack / Elementor и настраиваемый чат-виджет с анимацией и звуком. Поддерживает WordPress Multisite (мультисайт) и поддомены.
- * Version:           1.0.56
+ * Version:           1.0.57
  * Author:            Сергей Солошенко (RuCoder)
  * Author URI:        https://fixcoder.ru/
  * License:           GPL v2 or later
@@ -73,7 +73,16 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-if ( ! defined( 'WP_RU_MAX_VERSION' ) ) define( 'WP_RU_MAX_VERSION', '1.0.56' );
+// A versioned copy can remain active after a manual upload or an interrupted
+// update. Never execute this bootstrap twice: the plugin uses global class and
+// function names, so a second copy would otherwise end in a redeclaration
+// fatal before WordPress can render the recovery screen.
+if ( class_exists( 'WP_Ru_Max', false ) || defined( 'WP_RU_MAX_BOOTSTRAPPED' ) ) {
+    return;
+}
+if ( ! defined( 'WP_RU_MAX_BOOTSTRAPPED' ) ) define( 'WP_RU_MAX_BOOTSTRAPPED', true );
+
+if ( ! defined( 'WP_RU_MAX_VERSION' ) ) define( 'WP_RU_MAX_VERSION', '1.0.57' );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_FILE' ) ) define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_DIR' ) ) define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_URL' ) ) define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -83,36 +92,15 @@ if ( ! defined( 'WP_RU_MAX_API_BASE' ) ) define( 'WP_RU_MAX_API_BASE', 'https://
 // PRO is bundled into the main plugin. The option names stay compatible with
 // the standalone add-on so existing settings and conversations are preserved.
 if ( ! defined( 'WP_RU_MAX_PRO_BUNDLED' ) ) define( 'WP_RU_MAX_PRO_BUNDLED', true );
-// Version 1.0.56: the bundled module uses the same cache-busting version as
+// Version 1.0.57: the bundled module uses the same cache-busting version as
 // the main plugin, so all updated CSS/JS files are refreshed together.
-if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.56' );
+if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.57' );
 if ( ! defined( 'WP_RU_MAX_PRO_FILE' ) ) define( 'WP_RU_MAX_PRO_FILE', __FILE__ );
 if ( ! defined( 'WP_RU_MAX_PRO_DIR' ) ) define( 'WP_RU_MAX_PRO_DIR', WP_RU_MAX_PLUGIN_DIR );
 if ( ! defined( 'WP_RU_MAX_PRO_URL' ) ) define( 'WP_RU_MAX_PRO_URL', WP_RU_MAX_PLUGIN_URL . 'assets/pro/' );
 if ( ! defined( 'WP_RU_MAX_PRO_OPTION' ) ) define( 'WP_RU_MAX_PRO_OPTION', 'wp_ru_max_pro_settings' );
 if ( ! defined( 'WP_RU_MAX_PRO_LICENSE_OPTION' ) ) define( 'WP_RU_MAX_PRO_LICENSE_OPTION', 'wp_ru_max_pro_license' );
 
-// Always load PHP files from the directory of this plugin file. A legacy
-// add-on or a second copy of the plugin may have defined the old generic
-// path constant before this file is loaded.
-$wp_ru_max_includes_dir = __DIR__ . '/includes/';
-
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-compat.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-api.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-post-sender.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-auto-posting.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-notifications.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-chat-widget.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-logger.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-license.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-admin.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-contacts.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-updater.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-share.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-oauth.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-telegram-api.php';
-require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-social-poster.php';
 /**
  * Detect the former standalone PRO add-on before loading the bundled copy.
  *
@@ -121,38 +109,106 @@ require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-social-poster.php';
  * active plugins can be loaded in either order; when the main plugin loads
  * first, the later add-on would otherwise cause a redeclaration fatal error.
  */
-function wp_ru_max_has_legacy_pro_addon() {
-    $active_plugins = function_exists( 'get_option' )
-        ? (array) get_option( 'active_plugins', array() )
-        : array();
-    $network_plugins = function_exists( 'get_site_option' )
-        ? array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) )
-        : array();
-    $current_plugin = plugin_basename( __FILE__ );
-
-    foreach ( array_unique( array_merge( $active_plugins, $network_plugins ) ) as $plugin_file ) {
-        if ( ! is_string( $plugin_file ) || $plugin_file === $current_plugin ) {
-            continue;
-        }
-        if ( preg_match( '#(?:^|/)wp-ru-max-pro(?:[-/]|\.php$)#i', $plugin_file ) ) {
+if ( ! function_exists( 'wp_ru_max_has_legacy_pro_addon' ) ) {
+    function wp_ru_max_has_legacy_pro_addon() {
+        if (
+            function_exists( 'wp_ru_max_pro_settings' )
+            || class_exists( 'WP_Ru_Max_Pro_Admin', false )
+            || class_exists( 'WP_Ru_Max_Pro_Widget', false )
+        ) {
             return true;
         }
-    }
 
-    return false;
+        $active_plugins  = function_exists( 'get_option' )
+            ? (array) get_option( 'active_plugins', array() )
+            : array();
+        $network_plugins = function_exists( 'get_site_option' )
+            ? array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) )
+            : array();
+        $current_plugin  = plugin_basename( __FILE__ );
+
+        foreach ( array_unique( array_merge( $active_plugins, $network_plugins ) ) as $plugin_file ) {
+            if ( ! is_string( $plugin_file ) || $plugin_file === $current_plugin ) {
+                continue;
+            }
+            if ( preg_match( '#(?:^|/)wp-ru-max-pro(?:[-/]|\.php$)#i', $plugin_file ) ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
+// Always load PHP files from the directory of this plugin file. A legacy
+// add-on or a second copy of the plugin may have defined the old generic
+// path constant before this file is loaded.
+$wp_ru_max_includes_dir = __DIR__ . '/includes/';
+$wp_ru_max_legacy_pro   = wp_ru_max_has_legacy_pro_addon();
+
+foreach (
+    array(
+        'class-wp-ru-max.php',
+        'class-wp-ru-max-compat.php',
+        'class-wp-ru-max-api.php',
+        'class-wp-ru-max-post-sender.php',
+        'class-wp-ru-max-auto-posting.php',
+        'class-wp-ru-max-notifications.php',
+        'class-wp-ru-max-chat-widget.php',
+        'class-wp-ru-max-logger.php',
+        'class-wp-ru-max-license.php',
+        'class-wp-ru-max-admin.php',
+        'class-wp-ru-max-updater.php',
+        'class-wp-ru-max-share.php',
+        'class-wp-ru-max-oauth.php',
+        'class-wp-ru-max-telegram-api.php',
+        'class-wp-ru-max-social-poster.php',
+    ) as $wp_ru_max_file
+) {
+    $wp_ru_max_path = $wp_ru_max_includes_dir . $wp_ru_max_file;
+    if ( is_readable( $wp_ru_max_path ) ) {
+        require_once $wp_ru_max_path;
+    }
+}
+
+// The former add-on contained a compatible contacts implementation too.
+// Loading both copies would redeclare its helpers/classes, so keep the
+// standalone implementation in charge when it is active.
+$wp_ru_max_contacts_file = $wp_ru_max_includes_dir . 'class-wp-ru-max-contacts.php';
+if (
+    ! $wp_ru_max_legacy_pro
+    && ! function_exists( 'wp_ru_max_contacts_settings' )
+    && ! class_exists( 'WP_Ru_Max_Contacts', false )
+    && is_readable( $wp_ru_max_contacts_file )
+) {
+    require_once $wp_ru_max_contacts_file;
 }
 
 // If the old add-on was loaded first or is active elsewhere in the request,
 // let it own the compatible PRO functions/classes and skip the bundled copy.
-if ( ! function_exists( 'wp_ru_max_pro_settings' ) && ! wp_ru_max_has_legacy_pro_addon() ) {
-    require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-pro.php';
-    require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-pro-license.php';
-    require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-pro-admin.php';
-    require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-pro-widget.php';
+if (
+    ! $wp_ru_max_legacy_pro
+    && ! function_exists( 'wp_ru_max_pro_settings' )
+    && ! class_exists( 'WP_Ru_Max_Pro_Admin', false )
+    && ! class_exists( 'WP_Ru_Max_Pro_Widget', false )
+) {
+    foreach (
+        array(
+            'class-wp-ru-max-pro.php',
+            'class-wp-ru-max-pro-license.php',
+            'class-wp-ru-max-pro-admin.php',
+            'class-wp-ru-max-pro-widget.php',
+        ) as $wp_ru_max_pro_file
+    ) {
+        $wp_ru_max_pro_path = $wp_ru_max_includes_dir . $wp_ru_max_pro_file;
+        if ( is_readable( $wp_ru_max_pro_path ) ) {
+            require_once $wp_ru_max_pro_path;
+        }
+    }
 }
 
 function wp_ru_max() {
-    return WP_Ru_Max::instance();
+    return class_exists( 'WP_Ru_Max', false ) ? WP_Ru_Max::instance() : null;
 }
 
 /**
@@ -185,7 +241,9 @@ function wp_ru_max_handle_vk_callback_route() {
     if ( ! $is_callback ) {
         return;
     }
-    WP_Ru_Max_Admin::instance()->vk_oauth_callback();
+    if ( class_exists( 'WP_Ru_Max_Admin', false ) ) {
+        WP_Ru_Max_Admin::instance()->vk_oauth_callback();
+    }
 }
 add_action( 'template_redirect', 'wp_ru_max_handle_vk_callback_route', 1 );
 
@@ -193,18 +251,22 @@ wp_ru_max();
 
 // Инициализируем апдейтер только в контексте wp-admin, иначе он добавляет
 // фильтры и обращается к transient-кешу на каждом фронтенд-запросе.
-if ( is_admin() ) {
+if ( is_admin() && class_exists( 'WP_Ru_Max_Updater', false ) ) {
     new WP_Ru_Max_Updater( WP_RU_MAX_PLUGIN_FILE, WP_RU_MAX_VERSION );
 }
 
 // Хуки активации/деактивации
-register_activation_hook( __FILE__, array( 'WP_Ru_Max', 'activate' ) );
-register_deactivation_hook( __FILE__, array( 'WP_Ru_Max', 'deactivate' ) );
+if ( class_exists( 'WP_Ru_Max', false ) ) {
+    register_activation_hook( __FILE__, array( 'WP_Ru_Max', 'activate' ) );
+    register_deactivation_hook( __FILE__, array( 'WP_Ru_Max', 'deactivate' ) );
+}
 
 // Загружаем сетевой класс для Multisite
-if ( function_exists( 'is_multisite' ) && is_multisite() ) {
+if ( function_exists( 'is_multisite' ) && is_multisite() && ! class_exists( 'WP_Ru_Max_Network_Admin', false ) ) {
     require_once $wp_ru_max_includes_dir . 'class-wp-ru-max-network-admin.php';
-    WP_Ru_Max_Network_Admin::instance();
+    if ( class_exists( 'WP_Ru_Max_Network_Admin', false ) ) {
+        WP_Ru_Max_Network_Admin::instance();
+    }
 }
 
 // Existing installations need one rewrite flush after upgrading to the
