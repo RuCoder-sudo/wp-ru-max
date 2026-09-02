@@ -4,7 +4,7 @@ Tags: max, max messenger, notifications, chat widget, auto publish, woocommerce,
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.0.58
+Stable tag: 1.0.59
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,7 +12,7 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 == Description ==
 
-WP Ru-max — плагин для интеграции вашего WordPress сайта с российским мессенджером MAX (max.ru). Версия 1.0.58.
+WP Ru-max — плагин для интеграции вашего WordPress сайта с российским мессенджером MAX (max.ru). Версия 1.0.59.
 
 **Три модуля в одном плагине:**
 
@@ -20,6 +20,11 @@ WP Ru-max — плагин для интеграции вашего WordPress с
 * Автопостинг по расписанию — в редакторе записи можно выбрать MAX, Telegram, ВКонтакте, Одноклассники и Яндекс Дзен, указать дату и время, а затем перенести задание мышью в календаре раздела «Ru-max → Автопостинг».
 * Личные уведомления — перехват wp_mail() — все письма WordPress (заказы WooCommerce, заявки с форм CF7, Elementor, Gravity Forms, Ninja Forms и других) дублируются в личный чат с ботом MAX.
 * Чат-виджет — плавающая кнопка MAX с приветствием, анимацией «печатания», звуком, задержкой появления и попапом удержания.
+
+**Новое в версии 1.0.59:**
+
+* Исправлена совместимость проверки лицензии со старыми CA-пакетами PHP/cURL.
+* Проверка SSL остаётся включённой; добавлен актуальный публичный корневой сертификат Root YR для `fixcoder.ru`.
 
 **Новое в версии 1.0.58:**
 
