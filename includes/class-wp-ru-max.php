@@ -216,8 +216,12 @@ class WP_Ru_Max {
             $sites = get_sites( array( 'number' => 0 ) );
             foreach ( $sites as $site ) {
                 switch_to_blog( (int) $site->blog_id );
-                wp_clear_scheduled_hook( WP_Ru_Max_Post_Sender::QUEUE_WORKER_HOOK );
-                wp_clear_scheduled_hook( WP_Ru_Max_Auto_Posting::CRON_HOOK );
+                if ( class_exists( 'WP_Ru_Max_Post_Sender', false ) ) {
+                    wp_clear_scheduled_hook( WP_Ru_Max_Post_Sender::QUEUE_WORKER_HOOK );
+                }
+                if ( class_exists( 'WP_Ru_Max_Auto_Posting', false ) ) {
+                    wp_clear_scheduled_hook( WP_Ru_Max_Auto_Posting::CRON_HOOK );
+                }
                 restore_current_blog();
             }
         } else {
