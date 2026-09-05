@@ -2,9 +2,9 @@
 Contributors: wp-ru-max
 Tags: max, max messenger, notifications, chat widget, auto publish, woocommerce, contact form 7, elementor, multisite, subdomain
 Requires at least: 5.8
-Tested up to: 6.7
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.59
+Stable tag: 1.0.61
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,7 +12,7 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 == Description ==
 
-WP Ru-max — плагин для интеграции вашего WordPress сайта с российским мессенджером MAX (max.ru). Версия 1.0.59.
+WP Ru-max — плагин для интеграции вашего WordPress сайта с российским мессенджером MAX (max.ru). Версия 1.0.61.
 
 **Три модуля в одном плагине:**
 
@@ -21,7 +21,14 @@ WP Ru-max — плагин для интеграции вашего WordPress с
 * Личные уведомления — перехват wp_mail() — все письма WordPress (заказы WooCommerce, заявки с форм CF7, Elementor, Gravity Forms, Ninja Forms и других) дублируются в личный чат с ботом MAX.
 * Чат-виджет — плавающая кнопка MAX с приветствием, анимацией «печатания», звуком, задержкой появления и попапом удержания.
 
-**Новое в версии 1.0.59:**
+**Новое в версии 1.0.61:**
+
+* Исправлена критическая ошибка старой очереди с вызовом несуществующей функции `add_transient()`.
+* Задержка автоматической отправки новой записи теперь считается от фактического времени публикации, а не от позднего запуска WP-Cron.
+* При cURL error 60 сетевой запрос повторяется через системное хранилище сертификатов WordPress; проверка SSL остаётся включённой.
+* Обновлена диагностика очереди и заявлена совместимость с WordPress 5.8–7.1 и PHP 7.4–8.5.
+
+**Новое в версии 1.0.60:**
 
 * Исправлена совместимость проверки лицензии со старыми CA-пакетами PHP/cURL.
 * Проверка SSL остаётся включённой; добавлен актуальный публичный корневой сертификат Root YR для `fixcoder.ru`.
