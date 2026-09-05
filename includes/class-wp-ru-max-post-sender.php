@@ -212,14 +212,53 @@ class WP_Ru_Max_Post_Sender {
         }
     }
 
-    private function queue_add( $job_key, $post_id, $is_new, $due ) {
+    private function queue_add( $job_key, $post_id, $is_new, $due, $from_future = false ) {
         $queue = $this->get_queue();
         $queue[ $job_key ] = array(
-            'post_id' => $post_id,
-            'is_new'  => $is_new,
-            'due'     => $due,
+            'post_id'      => $post_id,
+            'is_new'       => $is_new,
+            'from_future'  => $from_future,
+            'due'          => $due,
         );
         $this->save_queue( $queue );
+    }
+
+    /**
+     * Возвращает timestamp публикации записи без зависимости от времени
+     * запуска текущего запроса. Это важно, когда WP-Cron запустил переход
+     * future -> publish с опозданием.
+     */
+    private function get_post_publish_timestamp( $post ) {
+        if ( ! empty( $post->post_date_gmt ) && '0000-00-00 00:00:00' !== $post->post_date_gmt ) {
+            $timestamp = strtotime( $post->post_date_gmt . ' UTC' );
+            if ( false !== $timestamp ) {
+                return (int) $timestamp;
+            }
+        }
+
+        if ( ! empty( $post->post_date ) && '0000-00-00 00:00:00' !== $post->post_date ) {
+            $timezone = function_exists( 'wp_timezone' ) ? wp_timezone() : new DateTimeZone( 'UTC' );
+            $date = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $post->post_date, $timezone );
+            if ( $date ) {
+                return (int) $date->getTimestamp();
+            }
+        }
+
+        return time();
+    }
+
+    /**
+     * Считает срок обработки от даты публикации только для задания,
+     * пришедшего из future -> publish. Для ручной публикации draft и для
+     * обновления уже опубликованной записи задержка идёт от текущего момента.
+     */
+    private function get_queue_due( $post, $delay, $use_post_date ) {
+        $delay = max( 0, (int) $delay );
+        $base  = $use_post_date ? $this->get_post_publish_timestamp( $post ) : time();
+
+        // WP-Cron не всегда принимает timestamp из прошлого как немедленное
+        // задание, поэтому оставляем минимум одну секунду на текущий запрос.
+        return max( time() + 1, $base + $delay );
     }
 
     /**
@@ -330,13 +369,7 @@ class WP_Ru_Max_Post_Sender {
         if ( 'future' === $post->post_status ) {
             $settings       = get_option( 'wp_ru_max_settings', array() );
             $send_delay     = isset( $settings['send_delay_seconds'] ) ? max( 0, (int) $settings['send_delay_seconds'] ) : 0;
-            $publish_time   = ! empty( $post->post_date_gmt ) && '0000-00-00 00:00:00' !== $post->post_date_gmt
-                ? strtotime( $post->post_date_gmt . ' UTC' )
-                : false;
-            $next_attempt   = max(
-                time() + MINUTE_IN_SECONDS,
-                $publish_time ? $publish_time + $send_delay + 15 : time() + MINUTE_IN_SECONDS
-            );
+            $next_attempt   = $this->get_queue_due( $post, $send_delay + 15, ! empty( $data['from_future'] ) );
             $data['due']    = $next_attempt;
             $data['attempts'] = 0;
             $queue[ $job_key ] = $data;
@@ -490,8 +523,9 @@ class WP_Ru_Max_Post_Sender {
             // опции (а не только в transient), чтобы её можно было перебрать и
             // обработать даже если само wp-cron событие не сработает вовремя.
             $job_key = $this->get_or_create_job_key( $post->ID, $is_new );
-            $due     = time() + $delay;
-            $this->queue_add( $job_key, $post->ID, $is_new, $due );
+            $from_future = 'future' === $old_status;
+            $due         = $this->get_queue_due( $post, $delay, $from_future );
+            $this->queue_add( $job_key, $post->ID, $is_new, $due, $from_future );
 
             // Стабильный ключ не допускает накопления одинаковых заданий при
             // повторном переходе записи в publish или повторном сохранении.
@@ -785,10 +819,25 @@ class WP_Ru_Max_Post_Sender {
 
         $template = isset( $settings['post_message_template'] ) ? trim( $settings['post_message_template'] ) : '';
 
+        $excerpt_h  = htmlspecialchars( $excerpt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $action_h   = htmlspecialchars( $action, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $site_name_h = htmlspecialchars( get_bloginfo( 'name' ), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $pt_label_h = htmlspecialchars( $pt_label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $url_h      = esc_url( $url );
+
         if ( ! empty( $template ) ) {
             $msg = str_replace(
                 array( '{title}', '{excerpt}', '{url}', '{author}', '{date}', '{status}', '{site_name}', '{post_type}' ),
-                array( $title, $excerpt, $url, $author, $date, $action, get_bloginfo( 'name' ), $pt_label ),
+                array(
+                    htmlspecialchars( $title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' ),
+                    $excerpt_h,
+                    $url_h,
+                    htmlspecialchars( $author, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' ),
+                    htmlspecialchars( $date, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' ),
+                    $action_h,
+                    $site_name_h,
+                    $pt_label_h,
+                ),
                 $template
             );
             $msg = $this->replace_field_placeholders( $msg, $post );
@@ -804,7 +853,6 @@ class WP_Ru_Max_Post_Sender {
         $title_h  = htmlspecialchars( $title,  ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
         $author_h = htmlspecialchars( $author, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
         $date_h   = htmlspecialchars( $date,   ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
-        $url_h    = esc_url( $url );
 
         $msg = '';
         if ( $show_action_label ) {
@@ -813,7 +861,7 @@ class WP_Ru_Max_Post_Sender {
         $msg .= "<b>$title_h</b>\n";
 
         if ( $excerpt ) {
-            $msg .= "\n" . $excerpt . "\n";
+            $msg .= "\n" . $excerpt_h . "\n";
         }
 
         if ( $show_author_date ) {
