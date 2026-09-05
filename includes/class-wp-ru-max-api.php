@@ -80,7 +80,7 @@ class WP_Ru_Max_API {
             $args['body'] = $json;
         }
 
-        $response = wp_remote_request( $url, $args );
+        $response = wp_ru_max_remote_request_with_ssl_fallback( 'request', $url, $args );
 
         if ( is_wp_error( $response ) ) {
             WP_Ru_Max_Logger::log( 'api', 'error', 'HTTP Error: ' . $response->get_error_message(), array(
@@ -152,7 +152,7 @@ class WP_Ru_Max_API {
         $multipart .= $file_data . "\r\n";
         $multipart .= "--{$boundary}--\r\n";
 
-        $response = wp_remote_post( $url, array_merge( array(
+        $response = wp_ru_max_remote_request_with_ssl_fallback( 'post', $url, array_merge( array(
             'timeout'   => 60,
             'headers'   => array(
                 'Authorization' => $this->token,
@@ -518,7 +518,7 @@ class WP_Ru_Max_API {
         $multipart .= $image_body . "\r\n";
         $multipart .= "--{$boundary}--\r\n";
 
-        $upload_response = wp_remote_post( $upload_url, array_merge( array(
+        $upload_response = wp_ru_max_remote_request_with_ssl_fallback( 'post', $upload_url, array_merge( array(
             'timeout'   => 60,
             'headers'   => array(
                 'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
