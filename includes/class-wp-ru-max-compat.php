@@ -83,3 +83,40 @@ if ( ! function_exists( 'wp_ru_max_utf8' ) ) {
         return $value;
     }
 }
+
+/**
+ * Повторяет HTTPS-запрос без дополнительного CA-файла только после ошибки
+ * проверки сертификата. Проверка SSL при этом остаётся включённой: сначала
+ * используется комплект сертификатов плагина, затем системный комплект
+ * WordPress/cURL. Это помогает старым хостингам, где один из комплектов
+ * неполный или собран из устаревших сертификатов.
+ */
+if ( ! function_exists( 'wp_ru_max_remote_request_with_ssl_fallback' ) ) {
+    function wp_ru_max_remote_request_with_ssl_fallback( $method, $url, $args = array() ) {
+        $method = strtolower( (string) $method );
+        $method = in_array( $method, array( 'get', 'post', 'head', 'request' ), true ) ? $method : 'request';
+        $callback = 'wp_remote_' . $method;
+
+        if ( ! function_exists( $callback ) ) {
+            return new WP_Error( 'http_method_unavailable', 'WordPress не поддерживает HTTP-метод ' . $method . '.' );
+        }
+
+        $response = call_user_func( $callback, $url, $args );
+        if ( ! is_wp_error( $response ) || empty( $args['sslcertificates'] ) ) {
+            return $response;
+        }
+
+        $error_message = strtolower( (string) $response->get_error_message() );
+        $certificate_error = false !== strpos( $error_message, 'curl error 60' )
+            || false !== strpos( $error_message, 'ssl certificate' )
+            || false !== strpos( $error_message, 'certificate problem' )
+            || false !== strpos( $error_message, 'certificate verify failed' );
+
+        if ( ! $certificate_error ) {
+            return $response;
+        }
+
+        unset( $args['sslcertificates'] );
+        return call_user_func( $callback, $url, $args );
+    }
+}
