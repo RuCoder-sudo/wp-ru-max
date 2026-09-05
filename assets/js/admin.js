@@ -580,6 +580,7 @@
                     settings:      'Настройки',
                     direct_access: 'Прямой доступ',
                     social:        'Соц. сети',
+                    autopost:      'Автопостинг',
                     push:          'Push',
                 };
                 var html = '<table><thead><tr><th>ID</th><th>Время</th><th>Тип</th><th>Статус</th><th>Событие</th><th>Детали</th></tr></thead><tbody>';
@@ -686,11 +687,48 @@
                     return;
                 }
                 renderAutopostCalendar(res.data);
+                renderAutopostQueue(res.data.queue || [], res.data.networks || {});
                 $('#wp-ru-max-autopost-total').text(res.data.summary.total);
                 $('#wp-ru-max-autopost-errors').text(res.data.summary.errors);
             }, function (msg) {
                 setAutoNotice('#wp-ru-max-calendar-result', false, msg);
             });
+        }
+
+        function renderAutopostQueue(queue, networkLabels) {
+            var $queue = $('#wp-ru-max-autopost-queue');
+            if (!$queue.length) { return; }
+            if (!queue || !queue.length) {
+                $queue.html('<p class="wp-ru-max-autopost-queue-empty">Очередь пуста. Все запланированные статьи уже опубликованы или заданий нет.</p>');
+                return;
+            }
+
+            var html = '<div class="wp-ru-max-autopost-queue-list">';
+            $.each(queue, function (_, item) {
+                var states = [];
+                $.each(item.statuses || {}, function (network, state) {
+                    var label = networkLabels[network] || network;
+                    states.push(label + ': ' + state);
+                });
+                var errors = [];
+                $.each(item.errors || {}, function (network, message) {
+                    errors.push((networkLabels[network] || network) + ': ' + message);
+                });
+                html += '<details class="wp-ru-max-autopost-queue-item">';
+                html += '<summary><a href="' + escAttr(item.edit_url || '#') + '">' + escHtml(item.title || '(без названия)') + '</a>';
+                html += '<span class="wp-ru-max-autopost-queue-date">' + escHtml(item.datetime || 'без даты') + '</span></summary>';
+                html += '<div class="wp-ru-max-autopost-queue-details">';
+                html += '<div><strong>Сети:</strong> ' + escHtml((item.networks || []).map(function (network) {
+                    return networkLabels[network] || network;
+                }).join(', ') || 'не указаны') + '</div>';
+                html += '<div><strong>Состояние:</strong> ' + escHtml(states.join(', ') || 'pending') + '</div>';
+                if (errors.length) {
+                    html += '<div class="wp-ru-max-autopost-queue-error"><strong>Ошибки:</strong> ' + escHtml(errors.join(' | ')) + '</div>';
+                }
+                html += '</div></details>';
+            });
+            html += '</div>';
+            $queue.html(html);
         }
 
         function renderAutopostCalendar(data) {
@@ -719,8 +757,9 @@
                 html += '<div class="wp-ru-max-calendar-day' + (isToday ? ' is-today' : '') + '" data-date="' + dateKey + '" role="button" tabindex="0" aria-label="Запланировать публикацию на ' + dateKey + '">';
                 html += '<div class="wp-ru-max-calendar-day-number">' + dayNumber + '</div>';
                 $.each(eventsByDate[dateKey] || [], function (_, event) {
-                    var scheduled = event.type === 'scheduled' || event.type === 'error';
+                    var scheduled = event.type === 'scheduled' || event.type === 'error' || event.scheduled;
                     var completed = event.type === 'completed';
+                    var movable = scheduled || completed;
                     var hasError = event.type === 'error';
                     var stateText = '';
                     if (event.states) {
@@ -733,12 +772,12 @@
                         });
                         stateText = states.join(', ');
                     }
-                    var eventClasses = scheduled ? ['is-scheduled'] : (completed ? ['is-completed'] : ['is-published']);
+                    var eventClasses = completed ? ['is-scheduled', 'is-completed'] : (scheduled ? ['is-scheduled'] : ['is-published']);
                     if (hasError) {
                         eventClasses.push('is-error');
                     }
                     html += '<div class="wp-ru-max-calendar-event ' + eventClasses.join(' ') + '"' +
-                        (scheduled ? ' draggable="true" data-post-id="' + event.id + '" data-datetime="' + escAttr(event.datetime) + '" data-networks="' + escAttr(JSON.stringify(event.networks || [])) + '"' : '') +
+                        (movable ? ' draggable="true" data-post-id="' + event.id + '" data-datetime="' + escAttr(event.datetime) + '" data-networks="' + escAttr(JSON.stringify(event.networks || [])) + '"' : '') +
                         ' title="' + escAttr(event.title + (stateText ? ' — ' + stateText : '')) + '">';
                     html += '<span class="wp-ru-max-calendar-event-time">' + (event.datetime || '').slice(11, 16) + '</span> ';
                     html += '<span>' + escHtml(event.title || '(без названия)') + '</span>';
@@ -810,7 +849,16 @@
             $(this).addClass('is-active');
             $root.find('[data-autopost-pane]').removeClass('is-active');
             $root.find('[data-autopost-pane="' + tab + '"]').addClass('is-active');
-            if (tab === 'calendar') { loadAutopostCalendar(); }
+            if (tab === 'calendar') {
+                loadAutopostCalendar();
+            } else if ($(this).data('autopost-focus-queue')) {
+                window.setTimeout(function () {
+                    var $queue = $('#wp-ru-max-autopost-queue');
+                    if ($queue.length) {
+                        $queue[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }, 0);
+            }
         });
         $root.on('click', '.wp-ru-max-calendar-day:not(.is-empty)', function (event) {
             if ($(event.target).closest('.wp-ru-max-calendar-event, button, a, input, select').length) {
@@ -882,9 +930,14 @@
             setAutoNotice('#wp-ru-max-autopost-result', true, 'Состояние очереди обновлено.');
         });
         $root.on('dragstart', '.wp-ru-max-calendar-event.is-scheduled', function (event) {
+            var networks = [];
+            try {
+                networks = JSON.parse($(this).attr('data-networks') || '[]');
+            } catch (e) {}
             event.originalEvent.dataTransfer.setData('text/plain', JSON.stringify({
                 postId: $(this).data('post-id'),
-                datetime: $(this).data('datetime')
+                datetime: $(this).data('datetime'),
+                networks: networks
             }));
             $(this).addClass('is-dragging');
         });
@@ -905,17 +958,12 @@
             var source;
             try { source = JSON.parse(raw); } catch (e) { return; }
             var time = (source.datetime || '').slice(11, 16) || '10:00';
-            doAjax('wp_ru_max_autopost_move', {
-                post_id: source.postId,
-                datetime: $(this).data('date') + ' ' + time
-            }, function (res) {
-                if (res && res.success) {
-                    setAutoNotice('#wp-ru-max-calendar-result', true, 'Дата автопостинга изменена.');
-                    loadAutopostCalendar();
-                } else {
-                    setAutoNotice('#wp-ru-max-calendar-result', false, (res && res.data) || 'Не удалось перенести запись.');
-                }
-            });
+            openCalendarScheduleModal(
+                String($(this).data('date')),
+                source.postId,
+                time,
+                source.networks || []
+            );
         });
         $root.on('click', '.wp-ru-max-autopost-delete', function (event) {
             event.stopPropagation();
