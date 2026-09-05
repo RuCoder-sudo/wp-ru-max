@@ -604,8 +604,12 @@ class WP_Ru_Max_Admin {
         }
 
         if ( $is_plugin_page ) {
-            wp_enqueue_style( 'wp-ru-max-admin', WP_RU_MAX_PLUGIN_URL . 'assets/css/admin.css', array(), WP_RU_MAX_VERSION );
-            wp_enqueue_script( 'wp-ru-max-admin', WP_RU_MAX_PLUGIN_URL . 'assets/js/admin.js', array( 'jquery' ), WP_RU_MAX_VERSION, true );
+            $admin_css_path = WP_RU_MAX_PLUGIN_DIR . 'assets/css/admin.css';
+            $admin_js_path  = WP_RU_MAX_PLUGIN_DIR . 'assets/js/admin.js';
+            $admin_css_ver  = file_exists( $admin_css_path ) ? (string) filemtime( $admin_css_path ) : WP_RU_MAX_VERSION;
+            $admin_js_ver   = file_exists( $admin_js_path ) ? (string) filemtime( $admin_js_path ) : WP_RU_MAX_VERSION;
+            wp_enqueue_style( 'wp-ru-max-admin', WP_RU_MAX_PLUGIN_URL . 'assets/css/admin.css', array(), $admin_css_ver );
+            wp_enqueue_script( 'wp-ru-max-admin', WP_RU_MAX_PLUGIN_URL . 'assets/js/admin.js', array( 'jquery' ), $admin_js_ver, true );
             wp_localize_script( 'wp-ru-max-admin', 'wpRuMax', array(
                 'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
                 'nonce'     => wp_create_nonce( 'wp_ru_max_nonce' ),
@@ -1264,39 +1268,25 @@ jQuery(function($){
             <h3>История версий</h3>
             <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
 
-            <h4 style="margin-bottom:4px;">v1.0.57</h4>
+            <h4 style="margin-bottom:4px;">v1.0.61</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
-                <li><strong>Исправлено:</strong> OAuth VK ID теперь использует отдельное Web-приложение, а приложение сообщества больше не подставляется в пользовательский поток.</li>
-                <li><strong>Исправлено:</strong> пользовательский VK ID-токен сохраняется отдельно для загрузки фото, а Community Access Token сохраняется для публикации на стене.</li>
-                <li><strong>Добавлено:</strong> если миниатюра WordPress отсутствует, плагин использует первую картинку из содержимого записи.</li>
-                <li><strong>Добавлено:</strong> подробные сообщения в журнале о причине, по которой изображение не было прикреплено.</li>
-                <li><strong>Добавлено:</strong> внутренние вкладки Telegram, Одноклассники, ВКонтакте и Яндекс Дзен в разделе «Социальные сети».</li>
-                <li><strong>Обновлено:</strong> инструкция по VK дополнена отдельными пошаговыми разделами для <code>dev.vk.ru</code> и <code>id.vk.ru</code>.</li>
+                <li><strong>Исправлено (критично):</strong> удалена причина ошибки <code>Call to undefined function add_transient()</code> в старых пакетах очереди; блокировка использует только поддерживаемый WordPress механизм.</li>
+                <li><strong>Исправлено:</strong> задержка новой записи считается от фактического времени публикации, поэтому поздний WP-Cron не добавляет часы ожидания.</li>
+                <li><strong>Исправлено:</strong> при cURL error 60 запрос повторяется через системное хранилище сертификатов без отключения проверки SSL.</li>
+                <li><strong>Обновлено:</strong> диагностика показывает ближайшее событие и минутный worker очереди; исправлено экранирование динамического текста публикаций.</li>
             </ul>
 
-            <h4 style="margin-bottom:4px;">v1.0.53</h4>
+            <h4 style="margin-bottom:4px;">v1.0.60</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
-                <li><strong>Добавлено:</strong> автопостинг по расписанию в MAX, Telegram, ВКонтакте, Одноклассники и Яндекс Дзен.</li>
-                <li><strong>Добавлено:</strong> отдельная очередь с независимыми статусами, повторными попытками и email-уведомлениями по каждой сети.</li>
-                <li><strong>Добавлено:</strong> выбор сетей, даты и времени в Gutenberg и Classic Editor.</li>
-                <li><strong>Добавлено:</strong> календарь публикаций с переносом запланированных заданий мышью, ручным запуском и удалением.</li>
-                <li><strong>Исправлено:</strong> панель Gutenberg автопостинга подключается на всех сайтах с плагином, даже если MAX ещё не настроен.</li>
+                <li><strong>Исправлено:</strong> MAX API работает на серверах, где в системном хранилище CA нет российской цепочки сертификатов MAX.</li>
+                <li><strong>Исправлено:</strong> после успешного обновления устаревший кеш проверки обновлений WordPress удаляется.</li>
+                <li><strong>Безопасность:</strong> проверка SSL остаётся включённой, дополнительная публичная CA-цепочка применяется только к домену MAX API.</li>
             </ul>
 
-            <h4 style="margin-bottom:4px;">v1.0.52</h4>
+            <h4 style="margin-bottom:4px;">v1.0.59</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
-                <li><strong>Исправлено:</strong> снятые галочки правил регистрации пользователя и клиентских писем WooCommerce сохраняются и не перезаписываются старым значением при общем сохранении.</li>
-                <li><strong>Исправлено:</strong> письмо WooCommerce <code>customer_new_account</code> определяется как регистрация пользователя и блокируется в MAX при выключенном правиле регистрации.</li>
-                <li><strong>Исправлено:</strong> значения настроек <code>false</code>, <code>0</code>, <code>off</code> и <code>no</code> корректно считаются выключенными.</li>
-                <li><strong>Изменено:</strong> правило клиентских писем не блокирует админское <code>new_order</code>, а исходные письма WordPress и WooCommerce не изменяются.</li>
-            </ul>
-
-            <h4 style="margin-bottom:4px;">v1.0.51</h4>
-            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
-                <li><strong>Исправлено:</strong> значок «Живой чат» теперь отключается отдельным переключателем.</li>
-                <li><strong>Добавлено:</strong> компоновки значков «Столбиком», «Веером», «В два ряда» и «Полукругом» с обновлением preview.</li>
-                <li><strong>Добавлено:</strong> независимое отключение уведомления о регистрации пользователя и клиентского письма о заказе WooCommerce.</li>
-                <li><strong>Изменено:</strong> исходные письма WordPress и WooCommerce клиентам не блокируются при отключении их копий в MAX.</li>
+                <li><strong>Исправлено:</strong> проверка лицензии совместима со старыми CA-пакетами PHP/cURL после перехода сервера лицензий на новую цепочку Let's Encrypt.</li>
+                <li><strong>Безопасность:</strong> проверка SSL остаётся включённой; для HTTPS-запроса к <code>fixcoder.ru</code> добавлен только актуальный публичный Root YR.</li>
             </ul>
 
             <?php if ( false ) : ?>
@@ -2280,7 +2270,12 @@ jQuery(function($){
         <?php
         $queue_status    = WP_Ru_Max_Post_Sender::get_queue_status();
         $cron_disabled   = defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON;
-        $next_cron_event = wp_next_scheduled( 'wp_ru_max_delayed_send' ) ? wp_next_scheduled( 'wp_ru_max_delayed_send' ) : null;
+        $queue_events = array(
+            wp_next_scheduled( 'wp_ru_max_delayed_send' ),
+            wp_next_scheduled( WP_Ru_Max_Post_Sender::QUEUE_WORKER_HOOK ),
+        );
+        $queue_events     = array_filter( array_map( 'intval', $queue_events ) );
+        $next_cron_event  = ! empty( $queue_events ) ? min( $queue_events ) : null;
         ?>
         <div class="wp-ru-max-card">
             <h3>Очередь отложенной отправки</h3>
@@ -2294,7 +2289,7 @@ jQuery(function($){
                 <tr><th>Заданий в очереди:</th><td><?php echo (int) $queue_status['total']; ?></td></tr>
                 <tr><th>Просрочено (ожидают обработки):</th><td><?php echo (int) $queue_status['overdue']; ?></td></tr>
                 <tr><th>DISABLE_WP_CRON:</th><td><?php echo $cron_disabled ? 'включён (используется внешний/реальный cron)' : 'выключен (стандартный псевдо-cron по посещениям)'; ?></td></tr>
-                <tr><th>Ближайшее запланированное событие:</th><td><?php echo $next_cron_event ? esc_html( date_i18n( 'd.m.Y H:i:s', $next_cron_event ) ) : '—'; ?></td></tr>
+                <tr><th>Ближайшее событие обработки очереди:</th><td><?php echo $next_cron_event ? esc_html( date_i18n( 'd.m.Y H:i:s', $next_cron_event ) ) : '—'; ?></td></tr>
             </table>
             <div class="wp-ru-max-actions">
                 <button type="button" class="button" id="flush_queue_now">Обработать очередь сейчас</button>
@@ -2349,7 +2344,7 @@ jQuery(function($){
                     <p>Запланируйте публикацию статьи и переносите её по календарю мышкой.</p>
                 </div>
                 <div class="wp-ru-max-autopost-stats">
-                    <span><strong id="wp-ru-max-autopost-total"><?php echo (int) $summary['total']; ?></strong> в очереди</span>
+                    <button type="button" class="wp-ru-max-autopost-queue-link" data-autopost-tab="posts" data-autopost-focus-queue="1" aria-controls="wp-ru-max-autopost-queue"><strong id="wp-ru-max-autopost-total"><?php echo (int) $summary['total']; ?></strong> в очереди</button>
                     <span><strong id="wp-ru-max-autopost-errors"><?php echo (int) $summary['errors']; ?></strong> с ошибками</span>
                 </div>
             </div>
@@ -2375,6 +2370,9 @@ jQuery(function($){
                     <p>Очередь проверяется раз в минуту через WP-Cron. При временной ошибке сети публикация повторяется независимо для каждой социальной сети.</p>
                     <button type="button" class="button button-secondary" id="wp-ru-max-autopost-refresh">Обновить состояние</button>
                     <div id="wp-ru-max-autopost-result" class="wp-ru-max-autopost-result" aria-live="polite"></div>
+                    <div id="wp-ru-max-autopost-queue" class="wp-ru-max-autopost-queue" aria-live="polite">
+                        <p class="description">Загрузка списка очереди…</p>
+                    </div>
                 </div>
             </section>
 
@@ -2386,7 +2384,7 @@ jQuery(function($){
                         <button type="button" class="button" id="wp-ru-max-calendar-next" aria-label="Следующий месяц">›</button>
                         <button type="button" class="button button-secondary" id="wp-ru-max-calendar-today">Сегодня</button>
                     </div>
-                    <p class="description">Фиолетовые карточки #6366f1 — созданные задания, зелёные #41c100 — успешно опубликованные, красные — задания с ошибкой. В календаре отображаются только статьи. Перетаскивать можно запланированные карточки.</p>
+                    <p class="description">В календаре отображаются только статьи. Перетаскивать можно запланированные карточки. Синий — статья, зелёные — успешно опубликованные, красные — задания с ошибкой.</p>
                     <div id="wp-ru-max-calendar" class="wp-ru-max-calendar" aria-live="polite"></div>
                     <div id="wp-ru-max-calendar-result" class="wp-ru-max-autopost-result" aria-live="polite"></div>
                 </div>
@@ -3199,6 +3197,7 @@ jQuery(function($){
                         'settings'       => 'Настройки',
                         'direct_access'  => 'Прямой доступ',
                         'social'         => 'Социальные сети',
+                        'autopost'       => 'Автопостинг',
                         'push'           => 'Push (устар.)',
                     );
                     foreach ( $filter_options as $val => $label ) {
