@@ -145,6 +145,11 @@ class WP_Ru_Max_Auto_Posting {
         add_filter( 'cron_schedules', array( $this, 'add_cron_schedule' ) );
         add_action( self::CRON_HOOK, array( $this, 'run_worker' ) );
         add_action( 'init', array( $this, 'ensure_worker' ), 22 );
+        // WP-Cron зависит от посещений сайта и может быть отключён на
+        // хостинге. На обычном запросе обрабатываем только уже просроченные
+        // задания; AJAX-запросы исключены, чтобы не отправлять старое задание
+        // до выполнения текущего действия пользователя.
+        add_action( 'wp_loaded', array( $this, 'process_due_on_request' ), 999 );
         // This singleton is created from the main plugin's init callback
         // (priority 10), so a new init hook at priority 6 would already be
         // missed. Register the meta immediately instead.
@@ -180,7 +185,37 @@ class WP_Ru_Max_Auto_Posting {
         }
     }
 
+    /**
+     * Планирует ближайшую проверку для конкретного задания.
+     *
+     * Постоянный worker остаётся страховкой раз в минуту, а отдельное событие
+     * позволяет не ждать следующего интервала после сохранения задания.
+     */
+    private function schedule_worker_for( $run_at = 0 ) {
+        if ( empty( $this->get_settings()['enabled'] ) ) {
+            return;
+        }
+
+        $due  = max( time() + 1, (int) $run_at );
+        $next = wp_next_scheduled( self::CRON_HOOK );
+        if ( ! $next || (int) $next > $due ) {
+            wp_schedule_single_event( $due, self::CRON_HOOK );
+        }
+        $this->ensure_worker();
+    }
+
     public function run_worker() {
+        $this->process_due();
+    }
+
+    public function process_due_on_request() {
+        if (
+            ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() )
+            || ( defined( 'DOING_AJAX' ) && DOING_AJAX )
+            || ( defined( 'DOING_CRON' ) && DOING_CRON )
+        ) {
+            return;
+        }
         $this->process_due();
     }
 
@@ -204,7 +239,9 @@ class WP_Ru_Max_Auto_Posting {
         }
         return $this->normalize_config(
             isset( $value['networks'] ) ? $value['networks'] : array(),
-            isset( $value['datetime'] ) ? $value['datetime'] : ''
+            isset( $value['datetime'] ) ? $value['datetime'] : '',
+            isset( $value['status'] ) ? $value['status'] : array(),
+            ! empty( $value['active'] )
         );
     }
 
@@ -220,11 +257,12 @@ class WP_Ru_Max_Auto_Posting {
         return $this->normalize_config(
             isset( $config['networks'] ) ? $config['networks'] : array(),
             isset( $config['datetime'] ) ? $config['datetime'] : '',
-            isset( $config['status'] ) ? $config['status'] : array()
+            isset( $config['status'] ) ? $config['status'] : array(),
+            ! empty( $config['active'] )
         );
     }
 
-    private function normalize_config( $networks, $datetime, $status = array() ) {
+    private function normalize_config( $networks, $datetime, $status = array(), $active = false ) {
         // Не даём сохранить задание для сети, которая не подключена на
         // текущем сайте. Это защищает и AJAX, и обычный редактор.
         $allowed = array_keys( self::configured_networks() );
@@ -249,6 +287,7 @@ class WP_Ru_Max_Auto_Posting {
             'networks' => $clean,
             'datetime' => $datetime,
             'status'   => $normalized_status,
+            'active'   => (bool) $active && ! empty( $clean ) && '' !== $datetime,
         );
     }
 
@@ -261,12 +300,55 @@ class WP_Ru_Max_Auto_Posting {
             return new WP_Error( 'post_not_found', 'Запись не найдена.' );
         }
 
-        $old    = $this->get_post_config( $post_id );
-        $status = ( ! $reset_status && isset( $old['status'] ) ) ? $old['status'] : array();
-        $config = $this->normalize_config( $networks, $datetime, $status );
+        $old                = $this->get_post_config( $post_id );
+        $status             = isset( $old['status'] ) ? (array) $old['status'] : array();
+        $requested_networks = array();
+        foreach ( (array) $networks as $network ) {
+            $network = sanitize_key( $network );
+            if ( '' !== $network && ! in_array( $network, $requested_networks, true ) ) {
+                $requested_networks[] = $network;
+            }
+        }
+        $allowed_networks = array_keys( self::configured_networks() );
+        $unsupported      = array_diff( $requested_networks, $allowed_networks );
+        if ( ! empty( $unsupported ) ) {
+            $labels = self::networks();
+            $names  = array();
+            foreach ( $unsupported as $network ) {
+                $names[] = $labels[ $network ] ?? $network;
+            }
+            return new WP_Error(
+                'network_not_configured',
+                'Нельзя запланировать публикацию: подключите или повторно авторизуйте сеть — ' . implode( ', ', $names ) . '.'
+            );
+        }
+
+        /*
+         * Завершённая статья является одноразовой публикацией. После этого
+         * обычное сохранение записи не должно создавать новую отправку. Но
+         * явное действие «Сохранить автопостинг» или перенос в календаре —
+         * это новый запуск, поэтому reset_status=true намеренно сбрасывает
+         * статусы и возвращает задание в очередь.
+         */
+        if ( ! $reset_status && $this->is_config_complete( $old ) ) {
+            $networks = $old['networks'];
+        } else {
+            $networks = $requested_networks;
+        }
+
+        $has_schedule = ! empty( $networks ) && '' !== trim( (string) $datetime );
+        $config = $this->normalize_config( $networks, $datetime, $status, $has_schedule );
         foreach ( $config['networks'] as $network ) {
-            if ( $reset_status || ! isset( $status[ $network ] ) || 'sent' === $status[ $network ] ) {
-                $config['status'][ $network ] = $reset_status ? 'pending' : $config['status'][ $network];
+            $previous_status = isset( $status[ $network ] ) ? $status[ $network ] : '';
+            /*
+             * При обычном сохранении записи sent/skipped остаются конечными
+             * состояниями. Явное перепланирование обрабатывается отдельно:
+             * reset_status=true возвращает каждую выбранную сеть в pending.
+             */
+            if ( $reset_status ) {
+                $config['status'][ $network ] = 'pending';
+            } elseif ( in_array( $previous_status, array( 'sent', 'skipped' ), true ) ) {
+                $config['status'][ $network ] = $previous_status;
             }
         }
         update_post_meta( $post_id, self::META_KEY, $config );
@@ -284,6 +366,18 @@ class WP_Ru_Max_Auto_Posting {
             return new WP_Error( 'invalid_datetime', 'Укажите дату и время в формате ГГГГ-ММ-ДД ЧЧ:ММ.' );
         }
 
+        /*
+         * После успешной отправки запись остаётся видимой в календаре, но
+         * больше не должна возвращаться в рабочую очередь даже если
+         * пользователь передвинул её на другую дату.
+         */
+        if ( $this->is_config_complete( $config ) ) {
+            unset( $queue[ $key ] );
+            $this->save_queue( $queue );
+            $this->ensure_worker();
+            return $config;
+        }
+
         $queue[ $key ] = array(
             'post_id'  => (int) $post_id,
             'run_at'   => $timestamp,
@@ -296,8 +390,14 @@ class WP_Ru_Max_Auto_Posting {
             'updated'  => current_time( 'mysql' ),
         );
         $this->save_queue( $queue );
-        wp_clear_scheduled_hook( self::CRON_HOOK );
-        $this->ensure_worker();
+        $this->schedule_worker_for( $timestamp );
+        WP_Ru_Max_Logger::log( 'autopost', 'info', 'Задание автопостинга для записи #' . (int) $post_id . ' сохранено в очередь.', array(
+            'post_id'  => (int) $post_id,
+            'datetime' => $config['datetime'],
+            'networks' => $config['networks'],
+            'queue_key' => $key,
+            'run_at'   => $timestamp,
+        ) );
         return $config;
     }
 
@@ -316,7 +416,7 @@ class WP_Ru_Max_Auto_Posting {
                 ? wp_unslash( $_POST['wp_ru_max_autopost_datetime'] )
                 : '';
             $datetime = str_replace( 'T', ' ', sanitize_text_field( (string) $datetime ) );
-            $this->save_post_config( $post_id, $networks, $datetime );
+            $this->save_post_config( $post_id, $networks, $datetime, false );
         }
     }
 
@@ -338,9 +438,55 @@ class WP_Ru_Max_Auto_Posting {
         return 'post_' . (int) $post_id;
     }
 
+    private function is_config_complete( $config ) {
+        if ( empty( $config['networks'] ) ) {
+            return false;
+        }
+        foreach ( (array) $config['networks'] as $network ) {
+            if ( ! in_array( $config['status'][ $network ] ?? '', array( 'sent', 'skipped' ), true ) ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private function get_queue() {
-        $queue = get_option( self::QUEUE_OPTION, array() );
-        return is_array( $queue ) ? $queue : array();
+        $stored = get_option( self::QUEUE_OPTION, array() );
+        if ( ! is_array( $stored ) ) {
+            return array();
+        }
+
+        /*
+         * До стабильного ключа в очереди могли остаться варианты вроде
+         * post_123_new и post_123_update. Оставляем ровно одно задание на
+         * запись и переносим его на канонический ключ.
+         */
+        $queue   = array();
+        $changed = false;
+        foreach ( $stored as $stored_key => $job ) {
+            $post_id = is_array( $job ) ? absint( $job['post_id'] ?? 0 ) : 0;
+            if ( ! $post_id ) {
+                $changed = true;
+                continue;
+            }
+            $canonical_key = $this->job_key( $post_id );
+            if ( (string) $stored_key === $canonical_key || ! isset( $queue[ $canonical_key ] ) ) {
+                if ( isset( $queue[ $canonical_key ] ) && (string) $stored_key === $canonical_key ) {
+                    $changed = true;
+                }
+                $queue[ $canonical_key ] = $job;
+            } else {
+                $changed = true;
+            }
+            if ( (string) $stored_key !== $canonical_key ) {
+                $changed = true;
+            }
+        }
+
+        if ( $changed || count( $queue ) !== count( $stored ) ) {
+            $this->save_queue( $queue );
+        }
+        return $queue;
     }
 
     private function save_queue( $queue ) {
@@ -357,6 +503,84 @@ class WP_Ru_Max_Auto_Posting {
     private function sync_queue_from_post_meta() {
         $queue = $this->get_queue();
         $changed = false;
+        $now = time();
+
+        /*
+         * Метаданные статьи являются источником истины. Старое задание могло
+         * остаться в option очереди после успешной отправки или переноса даты.
+         * Сначала приводим существующие задания к текущей конфигурации, а
+         * полностью завершённые удаляем.
+         */
+        foreach ( $queue as $key => $job ) {
+            $post_id = absint( is_array( $job ) ? ( $job['post_id'] ?? 0 ) : 0 );
+            if ( ! $post_id ) {
+                unset( $queue[ $key ] );
+                $changed = true;
+                continue;
+            }
+
+            $post = get_post( $post_id );
+            $config = $this->get_post_config( $post_id );
+            $queued_at = $this->datetime_to_timestamp( $config['datetime'] );
+            /*
+             * До появления признака active старые опубликованные записи с
+             * просроченной датой могли бесконечно возвращаться в очередь из
+             * метаданных. Они не являются новым явным расписанием и не
+             * должны неожиданно отправляться после обновления плагина.
+             * Будущие задания сохраняем для совместимости.
+             */
+            if (
+                ! $config['active']
+                && $post
+                && 'publish' === $post->post_status
+                && $queued_at
+                && $queued_at <= $now
+            ) {
+                unset( $queue[ $key ] );
+                $changed = true;
+                continue;
+            }
+            if ( empty( $config['networks'] ) || empty( $config['datetime'] ) || $this->is_config_complete( $config ) ) {
+                unset( $queue[ $key ] );
+                $changed = true;
+                continue;
+            }
+
+            $run_at = $this->datetime_to_timestamp( $config['datetime'] );
+            if ( ! $run_at ) {
+                unset( $queue[ $key ] );
+                $changed = true;
+                continue;
+            }
+
+            $canonical_key = $this->job_key( $post_id );
+            $job            = is_array( $job ) ? $job : array();
+            $job['post_id'] = $post_id;
+            $job['run_at']  = $run_at;
+            $job['networks'] = $config['networks'];
+            $job['statuses'] = $config['status'];
+            $job['attempts'] = isset( $job['attempts'] ) && is_array( $job['attempts'] ) ? $job['attempts'] : array();
+            $job['errors']   = isset( $job['errors'] ) && is_array( $job['errors'] ) ? $job['errors'] : array();
+
+            foreach ( array_keys( $job['attempts'] ) as $network ) {
+                if ( ! in_array( $network, $config['networks'], true ) ) {
+                    unset( $job['attempts'][ $network ] );
+                }
+            }
+            foreach ( array_keys( $job['errors'] ) as $network ) {
+                if ( ! in_array( $network, $config['networks'], true ) ) {
+                    unset( $job['errors'][ $network ] );
+                }
+            }
+
+            $previous_job = isset( $queue[ $canonical_key ] ) ? $queue[ $canonical_key ] : null;
+            if ( (string) $key !== $canonical_key || $previous_job !== $job ) {
+                unset( $queue[ $key ] );
+                $queue[ $canonical_key] = $job;
+                $changed = true;
+            }
+        }
+
         $post_ids = get_posts( array(
             'post_type'      => 'post',
             'post_status'    => array( 'publish', 'future', 'draft', 'pending' ),
@@ -367,6 +591,11 @@ class WP_Ru_Max_Auto_Posting {
         foreach ( (array) $post_ids as $post_id ) {
             $post_id = (int) $post_id;
             if ( ! $post_id ) {
+                continue;
+            }
+
+            $post = get_post( $post_id );
+            if ( ! $post ) {
                 continue;
             }
 
@@ -381,19 +610,19 @@ class WP_Ru_Max_Auto_Posting {
                 continue;
             }
 
-            $completed = true;
-            foreach ( $config['networks'] as $network ) {
-                if ( ! in_array( $config['status'][ $network ] ?? '', array( 'sent', 'skipped' ), true ) ) {
-                    $completed = false;
-                    break;
-                }
-            }
-
-            if ( $completed ) {
+            if ( $this->is_config_complete( $config ) ) {
                 if ( isset( $queue[ $key ] ) ) {
                     unset( $queue[ $key ] );
                     $changed = true;
                 }
+                continue;
+            }
+
+            /*
+             * Для старой мета-записи без active не создаём новое просроченное
+             * задание. Явное сохранение в календаре записывает active=true.
+             */
+            if ( ! $config['active'] && 'publish' === $post->post_status && $run_at <= time() ) {
                 continue;
             }
 
@@ -413,8 +642,14 @@ class WP_Ru_Max_Auto_Posting {
 
         if ( $changed ) {
             $this->save_queue( $queue );
-            wp_clear_scheduled_hook( self::CRON_HOOK );
-            $this->ensure_worker();
+            $next_due = 0;
+            foreach ( $queue as $job ) {
+                $job_due = (int) ( $job['run_at'] ?? 0 );
+                if ( $job_due > 0 && ( ! $next_due || $job_due < $next_due ) ) {
+                    $next_due = $job_due;
+                }
+            }
+            $this->schedule_worker_for( $next_due );
         }
     }
 
@@ -433,6 +668,44 @@ class WP_Ru_Max_Auto_Posting {
             }
         }
         return array( 'total' => count( $queue ), 'pending' => $pending, 'errors' => $errors );
+    }
+
+    /**
+     * Подробный список реально ожидающих заданий для панели автопостинга.
+     * Перед выдачей список синхронизируется с метаданными записей, поэтому
+     * старые завершённые задания не попадают в счётчик и список.
+     */
+    public static function get_queue_items() {
+        $instance = self::instance();
+        $instance->sync_queue_from_post_meta();
+        $queue = $instance->get_queue();
+        $items = array();
+
+        foreach ( $queue as $job ) {
+            $post_id = absint( $job['post_id'] ?? 0 );
+            $post    = $post_id ? get_post( $post_id ) : null;
+            if ( ! $post ) {
+                continue;
+            }
+
+            $items[] = array(
+                'id'        => $post_id,
+                'title'     => get_the_title( $post ) ?: '(без названия)',
+                'edit_url'  => admin_url( 'post.php?post=' . $post_id . '&action=edit' ),
+                'datetime'  => $instance->timestamp_to_datetime( (int) ( $job['run_at'] ?? 0 ) ),
+                'run_at'    => (int) ( $job['run_at'] ?? 0 ),
+                'networks'  => (array) ( $job['networks'] ?? array() ),
+                'statuses'  => (array) ( $job['statuses'] ?? array() ),
+                'attempts'  => (array) ( $job['attempts'] ?? array() ),
+                'errors'    => (array) ( $job['errors'] ?? array() ),
+            );
+        }
+
+        usort( $items, function( $left, $right ) {
+            return (int) $left['run_at'] <=> (int) $right['run_at'];
+        } );
+
+        return $items;
     }
 
     private function acquire_lock( &$token ) {
@@ -457,6 +730,11 @@ class WP_Ru_Max_Auto_Posting {
 
     public function process_due( $force = false, $only_post_id = 0 ) {
         if ( class_exists( 'WP_Ru_Max_License' ) && ! WP_Ru_Max_License::is_active() ) {
+            if ( $force ) {
+                WP_Ru_Max_Logger::log( 'autopost', 'error', 'Автопостинг не запущен: лицензия плагина не активна.', array(
+                    'only_post_id' => (int) $only_post_id,
+                ) );
+            }
             return 0;
         }
 
@@ -466,10 +744,18 @@ class WP_Ru_Max_Auto_Posting {
         }
         $token = '';
         if ( ! $this->acquire_lock( $token ) ) {
+            if ( $force ) {
+                WP_Ru_Max_Logger::log( 'autopost', 'warning', 'Автопостинг не запущен: очередь уже обрабатывается другим запросом.', array(
+                    'only_post_id' => (int) $only_post_id,
+                ) );
+            }
             return 0;
         }
         $processed = 0;
         try {
+            // Перед отправкой удаляем старые завершённые задания и
+            // восстанавливаем только действительно незавершённые записи.
+            $this->sync_queue_from_post_meta();
             foreach ( $this->get_queue() as $key => $job ) {
                 if ( $only_post_id && (int) ( $job['post_id'] ?? 0 ) !== (int) $only_post_id ) {
                     continue;
@@ -477,7 +763,21 @@ class WP_Ru_Max_Auto_Posting {
                 if ( ! $force && (int) ( $job['run_at'] ?? 0 ) > time() ) {
                     continue;
                 }
-                $this->process_job( $key, $job, $settings );
+                $max_attempts = max( 1, min( self::MAX_ATTEMPTS, (int) ( $settings['retry_attempts'] ?? self::MAX_ATTEMPTS ) ) );
+                if ( $this->all_attempts_exhausted( $job, $max_attempts ) ) {
+                    // Терминальная ошибка остаётся видимой в очереди и
+                    // истории, но больше не создаёт бесполезные запросы.
+                    continue;
+                }
+                try {
+                    $this->process_job( $key, $job, $settings );
+                } catch ( Throwable $e ) {
+                    WP_Ru_Max_Logger::log( 'autopost', 'error', 'Критическая ошибка обработки автопостинга #' . (int) ( $job['post_id'] ?? 0 ) . ': ' . $e->getMessage(), array(
+                        'post_id' => (int) ( $job['post_id'] ?? 0 ),
+                        'job_key' => $key,
+                        'exception' => get_class( $e ),
+                    ) );
+                }
                 $processed++;
             }
         } finally {
@@ -498,15 +798,34 @@ class WP_Ru_Max_Auto_Posting {
         $job['statuses'] = isset( $job['statuses'] ) ? (array) $job['statuses'] : array();
         $job['attempts'] = isset( $job['attempts'] ) ? (array) $job['attempts'] : array();
         $job['errors']   = isset( $job['errors'] ) ? (array) $job['errors'] : array();
+        $config = $this->get_post_config( $post->ID );
+        /*
+         * Метаданные записи — источник истины после успешной отправки.
+         * Это не даёт оставшемуся старому заданию повторно отправить уже
+         * опубликованную запись.
+         */
+        foreach ( (array) $config['status'] as $network => $state ) {
+            if ( in_array( $state, array( 'sent', 'skipped' ), true ) ) {
+                $job['statuses'][ $network ] = $state;
+            }
+        }
+        if ( $this->is_config_complete( $config ) ) {
+            unset( $queue[ $key ] );
+            $this->save_queue( $queue );
+            return;
+        }
         $all_sent = true;
         $had_error = false;
         $max_attempts = max( 1, min( self::MAX_ATTEMPTS, (int) ( $settings['retry_attempts'] ?? self::MAX_ATTEMPTS ) ) );
         foreach ( (array) $job['networks'] as $network ) {
             if ( $this->is_network_excluded( $post->ID, $network ) ) {
                 $job['statuses'][ $network ] = 'skipped';
+                $config['status'][ $network ] = 'skipped';
+                update_post_meta( $post->ID, self::META_KEY, $config );
                 continue;
             }
-            if ( 'sent' === ( $job['statuses'][ $network ] ?? 'pending' ) ) {
+            if ( in_array( $config['status'][ $network ] ?? '', array( 'sent', 'skipped' ), true ) ) {
+                $job['statuses'][ $network ] = $config['status'][ $network ];
                 continue;
             }
             $attempts = (int) ( $job['attempts'][ $network ] ?? 0 );
@@ -520,17 +839,24 @@ class WP_Ru_Max_Auto_Posting {
             if ( is_wp_error( $result ) ) {
                 $job['statuses'][ $network ] = 'error';
                 $job['errors'][ $network ]   = $result->get_error_message();
+                $config['status'][ $network ] = 'error';
                 $all_sent  = false;
                 $had_error = true;
                 WP_Ru_Max_Logger::log( 'autopost', 'error', 'Автопостинг #' . $post->ID . ' → ' . $network . ': ' . $result->get_error_message(), array( 'post_id' => $post->ID, 'network' => $network ) );
             } else {
                 $job['statuses'][ $network ] = 'sent';
+                /*
+                 * Фиксируем каждую сеть сразу после подтверждённой отправки.
+                 * Если PHP/WP-Cron остановится на следующей сети, уже
+                 * отправленная сеть не будет вызвана повторно.
+                 */
+                $config['status'][ $network ] = 'sent';
                 WP_Ru_Max_Logger::log( 'autopost', 'success', 'Автопостинг #' . $post->ID . ' → ' . $network . ': опубликовано.', array( 'post_id' => $post->ID, 'network' => $network ) );
             }
+            update_post_meta( $post->ID, self::META_KEY, $config );
         }
 
         $job['updated'] = current_time( 'mysql' );
-        $config = $this->get_post_config( $post->ID );
         $config['status'] = $job['statuses'];
         update_post_meta( $post->ID, self::META_KEY, $config );
 
@@ -552,6 +878,7 @@ class WP_Ru_Max_Auto_Posting {
             }
         }
         $this->save_queue( $queue );
+        $this->schedule_worker_for( (int) $job['run_at'] );
     }
 
     private function is_network_excluded( $post_id, $network ) {
@@ -688,6 +1015,12 @@ class WP_Ru_Max_Auto_Posting {
 
     public function ajax_calendar() {
         $this->require_admin();
+        /*
+         * WP-Cron запускается только при посещении сайта. Если хостинг
+         * пропустил loopback-запрос, обновление календаря не должно оставлять
+         * просроченное задание без попытки обработки.
+         */
+        $this->process_due();
         $month = sanitize_text_field( wp_unslash( $_POST['month'] ?? wp_date( 'Y-m' ) ) );
         if ( ! preg_match( '/^\d{4}-\d{2}$/', $month ) ) {
             $month = wp_date( 'Y-m' );
@@ -721,48 +1054,57 @@ class WP_Ru_Max_Auto_Posting {
                 );
             }
         }
-        $events = array();
+        $events_by_post = array();
         foreach ( $posts as $post ) {
             $config = $this->get_post_config( $post->ID );
+            $post_id = (int) $post->ID;
+            $scheduled = ! empty( $config['datetime'] )
+                ? $this->datetime_to_timestamp( $config['datetime'] )
+                : 0;
+            $scheduled_in_month = $scheduled >= $first && $scheduled < $last;
+
+            /*
+             * Одну запись показываем одной карточкой. Раньше опубликованная
+             * запись и её завершённое задание добавлялись отдельно, из-за
+             * чего после успешной отправки календарь визуально дублировал её.
+             */
+            if ( $scheduled_in_month ) {
+                $completed = $this->is_config_complete( $config );
+                $has_error = in_array( 'error', (array) $config['status'], true );
+                $events_by_post[ $post_id ] = array(
+                    'id'        => $post_id,
+                    'title'     => get_the_title( $post ),
+                    'date'      => substr( $config['datetime'], 0, 10 ),
+                    'datetime'  => $config['datetime'],
+                    'type'      => $completed ? 'completed' : ( $has_error ? 'error' : 'scheduled' ),
+                    'scheduled' => ! empty( $config['active'] ),
+                    'status'    => $post->post_status,
+                    'networks'  => $config['networks'],
+                    'states'    => $config['status'],
+                );
+                continue;
+            }
+
             $published = get_post_timestamp( $post );
             if ( $published >= $first && $published < $last ) {
-                $events[] = array(
-                    'id'        => (int) $post->ID,
+                $events_by_post[ $post_id ] = array(
+                    'id'        => $post_id,
                     'title'     => get_the_title( $post ),
                     'date'      => wp_date( 'Y-m-d', $published ),
                     'datetime'  => wp_date( 'Y-m-d H:i', $published ),
                     'type'      => 'published',
+                    'scheduled' => ! empty( $config['active'] ),
                     'status'    => $post->post_status,
                     'networks'  => array(),
                 );
             }
-            if ( ! empty( $config['datetime'] ) ) {
-                $scheduled = $this->datetime_to_timestamp( $config['datetime'] );
-                if ( $scheduled >= $first && $scheduled < $last ) {
-                    $completed = ! empty( $config['networks'] );
-                    foreach ( $config['networks'] as $network ) {
-                        if ( 'sent' !== ( $config['status'][ $network ] ?? '' ) ) {
-                            $completed = false;
-                            break;
-                        }
-                    }
-                    $events[] = array(
-                        'id'        => (int) $post->ID,
-                        'title'     => get_the_title( $post ),
-                        'date'      => substr( $config['datetime'], 0, 10 ),
-                        'datetime'  => $config['datetime'],
-                        'type'      => $completed ? 'completed' : 'scheduled',
-                        'status'    => $post->post_status,
-                        'networks'  => $config['networks'],
-                        'states'    => $config['status'],
-                    );
-                }
-            }
         }
+        $events = array_values( $events_by_post );
         wp_send_json_success( array(
             'month'           => $month,
             'events'          => $events,
             'available_posts' => $available_posts,
+            'queue'           => self::get_queue_items(),
             'networks'        => self::configured_networks(),
             'summary'         => self::get_queue_summary(),
         ) );
@@ -794,7 +1136,11 @@ class WP_Ru_Max_Auto_Posting {
         }
         $config = $this->get_post_config( $post_id );
         $config['datetime'] = '';
-        $config['status'] = array();
+        /*
+         * Снятие даты убирает задание, но не стирает факт уже выполненной
+         * публикации. Если эту же статью позже снова поставить в календарь,
+         * она останется завершённой и не уйдёт повторно.
+         */
         update_post_meta( $post_id, self::META_KEY, $config );
         $queue = $this->get_queue();
         unset( $queue[ $this->job_key( $post_id ) ] );
@@ -831,7 +1177,14 @@ class WP_Ru_Max_Auto_Posting {
         if ( is_wp_error( $saved ) ) {
             wp_send_json_error( $saved->get_error_message() );
         }
-        $this->process_due( true, $post_id );
+        $processed = $this->process_due( true, $post_id );
+        if ( ! $processed ) {
+            WP_Ru_Max_Logger::log( 'autopost', 'warning', 'Ручной запуск автопостинга для записи #' . $post_id . ' не обработал ни одного задания.', array(
+                'post_id'  => $post_id,
+                'networks' => $run_config['networks'],
+                'config'   => $this->get_post_config( $post_id ),
+            ) );
+        }
         wp_send_json_success( $this->get_post_config( $post_id ) );
     }
 
