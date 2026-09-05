@@ -370,7 +370,7 @@ class WP_Ru_Max_License {
         if ( $ca_file && is_readable( $ca_file ) ) {
             $request_args['sslcertificates'] = $ca_file;
         }
-        $response = wp_remote_post( self::VERIFY_URL, $request_args );
+        $response = wp_ru_max_remote_request_with_ssl_fallback( 'post', self::VERIFY_URL, $request_args );
 
         if ( is_wp_error( $response ) ) {
             return new WP_Error(
