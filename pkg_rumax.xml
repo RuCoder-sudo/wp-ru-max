@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="package" method="upgrade">
+  <name>pkg_rumax</name>
+  <packagename>rumax</packagename>
+  <version>1.0.2</version>
+  <creationDate>2026-09-06</creationDate>
+  <author>RuCoder / WP Ru-max Joomla Port</author>
+  <license>GNU General Public License version 2 or later</license>
+  <description>Ru-max для Joomla: MAX, публикации, соцсети, уведомления, плавающий виджет и live chat.</description>
+  <files folder="packages">
+    <file type="component" id="com_rumax">com_rumax.zip</file>
+    <file type="plugin" id="rumax" group="system">plg_system_rumax.zip</file>
+    <file type="plugin" id="rumax" group="content">plg_content_rumax.zip</file>
+    <file type="module" id="mod_rumax_widget">mod_rumax_widget.zip</file>
+  </files>
+</extension>

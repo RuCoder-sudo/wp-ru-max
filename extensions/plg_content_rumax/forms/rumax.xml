@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<form>
+  <fields name="rumax">
+    <fieldset name="rumax" label="Ru-max">
+      <field name="skip_max" type="radio" default="0" label="Не отправлять этот материал в MAX" layout="joomla.form.field.radio" filter="boolean"><option value="0">Нет</option><option value="1">Да</option></field>
+      <field name="networks" type="checkboxes" label="Сети автопостинга"><option value="telegram">Telegram</option><option value="vkontakte">ВКонтакте</option><option value="ok">Одноклассники</option><option value="dzen">Яндекс Дзен</option></field>
+      <field name="autopost_datetime" type="calendar" label="Дата и время автопостинга" showtime="true" filter="user_utc" />
+    </fieldset>
+  </fields>
+</form>

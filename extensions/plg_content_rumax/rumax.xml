@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" group="content" method="upgrade">
+  <name>plg_content_rumax</name>
+  <author>RuCoder / WP Ru-max Joomla Port</author>
+  <version>1.0.2</version>
+  <description>Автопубликация материалов Joomla в MAX и кнопка «Поделиться в MAX».</description>
+  <files>
+    <filename plugin="rumax">rumax.php</filename>
+    <folder>forms</folder>
+  </files>
+  <config>
+    <fields name="params">
+      <fieldset name="basic">
+        <field name="enabled" type="radio" default="1" label="Включить автопубликацию" layout="joomla.form.field.radio" filter="boolean"><option value="1">Да</option><option value="0">Нет</option></field>
+      </fieldset>
+    </fields>
+  </config>
+</extension>
