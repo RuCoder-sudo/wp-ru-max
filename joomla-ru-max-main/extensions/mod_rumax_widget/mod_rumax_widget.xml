@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="module" client="site" method="upgrade">
+  <name>mod_rumax_widget</name>
+  <author>RuCoder / WP Ru-max Joomla Port</author>
+  <version>1.0.2</version>
+  <description>Плавающий виджет MAX и меню связи Ru-max.</description>
+  <files>
+    <filename module="mod_rumax_widget">mod_rumax_widget.php</filename>
+    <folder>tmpl</folder>
+  </files>
+  <config>
+    <fields name="params">
+      <fieldset name="basic">
+        <field name="enabled" type="radio" default="1" label="Показывать виджет" layout="joomla.form.field.radio" filter="boolean"><option value="1">Да</option><option value="0">Нет</option></field>
+      </fieldset>
+    </fields>
+  </config>
+</extension>
