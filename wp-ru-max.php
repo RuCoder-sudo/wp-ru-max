@@ -3,7 +3,7 @@
  * Plugin Name:       WP Ru-max
  * Plugin URI:        https://fixcoder.ru/wp-ru-max/
  * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Jetpack / Elementor и настраиваемый чат-виджет с анимацией и звуком. Поддерживает WordPress Multisite (мультисайт) и поддомены.
- * Version:           1.0.61
+ * Version:           1.0.62
  * Author:            Сергей Солошенко (RuCoder)
  * Author URI:        https://fixcoder.ru/
  * License:           GPL v2 or later
@@ -82,7 +82,7 @@ if ( class_exists( 'WP_Ru_Max', false ) || defined( 'WP_RU_MAX_BOOTSTRAPPED' ) )
 }
 if ( ! defined( 'WP_RU_MAX_BOOTSTRAPPED' ) ) define( 'WP_RU_MAX_BOOTSTRAPPED', true );
 
-if ( ! defined( 'WP_RU_MAX_VERSION' ) ) define( 'WP_RU_MAX_VERSION', '1.0.61' );
+if ( ! defined( 'WP_RU_MAX_VERSION' ) ) define( 'WP_RU_MAX_VERSION', '1.0.62' );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_FILE' ) ) define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_DIR' ) ) define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_URL' ) ) define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -92,9 +92,10 @@ if ( ! defined( 'WP_RU_MAX_API_BASE' ) ) define( 'WP_RU_MAX_API_BASE', 'https://
 // PRO is bundled into the main plugin. The option names stay compatible with
 // the standalone add-on so existing settings and conversations are preserved.
 if ( ! defined( 'WP_RU_MAX_PRO_BUNDLED' ) ) define( 'WP_RU_MAX_PRO_BUNDLED', true );
-// Version 1.0.61: the bundled module uses the same cache-busting version as
-// the main plugin, so all updated CSS/JS files are refreshed together.
-if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.61' );
+// Version 1.0.62: the bundled module uses the same cache-busting version as
+// the main plugin. The duplicate contacts renderer was removed so the
+// «Связь с клиентами» screen is rendered only once.
+if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.62' );
 if ( ! defined( 'WP_RU_MAX_PRO_FILE' ) ) define( 'WP_RU_MAX_PRO_FILE', __FILE__ );
 if ( ! defined( 'WP_RU_MAX_PRO_DIR' ) ) define( 'WP_RU_MAX_PRO_DIR', WP_RU_MAX_PLUGIN_DIR );
 if ( ! defined( 'WP_RU_MAX_PRO_URL' ) ) define( 'WP_RU_MAX_PRO_URL', WP_RU_MAX_PLUGIN_URL . 'assets/pro/' );
@@ -171,18 +172,13 @@ foreach (
     }
 }
 
-// The former add-on contained a compatible contacts implementation too.
-// Loading both copies would redeclare its helpers/classes, so keep the
-// standalone implementation in charge when it is active.
-$wp_ru_max_contacts_file = $wp_ru_max_includes_dir . 'class-wp-ru-max-contacts.php';
-if (
-    ! $wp_ru_max_legacy_pro
-    && ! function_exists( 'wp_ru_max_contacts_settings' )
-    && ! class_exists( 'WP_Ru_Max_Contacts', false )
-    && is_readable( $wp_ru_max_contacts_file )
-) {
-    require_once $wp_ru_max_contacts_file;
-}
+/*
+ * The bundled PRO module already owns the contacts screen, widget and AJAX
+ * handlers. Do not load class-wp-ru-max-contacts.php here as well: that
+ * compatibility implementation registers the same tab and render action,
+ * which produced a second «Связь с клиентами» panel after the chat schedule.
+ * A separately installed legacy PRO add-on remains the owner when detected.
+ */
 
 // If the old add-on was loaded first or is active elsewhere in the request,
 // let it own the compatible PRO functions/classes and skip the bundled copy.
