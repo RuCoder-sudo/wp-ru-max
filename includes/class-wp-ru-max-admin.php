@@ -1268,6 +1268,12 @@ jQuery(function($){
             <h3>История версий</h3>
             <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
 
+            <h4 style="margin-bottom:4px;">v1.0.62</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Исправлено:</strong> раздел «Связь с клиентами» больше не выводится дважды: после расписания живого чата не появляется повторная панель WP RU-MAX.</li>
+                <li><strong>Обновлено:</strong> основной экран с шагом «Выберите свои каналы» оставлен единственным рабочим экраном модуля.</li>
+            </ul>
+
             <h4 style="margin-bottom:4px;">v1.0.61</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
                 <li><strong>Исправлено (критично):</strong> удалена причина ошибки <code>Call to undefined function add_transient()</code> в старых пакетах очереди; блокировка использует только поддерживаемый WordPress механизм.</li>
