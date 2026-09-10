@@ -1,4 +1,4 @@
-/* WP Ru-max PRO frontend v1.0.61. */
+/* WP Ru-max PRO frontend v1.0.62 — fixed duplicate contacts module rendering. */
 (function () {
   var menu = document.getElementById('wp-ru-max-pro-menu');
   var icon = document.getElementById('wp-ru-max-icon');
@@ -88,4 +88,4 @@
     fetch(wpRuMaxProFront.ajaxUrl, { method: 'POST', body: data, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (r) { if (r.success && r.data && r.data.messages) renderThread(r.data.messages); }).catch(function () {});
   }
   setInterval(pollThread, 4000);
-})(); 
+})();
