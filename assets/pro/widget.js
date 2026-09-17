@@ -1,4 +1,4 @@
-/* WP Ru-max PRO frontend v1.0.62 — fixed duplicate contacts module rendering. */
+/* WP Ru-max PRO frontend v1.0.63 — fixed notification rules and WooCommerce templates. */
 (function () {
   var menu = document.getElementById('wp-ru-max-pro-menu');
   var icon = document.getElementById('wp-ru-max-icon');
