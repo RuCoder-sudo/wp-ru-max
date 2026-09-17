@@ -136,6 +136,15 @@ class WP_Ru_Max {
     }
 
     /**
+     * Default personal notification template with useful WooCommerce fields.
+     *
+     * @return string
+     */
+    public static function default_notification_template() {
+        return "<b>{email_subject}</b>\n{email_message}\n\n<b>Заказ #{order_number}</b>\nСтатус: {order_status_label}\nКлиент: {billing_name}\nТелефон: {billing_phone}\nТовары:\n{order_items}\nСумма: {order_total}\n{order_url}";
+    }
+
+    /**
      * Добавляет настройки по умолчанию для текущего блога, если они ещё не заданы.
      */
     public static function maybe_add_default_options() {
@@ -157,11 +166,13 @@ class WP_Ru_Max {
                 'image_size_limit_mb'    => 5,
                 'notifications_enabled'  => false,
                 // Независимые правила для системных и клиентских писем.
+                'notify_plugin_updates'  => false,
+                'notify_site_errors'     => false,
                 'notify_user_registration' => true,
                 'notify_customer_order' => true,
                 'notify_from_email'      => 'any',
                 'notify_chat_ids'        => array(),
-                'notify_template'        => "<b>{email_subject}</b>\n{email_message}",
+                'notify_template'        => self::default_notification_template(),
                 'notify_format'          => 'html',
                 'send_files_by_url'      => true,
                 'multisite_enabled'      => false,
