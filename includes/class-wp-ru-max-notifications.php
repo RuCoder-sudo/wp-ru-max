@@ -23,9 +23,33 @@ class WP_Ru_Max_Notifications {
         return self::$instance;
     }
 
+    /**
+     * Reads a boolean setting without treating the string "false" as enabled.
+     *
+     * @param array  $settings All plugin settings.
+     * @param string $key      Setting key.
+     * @param bool   $default  Value for installations without the key.
+     * @return bool
+     */
+    private static function setting_enabled( $settings, $key, $default = false ) {
+        if ( ! array_key_exists( $key, $settings ) ) {
+            return $default;
+        }
+
+        $value = $settings[ $key ];
+        if ( is_bool( $value ) ) {
+            return $value;
+        }
+        if ( is_string( $value ) ) {
+            return ! in_array( strtolower( trim( $value ) ), array( '', '0', 'false', 'off', 'no' ), true );
+        }
+
+        return ! empty( $value );
+    }
+
     private function __construct() {
         $settings = get_option( 'wp_ru_max_settings', array() );
-        if ( ! empty( $settings['notifications_enabled'] ) ) {
+        if ( self::setting_enabled( $settings, 'notifications_enabled', false ) ) {
             // Перехватываем письма через стандартный фильтр wp_mail.
             // Совместимо с WP Mail SMTP, FluentSMTP, Postman SMTP и другими плагинами-почтовиками:
             // они заменяют транспорт через phpmailer_init/PHPMailer, но фильтр wp_mail
@@ -43,12 +67,12 @@ class WP_Ru_Max_Notifications {
             add_filter( 'wp_new_user_notification_email', array( $this, 'mark_registration_email' ), 10, 1 );
 
             // Уведомления об обновлении плагинов и ядра WordPress
-            if ( ! empty( $settings['notify_plugin_updates'] ) ) {
+            if ( self::setting_enabled( $settings, 'notify_plugin_updates', false ) ) {
                 add_action( 'upgrader_process_complete', array( $this, 'notify_plugin_update' ), 10, 2 );
             }
 
             // Уведомления о критических ошибках PHP
-            if ( ! empty( $settings['notify_site_errors'] ) ) {
+            if ( self::setting_enabled( $settings, 'notify_site_errors', false ) ) {
                 add_action( 'shutdown', array( $this, 'notify_site_error' ) );
             }
         }
@@ -74,8 +98,7 @@ class WP_Ru_Max_Notifications {
         }
 
         // Поддержка WC_Order и любых его наследников
-        if ( ! ( $email->object instanceof WC_Abstract_Order ) &&
-             ! ( $email->object instanceof WC_Order ) ) {
+        if ( ! class_exists( 'WC_Abstract_Order' ) || ! ( $email->object instanceof WC_Abstract_Order ) ) {
             // Письма WooCommerce без заказа (например, создание аккаунта)
             // всё равно должны участвовать в правилах отправки.
             if ( $email_id ) {
@@ -170,19 +193,7 @@ class WP_Ru_Max_Notifications {
      * @return bool
      */
     private function is_rule_enabled( $settings, $key, $default = true ) {
-        if ( ! array_key_exists( $key, $settings ) ) {
-            return $default;
-        }
-
-        $value = $settings[ $key ];
-        if ( is_bool( $value ) ) {
-            return $value;
-        }
-        if ( is_string( $value ) ) {
-            return ! in_array( strtolower( trim( $value ) ), array( '', '0', 'false', 'off', 'no' ), true );
-        }
-
-        return ! empty( $value );
+        return self::setting_enabled( $settings, $key, $default );
     }
 
     /**
@@ -301,6 +312,125 @@ class WP_Ru_Max_Notifications {
     }
 
     /**
+     * Builds optional WooCommerce values for the notification template.
+     * Empty values are returned for ordinary WordPress/form emails, so one
+     * template can be used for both WooCommerce and non-WooCommerce mail.
+     *
+     * @param array|null $woo_info Captured WooCommerce email information.
+     * @return array
+     */
+    private function get_woo_template_variables( $woo_info ) {
+        $empty = array(
+            '{woo_email_id}'         => '',
+            '{order_id}'             => '',
+            '{order_number}'         => '',
+            '{order_status}'         => '',
+            '{order_status_label}'   => '',
+            '{order_date}'           => '',
+            '{order_url}'            => '',
+            '{order_items}'          => '',
+            '{order_total}'          => '',
+            '{order_subtotal}'       => '',
+            '{order_shipping}'       => '',
+            '{order_discount}'       => '',
+            '{order_tax}'            => '',
+            '{payment_method}'       => '',
+            '{shipping_method}'      => '',
+            '{billing_name}'         => '',
+            '{billing_first_name}'   => '',
+            '{billing_last_name}'    => '',
+            '{billing_email}'        => '',
+            '{billing_phone}'        => '',
+            '{billing_address}'      => '',
+            '{shipping_name}'        => '',
+            '{shipping_address}'     => '',
+            '{customer_note}'        => '',
+        );
+
+        if ( empty( $woo_info ) ) {
+            return $empty;
+        }
+
+        $empty['{woo_email_id}'] = isset( $woo_info['email_id'] ) ? (string) $woo_info['email_id'] : '';
+        $order_id = ! empty( $woo_info['order_id'] ) ? (int) $woo_info['order_id'] : 0;
+        if ( ! $order_id || ! function_exists( 'wc_get_order' ) ) {
+            return $empty;
+        }
+
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) {
+            return $empty;
+        }
+
+        $billing_first_name = (string) $order->get_billing_first_name();
+        $billing_last_name  = (string) $order->get_billing_last_name();
+        $billing_name       = trim( $billing_first_name . ' ' . $billing_last_name );
+        $shipping_name      = trim( (string) $order->get_shipping_first_name() . ' ' . (string) $order->get_shipping_last_name() );
+
+        $items = array();
+        foreach ( $order->get_items() as $item ) {
+            $line = trim( (string) $item->get_name() );
+            $quantity = (int) $item->get_quantity();
+            if ( $quantity > 1 ) {
+                $line .= ' × ' . $quantity;
+            }
+            if ( method_exists( $item, 'get_total' ) && function_exists( 'wc_price' ) ) {
+                $line .= ' — ' . $this->html_to_text(
+                    wc_price( $item->get_total(), array( 'currency' => $order->get_currency() ) )
+                );
+            }
+            if ( '' !== $line ) {
+                $items[] = $line;
+            }
+        }
+
+        $money = function ( $amount ) use ( $order ) {
+            if ( function_exists( 'wc_price' ) ) {
+                return $this->html_to_text(
+                    wc_price( $amount, array( 'currency' => $order->get_currency() ) )
+                );
+            }
+            return (string) $amount;
+        };
+        $date_created = $order->get_date_created();
+        $order_date   = $date_created
+            ? wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $date_created->getTimestamp() )
+            : '';
+        $status       = (string) $order->get_status();
+        $statuses     = function_exists( 'wc_get_order_statuses' ) ? wc_get_order_statuses() : array();
+        $status_label = isset( $statuses[ 'wc-' . $status ] ) ? wp_strip_all_tags( $statuses[ 'wc-' . $status ] ) : $status;
+
+        return array_merge(
+            $empty,
+            array(
+                '{order_id}'           => (string) $order->get_id(),
+                '{order_number}'       => (string) $order->get_order_number(),
+                '{order_status}'       => $status,
+                '{order_status_label}' => $status_label,
+                '{order_date}'         => $order_date,
+                '{order_url}'          => method_exists( $order, 'get_view_order_url' ) ? (string) $order->get_view_order_url() : '',
+                '{order_items}'        => implode( "\n", $items ),
+                '{order_total}'        => $money( $order->get_total() ),
+                '{order_subtotal}'     => $money( $order->get_subtotal() ),
+                '{order_shipping}'     => $money( $order->get_shipping_total() ),
+                '{order_discount}'     => $money( $order->get_discount_total() ),
+                '{order_tax}'          => $money( $order->get_total_tax() ),
+                '{payment_method}'     => (string) $order->get_payment_method_title(),
+                '{shipping_method}'    => (string) $order->get_shipping_method(),
+                '{billing_name}'       => $billing_name,
+                '{billing_first_name}' => $billing_first_name,
+                '{billing_last_name}'  => $billing_last_name,
+                '{billing_email}'      => (string) $order->get_billing_email(),
+                '{billing_phone}'      => (string) $order->get_billing_phone(),
+                '{billing_address}'    => $this->html_to_text( $order->get_formatted_billing_address() ),
+                '{shipping_name}'      => $shipping_name,
+                '{shipping_address}'   => $this->html_to_text( $order->get_formatted_shipping_address() ),
+                '{customer_note}'      => (string) $order->get_customer_note(),
+            )
+        );
+    }
+
+    /**
      * Получить кнопки уведомлений из настроек.
      */
     private function get_notify_buttons( $settings ) {
@@ -374,7 +504,7 @@ class WP_Ru_Max_Notifications {
     public function intercept_email( $args ) {
         $settings = get_option( 'wp_ru_max_settings', array() );
 
-        if ( empty( $settings['notifications_enabled'] ) ) {
+        if ( ! self::setting_enabled( $settings, 'notifications_enabled', false ) ) {
             self::$current_woo_order = null;
             return $args;
         }
@@ -384,7 +514,13 @@ class WP_Ru_Max_Notifications {
         $message     = isset( $args['message'] ) ? $args['message'] : '';
         $notify_from = isset( $settings['notify_from_email'] ) ? trim( $settings['notify_from_email'] ) : 'any';
         $chat_ids    = isset( $settings['notify_chat_ids'] ) ? (array) $settings['notify_chat_ids'] : array();
-        $template    = isset( $settings['notify_template'] ) ? $settings['notify_template'] : "<b>{email_subject}</b>\n{email_message}";
+        $template    = isset( $settings['notify_template'] )
+            ? (string) $settings['notify_template']
+            : WP_Ru_Max::default_notification_template();
+        // Upgrade the old untouched default without overwriting a custom template.
+        if ( "<b>{email_subject}</b>\n{email_message}" === trim( $template ) ) {
+            $template = WP_Ru_Max::default_notification_template();
+        }
         $format      = isset( $settings['notify_format'] ) ? $settings['notify_format'] : 'html';
         $buttons     = $this->get_notify_buttons( $settings );
 
@@ -501,11 +637,27 @@ class WP_Ru_Max_Notifications {
         // (актуально для уведомлений Jetpack Contact Form и любых других форм)
         $clean_message = $this->escape_emails_for_max( $clean_message );
 
-        $text = str_replace(
-            array( '{email_subject}', '{email_message}' ),
-            array( $subject, $clean_message ),
-            $template
+        $template_vars = array_merge(
+            array(
+                '{email_subject}'   => (string) $subject,
+                '{email_message}'   => $clean_message,
+                '{email_to}'        => $to_str,
+                '{email_recipient}' => $to_str,
+                '{site_name}'       => get_bloginfo( 'name' ),
+                '{site_url}'        => home_url( '/' ),
+            ),
+            $this->get_woo_template_variables( $woo_info )
         );
+
+        // В HTML-шаблоне значения письма и заказа должны быть безопасными,
+        // но сами разрешённые HTML-теги шаблона должны сохраниться.
+        if ( 'html' === $format ) {
+            foreach ( $template_vars as $key => $value ) {
+                $template_vars[ $key ] = htmlspecialchars( (string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+            }
+        }
+
+        $text = strtr( (string) $template, $template_vars );
 
         $api = new WP_Ru_Max_API();
         foreach ( $chat_ids_clean as $chat_id ) {
@@ -543,11 +695,16 @@ class WP_Ru_Max_Notifications {
      * Вызывается хуком upgrader_process_complete.
      */
     public function notify_plugin_update( $upgrader, $hook_extra ) {
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        if ( ! self::setting_enabled( $settings, 'notifications_enabled', false )
+            || ! self::setting_enabled( $settings, 'notify_plugin_updates', false ) ) {
+            return;
+        }
+
         if ( empty( $hook_extra['action'] ) || $hook_extra['action'] !== 'update' ) {
             return;
         }
 
-        $settings = get_option( 'wp_ru_max_settings', array() );
         $chat_ids = isset( $settings['notify_chat_ids'] )
             ? array_filter( array_map( 'trim', (array) $settings['notify_chat_ids'] ) )
             : array();
@@ -602,6 +759,12 @@ class WP_Ru_Max_Notifications {
      * Вызывается хуком shutdown.
      */
     public function notify_site_error() {
+        $settings = get_option( 'wp_ru_max_settings', array() );
+        if ( ! self::setting_enabled( $settings, 'notifications_enabled', false )
+            || ! self::setting_enabled( $settings, 'notify_site_errors', false ) ) {
+            return;
+        }
+
         $error = error_get_last();
         if ( ! $error ) {
             return;
@@ -619,7 +782,6 @@ class WP_Ru_Max_Notifications {
         }
         set_transient( $lock, 1, 5 * MINUTE_IN_SECONDS );
 
-        $settings = get_option( 'wp_ru_max_settings', array() );
         $chat_ids = isset( $settings['notify_chat_ids'] )
             ? array_filter( array_map( 'trim', (array) $settings['notify_chat_ids'] ) )
             : array();
