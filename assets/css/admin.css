@@ -266,6 +266,34 @@
     font-size: 15px;
 }
 
+.wp-ru-max-notification-rules {
+    display: grid;
+    gap: 14px;
+}
+
+.wp-ru-max-notification-rule {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    line-height: 1.45;
+}
+
+.wp-ru-max-notification-rule .description {
+    color: #64748b;
+}
+
+.wp-ru-max-rule-status {
+    display: block;
+    margin-top: 3px;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.wp-ru-max-toggle input:checked ~ .wp-ru-max-toggle-slider + * {
+    color: #166534;
+}
+
 /* Token Row */
 .wp-ru-max-token-row {
     display: flex;
