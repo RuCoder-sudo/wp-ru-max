@@ -679,6 +679,27 @@ jQuery(function($){
         return $links;
     }
 
+    /**
+     * Keeps the supported formatting tags in personal notification templates.
+     *
+     * @param string $value Template submitted from the admin screen.
+     * @return string
+     */
+    private function sanitize_notification_template( $value ) {
+        return wp_kses(
+            (string) $value,
+            array(
+                'b'      => array(),
+                'strong' => array(),
+                'i'      => array(),
+                'em'     => array(),
+                'u'      => array(),
+                'br'     => array(),
+                'a'      => array( 'href' => true ),
+            )
+        );
+    }
+
     public function ajax_save_settings() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -765,7 +786,7 @@ jQuery(function($){
                     $settings[ $field ] = filter_var( $value, FILTER_VALIDATE_BOOLEAN );
                     break;
                 case 'notify_template':
-                    $settings[ $field ] = sanitize_textarea_field( $value );
+                    $settings[ $field ] = $this->sanitize_notification_template( $value );
                     break;
                 case 'post_sender_enabled':
                 case 'send_new_post':
@@ -843,7 +864,9 @@ jQuery(function($){
             }
             foreach ( $allowed_textarea as $key ) {
                 if ( isset( $_POST[ $key ] ) ) {
-                    $settings[ $key ] = sanitize_textarea_field( wp_unslash( $_POST[ $key ] ) );
+                    $settings[ $key ] = 'notify_template' === $key
+                        ? $this->sanitize_notification_template( wp_unslash( $_POST[ $key ] ) )
+                        : sanitize_textarea_field( wp_unslash( $_POST[ $key ] ) );
                 }
             }
             foreach ( $allowed_bool as $key ) {
@@ -1268,7 +1291,7 @@ jQuery(function($){
             <h3>История версий</h3>
             <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
 
-            <h4 style="margin-bottom:4px;">v1.0.62</h4>
+            <h4 style="margin-bottom:4px;">v1.0.63</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
                 <li><strong>Исправлено:</strong> раздел «Связь с клиентами» больше не выводится дважды: после расписания живого чата не появляется повторная панель WP RU-MAX.</li>
                 <li><strong>Обновлено:</strong> основной экран с шагом «Выберите свои каналы» оставлен единственным рабочим экраном модуля.</li>
@@ -1897,13 +1920,24 @@ jQuery(function($){
     }
 
     private function render_tab_notifications( $settings ) {
-        $enabled  = ! empty( $settings['notifications_enabled'] );
+        $enabled  = array_key_exists( 'notifications_enabled', $settings )
+            && filter_var( $settings['notifications_enabled'], FILTER_VALIDATE_BOOLEAN );
         $chat_ids = isset( $settings['notify_chat_ids'] ) ? array_filter( array_map( 'trim', (array) $settings['notify_chat_ids'] ) ) : array();
         $chat_ids_display = ! empty( $chat_ids ) ? array_values( $chat_ids ) : array( '' );
         $notify_user_registration = ! array_key_exists( 'notify_user_registration', $settings )
             || filter_var( $settings['notify_user_registration'], FILTER_VALIDATE_BOOLEAN );
         $notify_customer_order = ! array_key_exists( 'notify_customer_order', $settings )
             || filter_var( $settings['notify_customer_order'], FILTER_VALIDATE_BOOLEAN );
+        $notify_plugin_updates = array_key_exists( 'notify_plugin_updates', $settings )
+            && filter_var( $settings['notify_plugin_updates'], FILTER_VALIDATE_BOOLEAN );
+        $notify_site_errors = array_key_exists( 'notify_site_errors', $settings )
+            && filter_var( $settings['notify_site_errors'], FILTER_VALIDATE_BOOLEAN );
+        $notify_template = isset( $settings['notify_template'] )
+            ? (string) $settings['notify_template']
+            : WP_Ru_Max::default_notification_template();
+        if ( "<b>{email_subject}</b>\n{email_message}" === trim( $notify_template ) ) {
+            $notify_template = WP_Ru_Max::default_notification_template();
+        }
         ?>
         <div class="wp-ru-max-card">
             <h2>Личные уведомления</h2>
@@ -1964,8 +1998,9 @@ jQuery(function($){
                     <tr>
                         <th scope="row"><label for="notify_template">Шаблон</label></th>
                         <td>
-                            <textarea id="notify_template" name="notify_template" rows="6" class="large-text code"><?php echo esc_textarea( $settings['notify_template'] ?? "<b>{email_subject}</b>\n{email_message}" ); ?></textarea>
-                            <p class="description">Переменные: <code>{email_subject}</code> <code>{email_message}</code></p>
+                            <textarea id="notify_template" name="notify_template" rows="10" class="large-text code"><?php echo esc_textarea( $notify_template ); ?></textarea>
+                            <p class="description">Основные переменные: <code>{email_subject}</code> <code>{email_message}</code> <code>{email_to}</code> <code>{site_name}</code> <code>{site_url}</code>.</p>
+                            <p class="description">WooCommerce: <code>{order_number}</code> <code>{order_status_label}</code> <code>{order_date}</code> <code>{order_items}</code> <code>{order_total}</code> <code>{order_subtotal}</code> <code>{order_shipping}</code> <code>{order_discount}</code> <code>{order_tax}</code> <code>{payment_method}</code> <code>{shipping_method}</code> <code>{billing_name}</code> <code>{billing_email}</code> <code>{billing_phone}</code> <code>{billing_address}</code> <code>{shipping_name}</code> <code>{shipping_address}</code> <code>{customer_note}</code> <code>{order_url}</code>. В обычных письмах эти поля будут пустыми.</p>
                         </td>
                     </tr>
                     <tr>
@@ -1985,26 +2020,52 @@ jQuery(function($){
                     <tr>
                         <th scope="row">Отправлять, когда</th>
                         <td>
-                            <label style="display:block;margin-bottom:10px;">
-                                <input type="checkbox" name="notify_plugin_updates" value="1" <?php checked( ! empty( $settings['notify_plugin_updates'] ) ); ?> />
-                                <strong>Уведомления обновления плагинов</strong>
-                                <span class="description"> — уведомление в MAX при обновлении плагинов и ядра WordPress</span>
-                            </label>
-                            <label style="display:block;">
-                                <input type="checkbox" name="notify_site_errors" value="1" <?php checked( ! empty( $settings['notify_site_errors'] ) ); ?> />
-                                <strong>Уведомление ошибок сайта</strong>
-                                <span class="description"> — уведомление в MAX при критических PHP-ошибках (fatal error)</span>
-                            </label>
-                            <label style="display:block;margin-top:10px;">
-                                <input type="checkbox" id="notify_user_registration" name="notify_user_registration" value="1" <?php checked( $notify_user_registration ); ?> />
-                                <strong>Регистрация нового пользователя</strong>
-                                <span class="description"> — дублировать в MAX уведомление WordPress о регистрации пользователя</span>
-                            </label>
-                            <label style="display:block;margin-top:10px;">
-                                <input type="checkbox" id="notify_customer_order" name="notify_customer_order" value="1" <?php checked( $notify_customer_order ); ?> />
-                                <strong>Клиентское уведомление о заказе</strong>
-                                <span class="description"> — дублировать в MAX письмо клиенту «Спасибо за ваш заказ» и другие письма customer_*</span>
-                            </label>
+                            <div class="wp-ru-max-notification-rules">
+                                <div class="wp-ru-max-notification-rule">
+                                    <label class="wp-ru-max-toggle">
+                                        <input type="checkbox" id="notify_plugin_updates" name="notify_plugin_updates" value="1" <?php checked( $notify_plugin_updates ); ?> />
+                                        <span class="wp-ru-max-toggle-slider"></span>
+                                    </label>
+                                    <div>
+                                        <strong>Уведомления обновления плагинов</strong>
+                                        <span class="description"> — уведомление в MAX при обновлении плагинов и ядра WordPress</span>
+                                        <span class="wp-ru-max-rule-status" data-for="notify_plugin_updates"><?php echo $notify_plugin_updates ? 'Включено' : 'Выключено'; ?></span>
+                                    </div>
+                                </div>
+                                <div class="wp-ru-max-notification-rule">
+                                    <label class="wp-ru-max-toggle">
+                                        <input type="checkbox" id="notify_site_errors" name="notify_site_errors" value="1" <?php checked( $notify_site_errors ); ?> />
+                                        <span class="wp-ru-max-toggle-slider"></span>
+                                    </label>
+                                    <div>
+                                        <strong>Уведомление ошибок сайта</strong>
+                                        <span class="description"> — уведомление в MAX при критических PHP-ошибках (fatal error)</span>
+                                        <span class="wp-ru-max-rule-status" data-for="notify_site_errors"><?php echo $notify_site_errors ? 'Включено' : 'Выключено'; ?></span>
+                                    </div>
+                                </div>
+                                <div class="wp-ru-max-notification-rule">
+                                    <label class="wp-ru-max-toggle">
+                                        <input type="checkbox" id="notify_user_registration" name="notify_user_registration" value="1" <?php checked( $notify_user_registration ); ?> />
+                                        <span class="wp-ru-max-toggle-slider"></span>
+                                    </label>
+                                    <div>
+                                        <strong>Регистрация нового пользователя</strong>
+                                        <span class="description"> — дублировать в MAX уведомление WordPress о регистрации пользователя</span>
+                                        <span class="wp-ru-max-rule-status" data-for="notify_user_registration"><?php echo $notify_user_registration ? 'Включено' : 'Выключено'; ?></span>
+                                    </div>
+                                </div>
+                                <div class="wp-ru-max-notification-rule">
+                                    <label class="wp-ru-max-toggle">
+                                        <input type="checkbox" id="notify_customer_order" name="notify_customer_order" value="1" <?php checked( $notify_customer_order ); ?> />
+                                        <span class="wp-ru-max-toggle-slider"></span>
+                                    </label>
+                                    <div>
+                                        <strong>Клиентское уведомление о заказе</strong>
+                                        <span class="description"> — дублировать в MAX письмо клиенту «Спасибо за ваш заказ» и другие письма customer_*</span>
+                                        <span class="wp-ru-max-rule-status" data-for="notify_customer_order"><?php echo $notify_customer_order ? 'Включено' : 'Выключено'; ?></span>
+                                    </div>
+                                </div>
+                            </div>
                             <p class="description" style="margin-top:10px;">Эти правила влияют только на дублирование писем в MAX. Отправка исходных писем WordPress и WooCommerce клиентам не изменяется.</p>
                         </td>
                     </tr>
