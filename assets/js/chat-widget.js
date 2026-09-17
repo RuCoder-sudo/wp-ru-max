@@ -1,4 +1,4 @@
-/* WP Ru-max Chat Widget v1.0.62 — fixed duplicate contacts module rendering. */
+/* WP Ru-max Chat Widget v1.0.63 — fixed notification rules and WooCommerce templates. */
 (function () {
     'use strict';
 
