@@ -9,7 +9,7 @@
 
 **WP Ru-max** Плагин для WordPress, который подключает ваш сайт к российскому мессенджеру **MAX (max.ru)**. Автоматическая публикация записей, личные уведомления с любых форм и красивый чат-виджет.
 
-![Version](https://img.shields.io/badge/version-1.0.63-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.64-blue?style=flat-square)
 ![WordPress](https://img.shields.io/badge/WordPress-5.8%2B__7.1-21759b?style=flat-square&logo=wordpress)
 ![WooCommerce](https://img.shields.io/badge/WooCommerce-4.0%2B-96588a?style=flat-square)
 ![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4?style=flat-square&logo=php)
@@ -86,6 +86,13 @@
 | Звуковое уведомление | 3 варианта (синтез через Web Audio API) |
 | Задержка появления | 0 / 5 / 8 / 10 / 15 секунд |
 | Отступ от края | Слайдер 0–200 px |
+
+### Новое в версии 1.0.64
+
+- Автоматические письма WordPress об обновлениях больше не обходят выключенное правило и не попадают в личные уведомления.
+- Для обновлений и критических ошибок можно задать отдельные чаты/группы, отдельно от уведомлений с форм и писем WooCommerce.
+- Исходные письма WordPress и WooCommerce продолжают отправляться клиентам без изменений.
+- Основной плагин, bundled PRO-модуль и ассеты обновлены до версии **1.0.64**.
 
 ### Новое в версии 1.0.63
 
