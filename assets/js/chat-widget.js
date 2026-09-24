@@ -1,4 +1,4 @@
-/* WP Ru-max Chat Widget v1.0.63 — fixed notification rules and WooCommerce templates. */
+/* WP Ru-max Chat Widget v1.0.64 — separated system notification channels. */
 (function () {
     'use strict';
 
