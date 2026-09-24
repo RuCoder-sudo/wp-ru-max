@@ -1,4 +1,4 @@
-/* WP Ru-max PRO admin v1.0.63 — fixed notification rules and WooCommerce templates. */
+/* WP Ru-max PRO admin v1.0.64 — separated system notification channels. */
 jQuery(function ($) {
   var liveChatPane = $('.wprmp-pane[data-wprmp-pane="livechat"]');
   if (liveChatPane.length && !liveChatPane.find('.wprmp-livechat-conversations').length) liveChatPane.append('<div class="wprmp-livechat-conversations"></div>');
