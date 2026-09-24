@@ -1,4 +1,4 @@
-/* WP Ru-max PRO frontend v1.0.63 — fixed notification rules and WooCommerce templates. */
+/* WP Ru-max PRO frontend v1.0.64 — separated system notification channels. */
 (function () {
   var menu = document.getElementById('wp-ru-max-pro-menu');
   var icon = document.getElementById('wp-ru-max-icon');
