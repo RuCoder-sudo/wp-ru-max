@@ -230,6 +230,26 @@
         $('#notify_chat_ids_list').append('<div class="wp-ru-max-channel-row"><input type="text" name="notify_chat_ids[]" class="regular-text" placeholder="987654321 | My Personal ID" /><button type="button" class="button wp-ru-max-remove-channel">X</button></div>');
     });
 
+    $('#add_system_notify_channel').on('click', function () {
+        $('#system_notify_chat_ids_list').append('<div class="wp-ru-max-channel-row"><input type="text" name="system_notify_chat_ids[]" class="regular-text" placeholder="987654321 | System Notifications" /><button type="button" class="button wp-ru-max-remove-channel">X</button></div>');
+    });
+
+    $('#save_system_notification_channels').on('click', function () {
+        var systemChatIds = [];
+        $('input[name="system_notify_chat_ids[]"]').each(function () {
+            var v = $(this).val().trim();
+            if (v) systemChatIds.push(v);
+        });
+
+        var $btn = $(this).prop('disabled', true).text('Сохранение...');
+        doAjax('wp_ru_max_save_settings', {
+            system_notify_chat_ids_json: JSON.stringify(systemChatIds)
+        }, function (res) {
+            $btn.prop('disabled', false).text('Сохранить системный канал');
+            showNotice($('#system_notifications_result'), res.success ? 'success' : 'error', res.success ? 'Системный канал сохранён.' : res.data);
+        });
+    });
+
     /* -- Push Notification -- */
     $('#send_push_btn').on('click', function () {
         var chatId   = $('#push_chat_id').val().trim();
@@ -313,6 +333,12 @@
             if (v) chatIds.push(v);
         });
 
+        var systemChatIds = [];
+        $('input[name="system_notify_chat_ids[]"]').each(function () {
+            var v = $(this).val().trim();
+            if (v) systemChatIds.push(v);
+        });
+
         var wooStatuses = [];
         $('input[name="woo_notify_statuses[]"]:checked').each(function () {
             wooStatuses.push($(this).val());
@@ -322,6 +348,7 @@
             notifications_enabled:      $('#notifications_enabled').is(':checked') ? '1' : '0',
             notify_from_email:          $('#notify_from_email').val(),
             'notify_chat_ids[]':        chatIds,
+            system_notify_chat_ids_json: JSON.stringify(systemChatIds),
             notify_template:            $('#notify_template').val(),
             notify_format:              $('input[name="notify_format"]:checked').val(),
             notify_plugin_updates:      $('input[name="notify_plugin_updates"]').is(':checked') ? '1' : '0',
