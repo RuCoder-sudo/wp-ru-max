@@ -47,15 +47,46 @@ class WP_Ru_Max_Notifications {
         return ! empty( $value );
     }
 
-    private function __construct() {
-        $settings = get_option( 'wp_ru_max_settings', array() );
-        if ( self::setting_enabled( $settings, 'notifications_enabled', false ) ) {
-            // Перехватываем письма через стандартный фильтр wp_mail.
-            // Совместимо с WP Mail SMTP, FluentSMTP, Postman SMTP и другими плагинами-почтовиками:
-            // они заменяют транспорт через phpmailer_init/PHPMailer, но фильтр wp_mail
-            // всегда срабатывает до отправки.
-            add_filter( 'wp_mail', array( $this, 'intercept_email' ), 5, 1 );
+    /**
+     * Returns the dedicated system-event recipients. Older installations
+     * continue using their personal notification recipients until the new
+     * setting has been saved explicitly.
+     *
+     * @param array $settings All plugin settings.
+     * @return array
+     */
+    public static function get_system_chat_ids( $settings ) {
+        $key = array_key_exists( 'system_notify_chat_ids', $settings )
+            ? 'system_notify_chat_ids'
+            : 'notify_chat_ids';
+        $ids = isset( $settings[ $key ] ) ? (array) $settings[ $key ] : array();
+        $ids = array_map(
+            function( $id ) {
+                return trim( (string) $id );
+            },
+            $ids
+        );
 
+        return array_values( array_filter(
+            $ids,
+            function( $id ) {
+                return '' !== $id;
+            }
+        ) );
+    }
+
+    private function __construct() {
+        $settings         = get_option( 'wp_ru_max_settings', array() );
+        $personal_enabled = self::setting_enabled( $settings, 'notifications_enabled', false );
+        $site_errors_enabled = self::setting_enabled( $settings, 'notify_site_errors', false );
+
+        // Inspect mail only when personal forwarding or the independent
+        // recovery-email rule is active.
+        if ( $personal_enabled || $site_errors_enabled ) {
+            add_filter( 'wp_mail', array( $this, 'intercept_email' ), 5, 1 );
+        }
+
+        if ( $personal_enabled ) {
             // WooCommerce: перехватываем данные заказа ДО отправки письма,
             // чтобы знать order_id и статус внутри wp_mail фильтра.
             add_action( 'woocommerce_email_before_send_mail', array( $this, 'capture_woo_order_info' ), 1, 1 );
@@ -66,15 +97,15 @@ class WP_Ru_Max_Notifications {
             add_filter( 'wp_new_user_notification_email_admin', array( $this, 'mark_registration_email' ), 10, 1 );
             add_filter( 'wp_new_user_notification_email', array( $this, 'mark_registration_email' ), 10, 1 );
 
-            // Уведомления об обновлении плагинов и ядра WordPress
-            if ( self::setting_enabled( $settings, 'notify_plugin_updates', false ) ) {
-                add_action( 'upgrader_process_complete', array( $this, 'notify_plugin_update' ), 10, 2 );
-            }
+        }
 
-            // Уведомления о критических ошибках PHP
-            if ( self::setting_enabled( $settings, 'notify_site_errors', false ) ) {
-                add_action( 'shutdown', array( $this, 'notify_site_error' ) );
-            }
+        // Эти правила и их отдельный канал не зависят от пересылки личной
+        // почты: обновления и критические ошибки могут работать автономно.
+        if ( self::setting_enabled( $settings, 'notify_plugin_updates', false ) ) {
+            add_action( 'upgrader_process_complete', array( $this, 'notify_plugin_update' ), 10, 2 );
+        }
+        if ( $site_errors_enabled ) {
+            add_action( 'shutdown', array( $this, 'notify_site_error' ) );
         }
     }
 
@@ -178,6 +209,114 @@ class WP_Ru_Max_Notifications {
 
         $subject = isset( $args['subject'] ) ? (string) $args['subject'] : '';
         return (bool) preg_match( '/new user registration|new user|registration|new account|account.{0,12}(created|registered)|нов.{0,12}пользовател|регистрац.{0,18}пользовател|нов.{0,8}аккаунт|учетн.{0,12}запис/iu', $subject );
+    }
+
+    /**
+     * Recognizes WordPress automatic-update summary emails so they are not
+     * mistaken for ordinary personal email notifications. The update event is
+     * sent separately by upgrader_process_complete to the system channel.
+     *
+     * @param array $args Arguments passed to wp_mail().
+     * @return bool
+     */
+    private function is_wordpress_update_email( $args ) {
+        $subject = isset( $args['subject'] ) ? (string) $args['subject'] : '';
+        $message = isset( $args['message'] ) ? (string) $args['message'] : '';
+
+        if ( function_exists( 'wp_strip_all_tags' ) ) {
+            $subject = wp_strip_all_tags( $subject );
+            $message = wp_strip_all_tags( $message );
+        } else {
+            $subject = strip_tags( $subject );
+            $message = strip_tags( $message );
+        }
+
+        $text = html_entity_decode( $subject . "\n" . $message, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+        $has_english_update_phrase = preg_match(
+            '/\b(?:automatically[\s\S]{0,80}\b(?:updated|upgraded)\b|\b(?:updated|upgraded)[\s\S]{0,80}\bautomatically)\b/i',
+            $text
+        );
+        $mentions_english_update_target = preg_match( '/\b(?:plugins?|themes?|wordpress|site|core)\b/i', $text );
+        if ( $has_english_update_phrase && $mentions_english_update_target ) {
+            return true;
+        }
+
+        // WordPress translations vary between «обновлён» and «обновлен», and
+        // place «автоматически» before or after the update verb.
+        $has_russian_update_phrase = preg_match(
+            '/автоматическ[\s\S]{0,80}обнов|обнов[\s\S]{0,80}автоматическ/iu',
+            $text
+        );
+        $mentions_russian_update_target = preg_match( '/(?:сайт|wordpress|плагин|тем|ядр)/iu', $text );
+
+        return (bool) ( $has_russian_update_phrase && $mentions_russian_update_target );
+    }
+
+    /**
+     * Recognizes the WordPress recovery/fatal-error email so its MAX copy is
+     * controlled by the dedicated site-error rule, not by personal forwarding.
+     *
+     * @param array $args Arguments passed to wp_mail().
+     * @return bool
+     */
+    private function is_wordpress_site_error_email( $args ) {
+        $subject = isset( $args['subject'] ) ? (string) $args['subject'] : '';
+        $message = isset( $args['message'] ) ? (string) $args['message'] : '';
+
+        if ( function_exists( 'wp_strip_all_tags' ) ) {
+            $subject = wp_strip_all_tags( $subject );
+            $message = wp_strip_all_tags( $message );
+        } else {
+            $subject = strip_tags( $subject );
+            $message = strip_tags( $message );
+        }
+
+        $text = html_entity_decode( $subject . "\n" . $message, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+        if ( preg_match( '/technical issue|critical error.{0,80}(?:site|website)|(?:site|website).{0,80}critical error|fatal error.{0,80}(?:site|website)|(?:site|website).{0,80}fatal error/i', $text ) ) {
+            return true;
+        }
+
+        return (bool) preg_match(
+            '/(?:сайт|wordpress|плагин|тем).{0,100}(?:критическ|фатальн).{0,24}ошибк|(?:критическ|фатальн).{0,24}ошибк.{0,100}(?:сайт|wordpress|плагин|тем)/iu',
+            $text
+        );
+    }
+
+    /**
+     * Forwards the WordPress recovery email to the system channel once. The
+     * same transient is used by the shutdown fatal-error handler to avoid
+     * sending both notices for one error.
+     *
+     * @param array $args     Arguments passed to wp_mail().
+     * @param array $settings Plugin settings.
+     * @return void
+     */
+    private function send_site_error_email( $args, $settings ) {
+        $chat_ids = self::get_system_chat_ids( $settings );
+        if ( empty( $chat_ids ) ) {
+            return;
+        }
+
+        $lock = 'wp_ru_max_error_notified';
+        if ( get_transient( $lock ) ) {
+            return;
+        }
+        set_transient( $lock, 1, 5 * MINUTE_IN_SECONDS );
+
+        $subject = isset( $args['subject'] ) ? wp_ru_max_substr( wp_strip_all_tags( (string) $args['subject'] ), 0, 250, 'UTF-8' ) : '';
+        $message = isset( $args['message'] ) ? $this->html_to_text( (string) $args['message'] ) : '';
+        $message = wp_ru_max_substr( trim( $message ), 0, 1000, 'UTF-8' );
+        $site    = htmlspecialchars( get_bloginfo( 'name' ), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' );
+        $text    = "<b>Критическая ошибка сайта</b>\n\nСайт: {$site}\nТема письма: " .
+            htmlspecialchars( $subject, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' ) .
+            ( '' !== $message ? "\n\n" . htmlspecialchars( $message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8' ) : '' );
+
+        $api = new WP_Ru_Max_API();
+        foreach ( $chat_ids as $chat_id ) {
+            $api->send_message( $chat_id, $text, 'html' );
+        }
+
+        WP_Ru_Max_Logger::log( 'notifications', 'error', 'Письмо WordPress о критической ошибке отправлено в системный канал.' );
     }
 
     /**
@@ -503,9 +642,28 @@ class WP_Ru_Max_Notifications {
 
     public function intercept_email( $args ) {
         $settings = get_option( 'wp_ru_max_settings', array() );
+        $woo_info = self::$current_woo_order;
+        self::$current_woo_order = null; // сбрасываем сразу
+
+        // System email notices are governed independently from ordinary email
+        // forwarding and are never copied into the personal channel.
+        if ( $this->is_wordpress_site_error_email( $args ) ) {
+            if ( self::setting_enabled( $settings, 'notify_site_errors', false ) ) {
+                $this->send_site_error_email( $args, $settings );
+            }
+            return $args;
+        }
+
+        if ( $this->is_wordpress_update_email( $args ) ) {
+            WP_Ru_Max_Logger::log(
+                'notifications',
+                'info',
+                'Сводное письмо WordPress об обновлении исключено из личных уведомлений; применяется отдельное правило обновлений.'
+            );
+            return $args;
+        }
 
         if ( ! self::setting_enabled( $settings, 'notifications_enabled', false ) ) {
-            self::$current_woo_order = null;
             return $args;
         }
 
@@ -528,9 +686,6 @@ class WP_Ru_Max_Notifications {
         $to_str = is_array( $to ) ? implode( ', ', $to ) : (string) $to;
 
         // ── WooCommerce: фильтр по статусу и защита от дублей ────────────────
-        $woo_info = self::$current_woo_order;
-        self::$current_woo_order = null; // сбрасываем сразу
-
         // Версия 1.0.51: эти два типа писем отключаются независимо от
         // уведомлений администратора о новых заказах и других писем.
         if ( $this->should_skip_email( $args, $woo_info, $settings ) ) {
@@ -696,8 +851,7 @@ class WP_Ru_Max_Notifications {
      */
     public function notify_plugin_update( $upgrader, $hook_extra ) {
         $settings = get_option( 'wp_ru_max_settings', array() );
-        if ( ! self::setting_enabled( $settings, 'notifications_enabled', false )
-            || ! self::setting_enabled( $settings, 'notify_plugin_updates', false ) ) {
+        if ( ! self::setting_enabled( $settings, 'notify_plugin_updates', false ) ) {
             return;
         }
 
@@ -705,9 +859,7 @@ class WP_Ru_Max_Notifications {
             return;
         }
 
-        $chat_ids = isset( $settings['notify_chat_ids'] )
-            ? array_filter( array_map( 'trim', (array) $settings['notify_chat_ids'] ) )
-            : array();
+        $chat_ids = self::get_system_chat_ids( $settings );
 
         if ( empty( $chat_ids ) ) {
             return;
@@ -721,21 +873,29 @@ class WP_Ru_Max_Notifications {
             $ver  = isset( $wp_version ) ? $wp_version : '—';
             $text = "<b>WordPress обновлён</b>\n\nСайт: {$site}\nВерсия WordPress: {$ver}";
 
-        } elseif ( $type === 'plugin' ) {
-            $slugs = isset( $hook_extra['plugins'] ) ? (array) $hook_extra['plugins'] : array();
+        } elseif ( $type === 'plugin' || $type === 'theme' ) {
+            $list_key = 'plugin' === $type ? 'plugins' : 'themes';
+            $slugs    = isset( $hook_extra[ $list_key ] ) ? (array) $hook_extra[ $list_key ] : array();
             if ( empty( $slugs ) ) {
                 return;
             }
-            if ( ! function_exists( 'get_plugin_data' ) ) {
+            if ( 'plugin' === $type && ! function_exists( 'get_plugin_data' ) ) {
                 require_once ABSPATH . 'wp-admin/includes/plugin.php';
             }
             $names = array();
             foreach ( $slugs as $slug ) {
-                $path = WP_PLUGIN_DIR . '/' . $slug;
-                $data = file_exists( $path ) ? get_plugin_data( $path, false, false ) : array();
-                $names[] = ! empty( $data['Name'] ) ? $data['Name'] : $slug;
+                if ( 'plugin' === $type ) {
+                    $path = WP_PLUGIN_DIR . '/' . $slug;
+                    $data = file_exists( $path ) ? get_plugin_data( $path, false, false ) : array();
+                    $names[] = ! empty( $data['Name'] ) ? $data['Name'] : $slug;
+                } else {
+                    $theme = wp_get_theme( $slug );
+                    $names[] = $theme->exists() ? $theme->get( 'Name' ) : $slug;
+                }
             }
-            $text = "<b>Плагины обновлены</b>\n\nСайт: {$site}\nПлагины:\n— " . implode( "\n— ", $names );
+            $label = 'plugin' === $type ? 'Плагины обновлены' : 'Темы обновлены';
+            $items_label = 'plugin' === $type ? 'Плагины' : 'Темы';
+            $text = "<b>{$label}</b>\n\nСайт: {$site}\n{$items_label}:\n— " . implode( "\n— ", $names );
 
         } else {
             return;
@@ -760,8 +920,7 @@ class WP_Ru_Max_Notifications {
      */
     public function notify_site_error() {
         $settings = get_option( 'wp_ru_max_settings', array() );
-        if ( ! self::setting_enabled( $settings, 'notifications_enabled', false )
-            || ! self::setting_enabled( $settings, 'notify_site_errors', false ) ) {
+        if ( ! self::setting_enabled( $settings, 'notify_site_errors', false ) ) {
             return;
         }
 
@@ -775,20 +934,19 @@ class WP_Ru_Max_Notifications {
             return;
         }
 
-        // Не чаще 1 раза в 5 минут, чтобы не спамить при повторяющихся ошибках
+        $chat_ids = self::get_system_chat_ids( $settings );
+
+        if ( empty( $chat_ids ) ) {
+            return;
+        }
+
+        // Не чаще 1 раза в 5 минут, чтобы не спамить при повторяющихся ошибках.
+        // Общий ключ также не даёт продублировать письмо режима восстановления.
         $lock = 'wp_ru_max_error_notified';
         if ( get_transient( $lock ) ) {
             return;
         }
         set_transient( $lock, 1, 5 * MINUTE_IN_SECONDS );
-
-        $chat_ids = isset( $settings['notify_chat_ids'] )
-            ? array_filter( array_map( 'trim', (array) $settings['notify_chat_ids'] ) )
-            : array();
-
-        if ( empty( $chat_ids ) ) {
-            return;
-        }
 
         // Экранируем HTML-спецсимволы: сообщения об ошибках PHP и имена файлов
         // могут содержать <, >, & которые сломают parse_mode=html в MAX.
