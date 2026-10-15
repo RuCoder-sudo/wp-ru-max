@@ -840,7 +840,7 @@ jQuery(function($){
             $allowed_int      = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay', 'send_delay_seconds', 'retry_count', 'retry_delay_seconds', 'general_dedup_ttl' );
             $allowed_float    = array( 'image_size_limit_mb' );
             $allowed_color    = array( 'chat_widget_retention_stay_bg', 'chat_widget_retention_stay_color', 'chat_widget_retention_leave_bg', 'chat_widget_retention_leave_color' );
-            $allowed_array    = array( 'post_types', 'channels', 'notify_chat_ids', 'system_notify_chat_ids', 'filter_categories', 'filter_tags', 'woo_notify_statuses' );
+            $allowed_array    = array( 'post_types', 'channels', 'notify_chat_ids', 'system_notify_chat_ids', 'filter_categories', 'filter_tags' );
 
             foreach ( $allowed_text as $key ) {
                 if ( isset( $_POST[ $key ] ) ) {
@@ -947,6 +947,47 @@ jQuery(function($){
                     }
                 ) ) );
             }
+        }
+
+        // JSON preserves an intentionally empty status selection. jQuery omits
+        // empty [] parameters, which used to leave old WooCommerce statuses
+        // saved and made "select none" impossible.
+        if ( isset( $_POST['woo_notify_statuses_json'] ) ) {
+            $woo_statuses = json_decode( wp_unslash( $_POST['woo_notify_statuses_json'] ), true );
+        } elseif ( isset( $_POST['woo_notify_statuses'] ) ) {
+            $woo_statuses = wp_unslash( $_POST['woo_notify_statuses'] );
+        } else {
+            $woo_statuses = null;
+        }
+        if ( is_array( $woo_statuses ) ) {
+            $woo_statuses = array_filter(
+                $woo_statuses,
+                function( $status ) {
+                    return is_scalar( $status );
+                }
+            );
+            $woo_status_options = function_exists( 'wc_get_order_statuses' )
+                ? wc_get_order_statuses()
+                : array(
+                    'wc-pending'    => 'Pending payment',
+                    'wc-processing' => 'Processing',
+                    'wc-on-hold'    => 'On hold',
+                    'wc-completed'  => 'Completed',
+                    'wc-cancelled'  => 'Cancelled',
+                    'wc-refunded'   => 'Refunded',
+                    'wc-failed'     => 'Failed',
+                );
+            $valid_statuses = array();
+            foreach ( array_keys( $woo_status_options ) as $status_key ) {
+                $valid_statuses[] = preg_replace( '/^wc-/', '', sanitize_key( $status_key ) );
+            }
+            $woo_statuses = array_map(
+                function( $status ) {
+                    return preg_replace( '/^wc-/', '', sanitize_key( $status ) );
+                },
+                $woo_statuses
+            );
+            $settings['woo_notify_statuses'] = array_values( array_unique( array_intersect( $woo_statuses, $valid_statuses ) ) );
         }
 
         update_option( 'wp_ru_max_settings', $settings );
@@ -1308,6 +1349,15 @@ jQuery(function($){
             <h3>История версий</h3>
             <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
 
+            <h4 style="margin-bottom:4px;">Версия 1.0.65</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Исправлено:</strong> сведения о заказе WooCommerce берутся из реального фильтра почтового callback, поэтому фильтр статусов и защита от повторов применяются к письмам заказа.</li>
+                <li><strong>Добавлено:</strong> выбор одного, нескольких или всех статусов WooCommerce; пустой список корректно отключает отправку заказных писем в MAX.</li>
+                <li><strong>Изменено:</strong> по умолчанию выбраны все стандартные статусы WooCommerce; прежнее автоматическое включение значка «Живой чат» сбрасывается один раз после обновления.</li>
+                <li><strong>Добавлено:</strong> контакты разработчика на вкладке «Активация»; улучшена диагностика передачи запросов лицензии почтовому обработчику.</li>
+                <li><strong>Обновлено:</strong> заявлена совместимость с WordPress 7.1.3.</li>
+            </ul>
+
             <h4 style="margin-bottom:4px;">v1.0.64</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
                 <li><strong>Исправлено:</strong> автоматические письма WordPress об обновлениях больше не проходят в MAX как личные письма, когда правило обновлений выключено.</li>
@@ -1334,12 +1384,6 @@ jQuery(function($){
                 <li><strong>Исправлено:</strong> MAX API работает на серверах, где в системном хранилище CA нет российской цепочки сертификатов MAX.</li>
                 <li><strong>Исправлено:</strong> после успешного обновления устаревший кеш проверки обновлений WordPress удаляется.</li>
                 <li><strong>Безопасность:</strong> проверка SSL остаётся включённой, дополнительная публичная CA-цепочка применяется только к домену MAX API.</li>
-            </ul>
-
-            <h4 style="margin-bottom:4px;">v1.0.59</h4>
-            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
-                <li><strong>Исправлено:</strong> проверка лицензии совместима со старыми CA-пакетами PHP/cURL после перехода сервера лицензий на новую цепочку Let's Encrypt.</li>
-                <li><strong>Безопасность:</strong> проверка SSL остаётся включённой; для HTTPS-запроса к <code>fixcoder.ru</code> добавлен только актуальный публичный Root YR.</li>
             </ul>
 
             <?php if ( false ) : ?>
@@ -1956,6 +2000,11 @@ jQuery(function($){
             || filter_var( $settings['notify_user_registration'], FILTER_VALIDATE_BOOLEAN );
         $notify_customer_order = ! array_key_exists( 'notify_customer_order', $settings )
             || filter_var( $settings['notify_customer_order'], FILTER_VALIDATE_BOOLEAN );
+        $woo_filter_enabled = ! array_key_exists( 'woo_filter_enabled', $settings )
+            || filter_var( $settings['woo_filter_enabled'], FILTER_VALIDATE_BOOLEAN );
+        $selected_statuses = array_key_exists( 'woo_notify_statuses', $settings )
+            ? array_map( 'sanitize_key', (array) $settings['woo_notify_statuses'] )
+            : array( 'pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed' );
         $notify_plugin_updates = array_key_exists( 'notify_plugin_updates', $settings )
             && filter_var( $settings['notify_plugin_updates'], FILTER_VALIDATE_BOOLEAN );
         $notify_site_errors = array_key_exists( 'notify_site_errors', $settings )
@@ -2129,36 +2178,48 @@ jQuery(function($){
                         <th scope="row">Включить фильтр WooCommerce</th>
                         <td>
                             <label>
-                                <input type="checkbox" name="woo_filter_enabled" id="woo_filter_enabled" value="1" <?php checked( ! empty( $settings['woo_filter_enabled'] ) ); ?> />
+                                <input type="checkbox" name="woo_filter_enabled" id="woo_filter_enabled" value="1" <?php checked( $woo_filter_enabled ); ?> />
                                 <strong>Фильтр по статусам + защита от дублей</strong>
                             </label>
-                            <p class="description">Без этой опции приходят <em>все</em> письма WooCommerce, включая дубли (новый заказ + смена статуса = 2+ одинаковых уведомления).</p>
+                            <p class="description">По умолчанию выбраны все стандартные статусы WooCommerce. Снимите отметки у ненужных статусов; повторные письма об одном заказе и статусе подавляются.</p>
                         </td>
                     </tr>
-                    <tr id="woo_statuses_row" style="<?php echo empty( $settings['woo_filter_enabled'] ) ? 'display:none;' : ''; ?>">
+                    <tr id="woo_statuses_row" style="<?php echo $woo_filter_enabled ? '' : 'display:none;'; ?>">
                         <th scope="row">Статусы для уведомлений</th>
                         <td>
                             <?php
-                            $woo_statuses = array(
-                                'pending'    => 'Ожидает оплаты',
-                                'processing' => 'В обработке (оплачен)',
-                                'on-hold'    => 'На удержании',
-                                'completed'  => 'Выполнен',
-                                'cancelled'  => 'Отменён',
-                                'refunded'   => 'Возврат средств',
-                                'failed'     => 'Ошибка оплаты',
-                            );
-                            $selected_statuses = isset( $settings['woo_notify_statuses'] )
-                                ? (array) $settings['woo_notify_statuses']
-                                : array( 'processing', 'completed' );
-                            foreach ( $woo_statuses as $slug => $label ) :
+                            $woo_status_options = function_exists( 'wc_get_order_statuses' )
+                                ? wc_get_order_statuses()
+                                : array(
+                                    'wc-pending'    => 'Ожидает оплаты',
+                                    'wc-processing' => 'В обработке (оплачен)',
+                                    'wc-on-hold'    => 'На удержании',
+                                    'wc-completed'  => 'Выполнен',
+                                    'wc-cancelled'  => 'Отменён',
+                                    'wc-refunded'   => 'Возврат средств',
+                                    'wc-failed'     => 'Ошибка оплаты',
+                                );
+                            $woo_statuses = array();
+                            foreach ( $woo_status_options as $status_key => $status_label ) {
+                                $status_slug = preg_replace( '/^wc-/', '', (string) $status_key );
+                                if ( '' !== $status_slug ) {
+                                    $woo_statuses[ $status_slug ] = wp_strip_all_tags( (string) $status_label );
+                                }
+                            }
+                            $selected_statuses = array_values( array_intersect( $selected_statuses, array_keys( $woo_statuses ) ) );
+                            ?>
+                            <label style="display:block;margin-bottom:10px;font-weight:600;">
+                                <input type="checkbox" id="woo_status_select_all" value="1" <?php checked( ! empty( $woo_statuses ) && count( $selected_statuses ) === count( $woo_statuses ) ); ?> />
+                                Выбрать все статусы
+                            </label>
+                            <?php foreach ( $woo_statuses as $slug => $label ) :
                             ?>
                             <label style="display:block;margin-bottom:6px;">
                                 <input type="checkbox" name="woo_notify_statuses[]" value="<?php echo esc_attr( $slug ); ?>" <?php checked( in_array( $slug, $selected_statuses, true ) ); ?> />
                                 <?php echo esc_html( $label ); ?> <code style="font-size:11px;color:#666;"><?php echo esc_html( $slug ); ?></code>
                             </label>
                             <?php endforeach; ?>
-                            <p class="description" style="margin-top:8px;">Если ни один статус не выбран — уведомления WooCommerce не отправляются совсем.</p>
+                            <p class="description" style="margin-top:8px;">Отметьте нужные статусы или «Выбрать все статусы». Если снять все отметки, письма WooCommerce в MAX отправляться не будут.</p>
                         </td>
                     </tr>
                 </table>
@@ -3513,6 +3574,22 @@ jQuery(function($){
                     </table>
                 </div>
             <?php endif; ?>
+
+            <hr style="margin:32px 0;" />
+
+            <div class="wp-ru-max-activation-block">
+                <h3>Контакты разработчика</h3>
+                <ul style="margin-left:18px;list-style:disc;">
+                    <li><strong>Сайт плагина:</strong> <a href="https://max-wp.ru/" target="_blank" rel="noopener noreferrer">https://max-wp.ru/</a></li>
+                    <li><strong>Сайт разработчика:</strong> <a href="https://fixcoder.ru/" target="_blank" rel="noopener noreferrer">https://fixcoder.ru/</a></li>
+                    <li><strong>MAX мессенджер:</strong> <a href="https://max.ru/u/f9LHodD0cOITtCJ_yEgNCwvrSY5k9nGXMvyoMZSfqVbSkPqWZnJj2hEH9UA" target="_blank" rel="noopener noreferrer">Написать в MAX</a></li>
+                    <li><strong>Телеграм мессенджер:</strong> <a href="https://t.me/RussCoder" target="_blank" rel="noopener noreferrer">https://t.me/RussCoder</a></li>
+                    <li><strong>ВКонтакте:</strong> <a href="https://vk.com/rucoderweb" target="_blank" rel="noopener noreferrer">https://vk.com/rucoderweb</a></li>
+                    <li><strong>GitHub:</strong> <a href="https://github.com/RuCoder-sudo/" target="_blank" rel="noopener noreferrer">https://github.com/RuCoder-sudo/</a></li>
+                    <li><strong>Email:</strong> <a href="mailto:rucoder.rf@yandex.ru">rucoder.rf@yandex.ru</a></li>
+                    <li><strong>Телефон:</strong> <a href="tel:+79859855397">+79859855397</a></li>
+                </ul>
+            </div>
         </div>
 
         <script>
@@ -3596,7 +3673,7 @@ jQuery(function($){
 
             function showResult(selector, success, msg){
                 $(selector).removeClass('notice-success notice-error').addClass(success ? 'notice-success' : 'notice-error')
-                    .css({ display:'block', padding:'12px 16px', background:'#fff', borderLeft: success ? '4px solid #00a32a' : '4px solid #d63638', marginTop:'12px' }).html(msg);
+                    .css({ display:'block', padding:'12px 16px', background:'#fff', borderLeft: success ? '4px solid #00a32a' : '4px solid #d63638', marginTop:'12px' }).text(msg);
             }
         })(jQuery);
         </script>
