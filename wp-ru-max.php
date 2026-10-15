@@ -3,7 +3,7 @@
  * Plugin Name:       WP Ru-max
  * Plugin URI:        https://fixcoder.ru/wp-ru-max/
  * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Jetpack / Elementor и настраиваемый чат-виджет с анимацией и звуком. Поддерживает WordPress Multisite (мультисайт) и поддомены.
- * Version:           1.0.64
+ * Version:           1.0.65
  * Author:            Сергей Солошенко (RuCoder)
  * Author URI:        https://fixcoder.ru/
  * License:           GPL v2 or later
@@ -11,7 +11,7 @@
  * Text Domain:       wp-ru-max
  * Domain Path:       /languages
  * Requires at least: 5.8
- * Tested up to:      7.1
+ * Tested up to:      7.1.3
  * Requires PHP:      7.4
  * Network:           true
  *
@@ -82,7 +82,7 @@ if ( class_exists( 'WP_Ru_Max', false ) || defined( 'WP_RU_MAX_BOOTSTRAPPED' ) )
 }
 if ( ! defined( 'WP_RU_MAX_BOOTSTRAPPED' ) ) define( 'WP_RU_MAX_BOOTSTRAPPED', true );
 
-if ( ! defined( 'WP_RU_MAX_VERSION' ) ) define( 'WP_RU_MAX_VERSION', '1.0.64' );
+if ( ! defined( 'WP_RU_MAX_VERSION' ) ) define( 'WP_RU_MAX_VERSION', '1.0.65' );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_FILE' ) ) define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_DIR' ) ) define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_URL' ) ) define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -92,9 +92,9 @@ if ( ! defined( 'WP_RU_MAX_API_BASE' ) ) define( 'WP_RU_MAX_API_BASE', 'https://
 // PRO is bundled into the main plugin. The option names stay compatible with
 // the standalone add-on so existing settings and conversations are preserved.
 if ( ! defined( 'WP_RU_MAX_PRO_BUNDLED' ) ) define( 'WP_RU_MAX_PRO_BUNDLED', true );
-// Version 1.0.64: keep the bundled module's cache-busting version aligned
+// Version 1.0.65: keep the bundled module's cache-busting version aligned
 // with the main plugin release.
-if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.64' );
+if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.65' );
 if ( ! defined( 'WP_RU_MAX_PRO_FILE' ) ) define( 'WP_RU_MAX_PRO_FILE', __FILE__ );
 if ( ! defined( 'WP_RU_MAX_PRO_DIR' ) ) define( 'WP_RU_MAX_PRO_DIR', WP_RU_MAX_PLUGIN_DIR );
 if ( ! defined( 'WP_RU_MAX_PRO_URL' ) ) define( 'WP_RU_MAX_PRO_URL', WP_RU_MAX_PLUGIN_URL . 'assets/pro/' );
@@ -243,6 +243,31 @@ function wp_ru_max_handle_vk_callback_route() {
 add_action( 'template_redirect', 'wp_ru_max_handle_vk_callback_route', 1 );
 
 wp_ru_max();
+
+// Apply the live-chat default migration from the always-loaded main plugin,
+// including installations that still use the compatible standalone PRO add-on.
+add_action( 'plugins_loaded', function() {
+    $migration_key = 'wp_ru_max_live_chat_default_off_migrated';
+    if ( get_option( $migration_key ) ) {
+        return;
+    }
+
+    $saved = get_option( WP_RU_MAX_PRO_OPTION, false );
+    if ( is_array( $saved ) ) {
+        if ( ! isset( $saved['chat'] ) || ! is_array( $saved['chat'] ) ) {
+            $saved['chat'] = array();
+        }
+        $saved['chat']['live_chat_enabled'] = false;
+        update_option( WP_RU_MAX_PRO_OPTION, $saved );
+
+        $verified = get_option( WP_RU_MAX_PRO_OPTION, array() );
+        if ( ! is_array( $verified ) || ! empty( $verified['chat']['live_chat_enabled'] ) ) {
+            return;
+        }
+    }
+
+    update_option( $migration_key, 1 );
+}, 1 );
 
 // Инициализируем апдейтер только в контексте wp-admin, иначе он добавляет
 // фильтры и обращается к transient-кешу на каждом фронтенд-запросе.
