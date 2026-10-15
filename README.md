@@ -17,8 +17,8 @@
 
 **Интеграция WordPress с российским мессенджером MAX (max.ru)**
 
-<a href="https://fixcoder.ru/">
-  <img src="https://img.shields.io/badge/🌐_Открыть_сайт-fixcoder.ru-d63347?style=for-the-badge&labelColor=1a0d12" alt="Открыть сайт" height="42">
+<a href="https://max-wp.ru/">
+  <img src="https://img.shields.io/badge/🌐_Открыть_сайт-max-wp.ru-d63347?style=for-the-badge&labelColor=1a0d12" alt="Открыть сайт" height="42">
 </a>
 
 [Получить лицензию](https://fixcoder.ru/) · [Установка](https://max-wp.ru/ystanovka/) · [Настройка](https://max-wp.ru/ystanovka/) · [Поддержка](#поддержка) · [Лицензия использования](https://github.com/RuCoder-sudo/wp-ru-max/blob/main/ICENSE.md)
