@@ -289,6 +289,20 @@
         $('#woo_statuses_row').toggle(this.checked);
     });
 
+    function syncWooStatusSelectAll() {
+        var $statuses = $('input[name="woo_notify_statuses[]"]');
+        var selected = $statuses.filter(':checked').length;
+        $('#woo_status_select_all')
+            .prop('checked', $statuses.length > 0 && selected === $statuses.length)
+            .prop('indeterminate', selected > 0 && selected < $statuses.length);
+    }
+
+    $('#woo_status_select_all').on('change', function () {
+        $('input[name="woo_notify_statuses[]"]').prop('checked', this.checked);
+    });
+    $(document).on('change', 'input[name="woo_notify_statuses[]"]', syncWooStatusSelectAll);
+    syncWooStatusSelectAll();
+
     $('#test_notification').on('click', function () {
         var chatId = $('#notify_test_chat').val().trim();
         if (!chatId) {
@@ -359,7 +373,7 @@
             notify_user_registration:   $('input[name="notify_user_registration"]').is(':checked') ? '1' : '0',
             notify_customer_order:      $('input[name="notify_customer_order"]').is(':checked') ? '1' : '0',
             woo_filter_enabled:         $('input[name="woo_filter_enabled"]').is(':checked') ? '1' : '0',
-            'woo_notify_statuses[]':    wooStatuses,
+            woo_notify_statuses_json:   JSON.stringify(wooStatuses),
             general_dedup_enabled:      $('input[name="general_dedup_enabled"]').is(':checked') ? '1' : '0',
             general_dedup_ttl:          parseInt($('#general_dedup_ttl').val(), 10) || 30,
         }, collectNotifyButtons());
