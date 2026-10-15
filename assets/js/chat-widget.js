@@ -1,4 +1,4 @@
-/* WP Ru-max Chat Widget v1.0.64 — separated system notification channels. */
+/* WP Ru-max Chat Widget v1.0.65 — plugin release. */
 (function () {
     'use strict';
 
