@@ -9,8 +9,8 @@
 
 **WP Ru-max** Плагин для WordPress, который подключает ваш сайт к российскому мессенджеру **MAX (max.ru)**. Автоматическая публикация записей, личные уведомления с любых форм и красивый чат-виджет.
 
-![Version](https://img.shields.io/badge/version-1.0.64-blue?style=flat-square)
-![WordPress](https://img.shields.io/badge/WordPress-5.8%2B__7.1-21759b?style=flat-square&logo=wordpress)
+![Version](https://img.shields.io/badge/version-1.0.65-blue?style=flat-square)
+![WordPress](https://img.shields.io/badge/WordPress-5.8%2B__7.1.3-21759b?style=flat-square&logo=wordpress)
 ![WooCommerce](https://img.shields.io/badge/WooCommerce-4.0%2B-96588a?style=flat-square)
 ![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4?style=flat-square&logo=php)
 ![License](https://img.shields.io/badge/license-GPLv2-green?style=flat-square)
@@ -70,8 +70,8 @@
 
 | Функция | Описание |
 |---|---|
-| Перехват `wp_mail()` | Все email-уведомления WordPress → в MAX |
-| WooCommerce | Новый заказ, смена статуса, оплата и т.д. |
+| Перехват `wp_mail()` | Email-уведомления WordPress → в MAX |
+| WooCommerce | Выбранные статусы заказа, с защитой от повторов |
 | Contact Form 7 | Уведомления со всех форм |
 | Elementor Forms | Включая Elementor Pro |
 | Gravity Forms | Полная поддержка |
@@ -86,6 +86,15 @@
 | Звуковое уведомление | 3 варианта (синтез через Web Audio API) |
 | Задержка появления | 0 / 5 / 8 / 10 / 15 секунд |
 | Отступ от края | Слайдер 0–200 px |
+
+### Новое в версии 1.0.65
+
+- Захват сведений о WooCommerce-заказе перенесён на реально вызываемый фильтр почтового callback перед `wp_mail()`; фильтр статусов и защита от повторов теперь получают ID письма и заказа.
+- В «Личные уведомления» можно отправлять все или выбранные статусы заказов. Пустой выбор сохраняется корректно и останавливает отправку заказных писем в MAX.
+- По умолчанию выбраны все стандартные статусы WooCommerce; ненужные статусы можно отключить. Повторные письма по одному заказу и статусу пропускаются.
+- Значок «Живой чат» выключен по умолчанию; при первом запуске обновлённого плагина старое значение по умолчанию отключается один раз.
+- Добавлены кликабельные контакты разработчика во вкладке «Активация» и уточнена диагностика передачи запроса лицензии почтовой системе WordPress.
+- Обновлена заявленная совместимость с WordPress 7.1.3.
 
 ### Новое в версии 1.0.64
 
