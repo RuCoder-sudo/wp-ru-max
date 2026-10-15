@@ -9,10 +9,10 @@ class WP_Ru_Max_Notifications {
     private static $instance = null;
 
     /**
-     * Данные текущего WooCommerce-письма, заполняемые хуком
-     * woocommerce_email_before_send_mail. Для писем без заказа (например,
-     * customer_new_account) сохраняется только email_id. Сбрасываются после
-     * каждого вызова intercept_email.
+     * Данные текущего WooCommerce-письма, заполняемые фильтром
+     * woocommerce_mail_callback непосредственно перед вызовом wp_mail().
+     * Для писем без заказа (например, customer_new_account) сохраняется
+     * только email_id. Сбрасываются после каждого вызова intercept_email.
      */
     private static $current_woo_order = null;
 
@@ -87,9 +87,12 @@ class WP_Ru_Max_Notifications {
         }
 
         if ( $personal_enabled ) {
-            // WooCommerce: перехватываем данные заказа ДО отправки письма,
-            // чтобы знать order_id и статус внутри wp_mail фильтра.
-            add_action( 'woocommerce_email_before_send_mail', array( $this, 'capture_woo_order_info' ), 1, 1 );
+            // WooCommerce вызывает этот фильтр прямо перед wp_mail(), передавая
+            // объект WC_Email. Хук woocommerce_email_before_send_mail в
+            // WooCommerce отсутствует, поэтому он не мог заполнить order_id,
+            // email_id и статус для фильтрации/дедупликации.
+            add_filter( 'woocommerce_mail_callback', array( $this, 'capture_woo_order_info' ), 1, 2 );
+            add_action( 'woocommerce_email_sent', array( $this, 'clear_woo_order_info' ), PHP_INT_MAX, 3 );
 
             // WordPress не передаёт источник письма в фильтр wp_mail. Добавляем
             // служебную метку к обоим стандартным письмам регистрации, чтобы
@@ -110,12 +113,18 @@ class WP_Ru_Max_Notifications {
     }
 
     /**
-     * Перехватывает данные WooCommerce-письма перед его отправкой.
-     * Вызывается хуком woocommerce_email_before_send_mail.
+     * Сохраняет сведения о письме WooCommerce перед вызовом wp_mail().
+     * Вызывается фильтром woocommerce_mail_callback.
      *
-     * @param WC_Email $email Объект WooCommerce письма.
+     * @param callable|string $callback Текущий почтовый callback.
+     * @param WC_Email       $email    Объект WooCommerce письма.
+     * @return callable|string Исходный callback без изменений.
      */
-    public function capture_woo_order_info( $email ) {
+    public function capture_woo_order_info( $callback, $email = null ) {
+        if ( ! is_object( $email ) ) {
+            return $callback;
+        }
+
         $email_id = isset( $email->id ) ? (string) $email->id : '';
         if ( ! isset( $email->object ) ) {
             if ( $email_id ) {
@@ -125,7 +134,7 @@ class WP_Ru_Max_Notifications {
                     'email_id' => $email_id,
                 );
             }
-            return;
+            return $callback;
         }
 
         // Поддержка WC_Order и любых его наследников
@@ -139,12 +148,17 @@ class WP_Ru_Max_Notifications {
                     'email_id' => $email_id,
                 );
             }
-            return;
+            return $callback;
         }
 
         $order_id = (int) $email->object->get_id();
         if ( ! $order_id ) {
-            return;
+            self::$current_woo_order = array(
+                'order_id' => 0,
+                'status'   => '',
+                'email_id' => $email_id,
+            );
+            return $callback;
         }
 
         $status   = (string) $email->object->get_status();
@@ -154,6 +168,20 @@ class WP_Ru_Max_Notifications {
             'status'   => $status,
             'email_id' => $email_id,
         );
+
+        return $callback;
+    }
+
+    /**
+     * Не оставляет сведения о WooCommerce-письме при использовании стороннего
+     * почтового callback, который не вызывает wp_mail().
+     *
+     * @param bool     $sent    Было ли письмо отправлено.
+     * @param string   $email_id Идентификатор WooCommerce-письма.
+     * @param WC_Email $email   Объект письма.
+     */
+    public function clear_woo_order_info( $sent = null, $email_id = null, $email = null ) {
+        self::$current_woo_order = null;
     }
 
     /**
@@ -692,27 +720,27 @@ class WP_Ru_Max_Notifications {
             return $args;
         }
 
-        if ( ! empty( $settings['woo_filter_enabled'] ) && ! empty( $woo_info ) ) {
+        if ( self::setting_enabled( $settings, 'woo_filter_enabled', true ) && ! empty( $woo_info ) && ! empty( $woo_info['order_id'] ) ) {
             $order_id = $woo_info['order_id'];
             // WooCommerce хранит статус с префиксом 'wc-' в БД, но get_status() возвращает без 'wc-'
             $status   = preg_replace( '/^wc-/', '', (string) $woo_info['status'] );
 
             // Фильтр по статусам
-            $allowed_statuses = isset( $settings['woo_notify_statuses'] ) ? (array) $settings['woo_notify_statuses'] : array();
-            if ( ! empty( $allowed_statuses ) ) {
-                $allowed_clean = array_map(
-                    function( $s ) {
-                        return preg_replace( '/^wc-/', '', (string) $s );
-                    },
-                    $allowed_statuses
+            $allowed_statuses = array_key_exists( 'woo_notify_statuses', $settings )
+                ? (array) $settings['woo_notify_statuses']
+                : array( 'pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed' );
+            $allowed_clean = array_map(
+                function( $s ) {
+                    return preg_replace( '/^wc-/', '', (string) $s );
+                },
+                $allowed_statuses
+            );
+            if ( empty( $allowed_clean ) || ! in_array( $status, $allowed_clean, true ) ) {
+                WP_Ru_Max_Logger::log( 'notifications', 'info',
+                    "WooCommerce заказ #{$order_id} (статус: {$status}) пропущен — статус не входит в список уведомлений.",
+                    array( 'order_id' => $order_id, 'status' => $status, 'allowed' => $allowed_clean )
                 );
-                if ( ! in_array( $status, $allowed_clean, true ) ) {
-                    WP_Ru_Max_Logger::log( 'notifications', 'info',
-                        "WooCommerce заказ #{$order_id} (статус: {$status}) пропущен — статус не входит в список уведомлений.",
-                        array( 'order_id' => $order_id, 'status' => $status, 'allowed' => $allowed_clean )
-                    );
-                    return $args;
-                }
+                return $args;
             }
 
             // Защита от дублей: одно уведомление по одному заказу+статус за 60 секунд
