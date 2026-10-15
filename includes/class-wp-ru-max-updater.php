@@ -121,7 +121,7 @@ class WP_Ru_Max_Updater {
                 'new_version'  => $latest_version,
                 'url'          => "https://github.com/{$this->github_user}/{$this->github_repo}",
                 'package'      => "https://github.com/{$this->github_user}/{$this->github_repo}/archive/refs/tags/{$release['tag_name']}.zip",
-                'tested'       => '6.7',
+                'tested'       => '7.1.3',
                 'requires_php' => '7.4',
                 'icons'        => array(),
                 'banners'      => array(),
@@ -176,7 +176,7 @@ class WP_Ru_Max_Updater {
             'author'        => '<a href="https://fixcoder.ru/" target="_blank">RuCoder</a>',
             'homepage'      => "https://github.com/{$this->github_user}/{$this->github_repo}",
             'requires'      => '5.8',
-            'tested'        => '6.7',
+            'tested'        => '7.1.3',
             'requires_php'  => '7.4',
             'last_updated'  => $release['published_at'] ?? '',
             'sections'      => array(
