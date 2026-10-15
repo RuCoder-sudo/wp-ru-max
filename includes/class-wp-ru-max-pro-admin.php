@@ -111,7 +111,7 @@ class WP_Ru_Max_Pro_Admin {
         // прислал неполный объект настроек без unchecked-поля.
         $live_chat_enabled = array_key_exists( 'live_chat_enabled', $chat_raw )
             ? wp_ru_max_pro_bool( $chat_raw['live_chat_enabled'] )
-            : wp_ru_max_pro_bool( $current['chat']['live_chat_enabled'] ?? true, true );
+            : wp_ru_max_pro_bool( $current['chat']['live_chat_enabled'] ?? false, false );
         $settings = array(
             'enabled' => wp_ru_max_pro_bool( $raw['enabled'] ?? false, true ),
             'channels' => $channels,
