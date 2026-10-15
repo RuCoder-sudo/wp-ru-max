@@ -121,7 +121,7 @@ class WP_Ru_Max_Pro_Widget {
             && wp_ru_max_pro_is_live_chat_available( $settings['chat'] );
         // Version 1.0.51: live chat is an explicit setting. Offline/schedule
         // state still does not hide it; only the administrator's toggle does.
-        $live_chat_enabled = wp_ru_max_pro_bool( $settings['chat']['live_chat_enabled'] ?? true, true );
+        $live_chat_enabled = wp_ru_max_pro_bool( $settings['chat']['live_chat_enabled'] ?? false, false );
         $enabled = array( 'max' );
         if ( $live_chat_enabled ) {
             $enabled[] = 'live_chat';
