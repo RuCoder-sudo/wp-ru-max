@@ -170,6 +170,8 @@ class WP_Ru_Max {
                 'notify_site_errors'     => false,
                 'notify_user_registration' => true,
                 'notify_customer_order' => true,
+                'woo_filter_enabled'    => true,
+                'woo_notify_statuses'   => array( 'pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed' ),
                 'notify_from_email'      => 'any',
                 'notify_chat_ids'        => array(),
                 'notify_template'        => self::default_notification_template(),
