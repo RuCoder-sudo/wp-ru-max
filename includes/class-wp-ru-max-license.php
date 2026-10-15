@@ -262,11 +262,20 @@ class WP_Ru_Max_License {
             }
         };
         add_action( 'wp_mail_failed', $mail_failed, 10, 1 );
-        $sent = wp_mail( self::OWNER_EMAIL, $subject, $body, $headers );
-        remove_action( 'wp_mail_failed', $mail_failed, 10 );
+        try {
+            $sent = wp_mail( self::OWNER_EMAIL, $subject, $body, $headers );
+        } catch ( Throwable $error ) {
+            $sent       = false;
+            $mail_error = $error->getMessage();
+        } finally {
+            remove_action( 'wp_mail_failed', $mail_failed, 10 );
+        }
 
         if ( $sent ) {
-            wp_send_json_success( 'Запрос отправлен! Владелец пришлёт ключ на ' . $email . ' в ближайшее время.' );
+            if ( class_exists( 'WP_Ru_Max_Logger', false ) ) {
+                WP_Ru_Max_Logger::log( 'license', 'info', 'Запрос лицензии передан WordPress почтовому обработчику.' );
+            }
+            wp_send_json_success( 'Запрос передан почтовой системе сайта. Если письмо не появится, проверьте папку «Спам» и настройки SMTP либо свяжитесь с разработчиком по контактам ниже.' );
         } else {
             if ( class_exists( 'WP_Ru_Max_Logger', false ) ) {
                 WP_Ru_Max_Logger::log( 'license', 'error', 'Не удалось отправить запрос лицензии через wp_mail().', array(
