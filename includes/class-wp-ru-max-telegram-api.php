@@ -130,7 +130,7 @@ class WP_Ru_Max_Telegram_API {
      * @param string $parse_mode 'HTML' | 'MarkdownV2' | ''
      * @return array|WP_Error
      */
-    public function send_photo( $chat_id, $photo_url, $caption = '', $parse_mode = 'HTML' ) {
+    public function send_photo( $chat_id, $photo_url, $caption = '', $parse_mode = 'HTML', $fallback_to_text = true ) {
         // Telegram ограничивает подпись к фото 1024 символами
         if ( wp_ru_max_strlen( $caption, 'UTF-8' ) > 1024 ) {
             $caption = wp_ru_max_substr( $caption, 0, 1020, 'UTF-8' ) . "\n...";
@@ -151,7 +151,7 @@ class WP_Ru_Max_Telegram_API {
 
         // Если фото отклонено (недоступный URL, неподдерживаемый тип и т.д.)
         // — отправляем текст отдельно, чтобы публикация не пропала полностью.
-        if ( is_wp_error( $result ) ) {
+        if ( is_wp_error( $result ) && $fallback_to_text ) {
             WP_Ru_Max_Logger::log( 'social', 'warning',
                 '[Telegram] sendPhoto не удался (' . $result->get_error_message() . ') — fallback на sendMessage.',
                 array( 'chat_id' => $chat_id, 'photo_url' => $photo_url )
