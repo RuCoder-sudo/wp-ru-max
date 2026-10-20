@@ -172,9 +172,9 @@ class WP_Ru_Max_Contacts {
         add_action( 'wp_ajax_wp_ru_max_contacts_close', array( $this, 'close' ) );
         add_action( 'wp_ajax_wp_ru_max_contacts_messages', array( $this, 'messages' ) );
     }
-    public function add_tab( $tabs ) { $tabs['contacts'] = 'Связь с клиентами'; return $tabs; }
+    public function add_tab( $tabs ) { $tabs['contacts'] = 'Виджет контакты'; return $tabs; }
     public function add_key( $keys ) { $keys[] = 'contacts'; return $keys; }
-    public function add_submenu( $items ) { $items[] = array( 'Связь с клиентами', 'manage_options', 'admin.php?page=wp-ru-max&tab=contacts' ); return $items; }
+    public function add_submenu( $items ) { $items[] = array( 'Виджет контакты', 'manage_options', 'admin.php?page=wp-ru-max&tab=contacts' ); return $items; }
     private function text( $value ) { return sanitize_text_field( wp_unslash( $value ?? '' ) ); }
     private function allow_public_request( $action, $limit = 20 ) {
         $ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown';
@@ -299,7 +299,7 @@ class WP_Ru_Max_Contacts {
         $open = array_filter( (array) get_option( 'wp_ru_max_pro_pending_messages', array() ), function( $item ) { return 'closed' !== ( $item['status'] ?? 'open' ); } );
         ?>
         <div class="wprmp-admin" dir="ltr">
-            <div class="wprmp-heading"><div><span class="wprmp-kicker">WP RU-MAX</span><h1>Связь с клиентами</h1><p>Каналы, форма обратной связи и живой чат — теперь в едином плагине.</p></div><div class="wprmp-heading-actions"><span class="wprmp-live-status"><i></i> Модуль включён</span><button type="button" class="button button-primary" id="wprmp-save">Сохранить настройки</button></div></div>
+            <div class="wprmp-heading"><div><span class="wprmp-kicker">WP RU-MAX</span><h1>Виджет контакты</h1><p>Каналы, форма обратной связи и живой чат — теперь в едином плагине.</p></div><div class="wprmp-heading-actions"><span class="wprmp-live-status"><i></i> Модуль включён</span><button type="button" class="button button-primary" id="wprmp-save">Сохранить настройки</button></div></div>
             <nav class="wprmp-subtabs"><button type="button" class="wprmp-subtab is-active" data-wprmp-tab="settings">Настройки</button><button type="button" class="wprmp-subtab" data-wprmp-tab="messages">Заявки <b><?php echo count( $open ); ?></b></button></nav>
             <section class="wprmp-pane is-active" data-wprmp-pane="settings">
                 <div class="wprmp-hero"><div><span class="wprmp-eyebrow">КОНТАКТЫ В ОДНОМ МЕСТЕ</span><h2>Сделайте общение частью сайта</h2><p>Основной значок MAX берёт размер, положение и отступ из вкладки «Чат-виджет MAX».</p></div></div>
