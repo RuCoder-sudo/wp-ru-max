@@ -380,12 +380,128 @@ class WP_Ru_Max_API {
      */
     public function get_image_size_limit() {
         $settings = get_option( 'wp_ru_max_settings', array() );
-        $limit_mb = isset( $settings['image_size_limit_mb'] ) ? (int) $settings['image_size_limit_mb'] : 5;
-        if ( $limit_mb <= 0 ) {
-            $limit_mb = 5;
+        $limit_mb = isset( $settings['image_size_limit_mb'] ) ? (float) $settings['image_size_limit_mb'] : 5.0;
+        // 0 means use the upload pipeline's maximum supported source size.
+        $limit_mb = $limit_mb <= 0 ? 50.0 : min( 50.0, max( 0.5, $limit_mb ) );
+        return (int) round( $limit_mb * 1024 * 1024 );
+    }
+
+    /**
+     * Produce a MAX-compatible binary variant when the source is oversized,
+     * unusually large in pixels, or in a less portable format.
+     *
+     * @return array|WP_Error
+     */
+    private function prepare_max_image_binary( $body, $source_url, $size_limit ) {
+        if ( ! function_exists( 'getimagesizefromstring' ) ) {
+            return new WP_Error( 'image_inspector_missing', 'На сервере недоступна проверка типа изображения.' );
         }
-        $limit_mb = min( 50, $limit_mb );
-        return $limit_mb * 1024 * 1024;
+        $info = @getimagesizefromstring( $body );
+        if ( ! is_array( $info ) || empty( $info['mime'] ) || empty( $info[0] ) || empty( $info[1] ) ) {
+            return new WP_Error( 'invalid_image', 'Полученный файл не является корректным изображением.' );
+        }
+        $mime = strtolower( (string) $info['mime'] );
+        $allowed = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp' );
+        if ( ! in_array( $mime, $allowed, true ) ) {
+            return new WP_Error( 'unsupported_image_type', 'Формат изображения не поддерживается. Используйте JPEG, PNG, GIF или WebP.' );
+        }
+        if ( (int) $info[0] < 32 || (int) $info[1] < 32 || ( (int) $info[0] * (int) $info[1] ) > 50000000 ) {
+            return new WP_Error( 'invalid_image_dimensions', 'Размеры изображения некорректны или превышают безопасный предел обработки.' );
+        }
+
+        $needs_conversion = in_array( $mime, array( 'image/gif', 'image/webp' ), true );
+        $needs_resize = (int) $info[0] > 1920 || (int) $info[1] > 1920 || strlen( $body ) > $size_limit;
+        if ( ! $needs_conversion && ! $needs_resize ) {
+            $path = (string) wp_parse_url( $source_url, PHP_URL_PATH );
+            $name = sanitize_file_name( basename( $path ) );
+            if ( '' === $name ) {
+                $name = 'wp-ru-max-image.' . ( 'image/png' === $mime ? 'png' : 'jpg' );
+            }
+            return array( 'body' => $body, 'mime' => $mime, 'filename' => $name );
+        }
+
+        if ( ! function_exists( 'wp_get_image_editor' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+        }
+        $source_file = wp_tempnam( 'wp-ru-max-source-image' );
+        if ( ! $source_file || false === file_put_contents( $source_file, $body ) ) {
+            if ( $source_file && file_exists( $source_file ) ) {
+                wp_delete_file( $source_file );
+            }
+            return new WP_Error( 'image_temp_file_failed', 'Не удалось подготовить временный файл изображения.' );
+        }
+
+        $variant_file = '';
+        $temporary_files = array();
+        try {
+            $editor = wp_get_image_editor( $source_file );
+            if ( is_wp_error( $editor ) ) {
+                return new WP_Error( 'image_editor_failed', 'Не удалось обработать изображение: ' . $editor->get_error_message() );
+            }
+            if ( (int) $info[0] > 1920 || (int) $info[1] > 1920 ) {
+                $resize = $editor->resize( 1920, 1920, false );
+                if ( is_wp_error( $resize ) ) {
+                    return new WP_Error( 'image_resize_failed', 'Не удалось уменьшить изображение: ' . $resize->get_error_message() );
+                }
+            }
+            $editor->set_quality( 84 );
+            $variant_file = wp_tempnam( 'wp-ru-max-image.jpg' );
+            if ( ! $variant_file ) {
+                return new WP_Error( 'image_temp_file_failed', 'Не удалось создать подготовленную копию изображения.' );
+            }
+            $temporary_files[] = $variant_file;
+            $saved = $editor->save( $variant_file, 'image/jpeg' );
+            if ( is_wp_error( $saved ) ) {
+                return new WP_Error( 'image_conversion_failed', 'Не удалось преобразовать изображение в JPEG: ' . $saved->get_error_message() );
+            }
+            $variant_file = $saved['path'] ?? $variant_file;
+            if ( ! in_array( $variant_file, $temporary_files, true ) ) {
+                $temporary_files[] = $variant_file;
+            }
+            $variant_size = (int) @filesize( $variant_file );
+            if ( $variant_size > $size_limit ) {
+                if ( (int) $info[0] > 1280 || (int) $info[1] > 1280 ) {
+                    $resize = $editor->resize( 1280, 1280, false );
+                    if ( is_wp_error( $resize ) ) {
+                        return new WP_Error( 'image_resize_failed', 'Не удалось дополнительно уменьшить изображение.' );
+                    }
+                }
+                $editor->set_quality( 70 );
+                $saved = $editor->save( $variant_file, 'image/jpeg' );
+                if ( is_wp_error( $saved ) ) {
+                    return new WP_Error( 'image_conversion_failed', 'Не удалось сохранить уменьшенное JPEG-изображение.' );
+                }
+                $variant_file = $saved['path'] ?? $variant_file;
+                if ( ! in_array( $variant_file, $temporary_files, true ) ) {
+                    $temporary_files[] = $variant_file;
+                }
+                $variant_size = (int) @filesize( $variant_file );
+            }
+            if ( $variant_size <= 0 || $variant_size > $size_limit ) {
+                return new WP_Error(
+                    'image_too_large_after_processing',
+                    sprintf( 'Изображение после оптимизации превышает лимит MAX в %s МБ.', round( $size_limit / 1048576, 1 ) )
+                );
+            }
+            $variant_body = file_get_contents( $variant_file );
+            if ( false === $variant_body ) {
+                return new WP_Error( 'image_read_failed', 'Не удалось прочитать обработанную копию изображения.' );
+            }
+            return array(
+                'body'     => $variant_body,
+                'mime'     => 'image/jpeg',
+                'filename' => 'wp-ru-max-image.jpg',
+            );
+        } finally {
+            if ( file_exists( $source_file ) ) {
+                wp_delete_file( $source_file );
+            }
+            foreach ( $temporary_files as $temporary_file ) {
+                if ( file_exists( $temporary_file ) ) {
+                    wp_delete_file( $temporary_file );
+                }
+            }
+        }
     }
 
     /**
@@ -421,11 +537,12 @@ class WP_Ru_Max_API {
             'image_url' => $image_url,
         ) );
 
-        // Шаг 1: Скачать изображение с сайта WordPress
+        // Скачиваем файл с верхним техническим пределом, затем при
+        // необходимости оптимизируем его до лимита, заданного в настройках.
         $image_response = wp_remote_get( $image_url, array(
             'timeout'             => 30,
             'sslverify'           => true,
-            'limit_response_size' => $size_limit + 1,
+            'limit_response_size' => 50 * 1024 * 1024 + 1,
         ) );
 
         if ( is_wp_error( $image_response ) ) {
@@ -443,44 +560,22 @@ class WP_Ru_Max_API {
             return new WP_Error( 'download_failed', $err );
         }
 
+        $prepared = $this->prepare_max_image_binary( $image_body, $image_url, $size_limit );
+        if ( is_wp_error( $prepared ) ) {
+            WP_Ru_Max_Logger::log( 'api', 'error', $prepared->get_error_message(), array( 'image_url' => $image_url ) );
+            return $prepared;
+        }
+        $image_body = $prepared['body'];
         $image_size = strlen( $image_body );
-        if ( $image_size > $size_limit ) {
-            $err = sprintf(
-                'Изображение слишком большое: %s МБ. Максимум: %s МБ.',
-                round( $image_size / 1048576, 2 ),
-                round( $size_limit / 1048576, 2 )
-            );
-            WP_Ru_Max_Logger::log( 'api', 'warning', $err );
-            return new WP_Error( 'image_too_large', $err );
-        }
+        $content_type = $prepared['mime'];
+        $filename = $prepared['filename'];
 
-        if ( function_exists( 'getimagesizefromstring' ) ) {
-            $image_info = @getimagesizefromstring( $image_body );
-            if ( false === $image_info || empty( $image_info['mime'] ) ) {
-                return new WP_Error( 'invalid_image', 'Полученный файл не является изображением.' );
-            }
-        }
-
-        WP_Ru_Max_Logger::log( 'api', 'info', 'Изображение скачано успешно.', array(
+        WP_Ru_Max_Logger::log( 'api', 'info', 'Изображение проверено и подготовлено для MAX.', array(
             'size_bytes' => $image_size,
             'http_code'  => $image_code,
+            'content_type' => $content_type,
+            'filename'   => $filename,
         ) );
-
-        // Определить тип файла
-        $content_type = wp_remote_retrieve_header( $image_response, 'content-type' );
-        $content_type = $content_type ? strtok( $content_type, ';' ) : '';
-        if ( ! $content_type || strpos( $content_type, 'image/' ) === false ) {
-            $ext          = strtolower( pathinfo( parse_url( $image_url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
-            $ext_map      = array( 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'gif' => 'image/gif', 'webp' => 'image/webp' );
-            $content_type = isset( $ext_map[ $ext ] ) ? $ext_map[ $ext ] : 'image/jpeg';
-        }
-
-        $filename = basename( parse_url( $image_url, PHP_URL_PATH ) ) ?: 'image.jpg';
-        // Убедиться что имя файла без лишних параметров
-        $filename = preg_replace( '/[^a-zA-Z0-9._-]/', '_', $filename );
-        if ( empty( $filename ) ) {
-            $filename = 'image.jpg';
-        }
 
         WP_Ru_Max_Logger::log( 'api', 'info', 'Метаданные изображения определены.', array(
             'filename'     => $filename,
@@ -568,26 +663,11 @@ class WP_Ru_Max_API {
      * Порядок попыток:
      *   1. Бинарная загрузка (upload_image_binary) — token → attachment
      *   2. Передача по URL напрямую в attachment
-     *   3. Отправка только текста (без изображения)
+     *   3. Если оба способа загрузки фото не сработали — явная ошибка.
      */
     public function send_message_with_image( $chat_id, $text, $image_url, $format = 'html', $buttons = array() ) {
         $chat_id = $this->normalize_chat_id( $chat_id );
         $text = $this->sanitize_utf8( $text, true );
-
-        // Проверяем размер изображения
-        $size_limit = $this->get_image_size_limit();
-        $image_size = $this->check_image_size( $image_url );
-
-        if ( $image_size !== false && $image_size > $size_limit ) {
-            $size_mb  = round( $image_size / 1048576, 2 );
-            $limit_mb = round( $size_limit / 1048576, 0 );
-            WP_Ru_Max_Logger::log( 'api', 'warning', "Изображение ({$size_mb} МБ) превышает лимит ({$limit_mb} МБ) — отправка без изображения.", array(
-                'url'         => $image_url,
-                'size_bytes'  => $image_size,
-                'limit_bytes' => $size_limit,
-            ) );
-            return $this->send_message( $chat_id, $text, $format, $buttons );
-        }
 
         // Попытка 1: бинарная загрузка через MAX Upload API
         $token = $this->upload_image_binary( $image_url );
@@ -674,12 +754,14 @@ class WP_Ru_Max_API {
             return $result;
         }
 
-        WP_Ru_Max_Logger::log( 'api', 'warning', 'Отправка изображения по URL не удалась: ' . $result->get_error_message() . ' — отправляем только текст.', array(
+        WP_Ru_Max_Logger::log( 'api', 'error', 'Отправка изображения по URL не удалась: ' . $result->get_error_message() . '. Текст без выбранного изображения не отправлен.', array(
             'image_url' => $image_url,
         ) );
 
-        // Попытка 3: только текст
-        return $this->send_message( $chat_id, $text, $format, $buttons );
+        return new WP_Error(
+            'image_send_failed',
+            'Не удалось отправить выбранное изображение в MAX. Текстовое сообщение без изображения не отправлялось.'
+        );
     }
 
     /**
