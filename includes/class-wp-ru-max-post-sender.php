@@ -212,13 +212,20 @@ class WP_Ru_Max_Post_Sender {
         }
     }
 
-    private function queue_add( $job_key, $post_id, $is_new, $due, $from_future = false ) {
+    private function queue_add( $job_key, $post_id, $is_new, $due, $from_future = false, $sent_targets = array(), $generation = '' ) {
         $queue = $this->get_queue();
+        $same_generation = isset( $queue[ $job_key ]['generation'] )
+            && hash_equals( (string) $queue[ $job_key ]['generation'], (string) $generation );
+        $previously_sent = $same_generation && isset( $queue[ $job_key ]['sent_targets'] )
+            ? (array) $queue[ $job_key ]['sent_targets']
+            : array();
         $queue[ $job_key ] = array(
             'post_id'      => $post_id,
             'is_new'       => $is_new,
             'from_future'  => $from_future,
             'due'          => $due,
+            'generation'   => (string) $generation,
+            'sent_targets' => array_values( array_unique( array_map( 'sanitize_text_field', array_merge( $previously_sent, (array) $sent_targets ) ) ) ),
         );
         $this->save_queue( $queue );
     }
@@ -404,8 +411,17 @@ class WP_Ru_Max_Post_Sender {
             return;
         }
 
+        $generation = $this->get_post_generation( $post );
+        if ( empty( $data['generation'] ) || ! hash_equals( (string) $data['generation'], $generation ) ) {
+            $data['generation']   = $generation;
+            $data['sent_targets'] = array();
+        }
+
         $settings = get_option( 'wp_ru_max_settings', array() );
-        $sent = $this->send_post( $post, ! empty( $data['is_new'] ), $settings );
+        $sent_targets = array();
+        $previously_sent = array_values( array_unique( array_map( 'sanitize_text_field', (array) ( $data['sent_targets'] ?? array() ) ) ) );
+        $sent = $this->send_post( $post, ! empty( $data['is_new'] ), $settings, $previously_sent, $sent_targets );
+        $data['sent_targets'] = array_values( array_unique( array_merge( $previously_sent, $sent_targets ) ) );
 
         if ( $sent ) {
             unset( $queue[ $job_key ] );
@@ -525,7 +541,7 @@ class WP_Ru_Max_Post_Sender {
             $job_key = $this->get_or_create_job_key( $post->ID, $is_new );
             $from_future = 'future' === $old_status;
             $due         = $this->get_queue_due( $post, $delay, $from_future );
-            $this->queue_add( $job_key, $post->ID, $is_new, $due, $from_future );
+            $this->queue_add( $job_key, $post->ID, $is_new, $due, $from_future, array(), $this->get_post_generation( $post ) );
 
             // Стабильный ключ не допускает накопления одинаковых заданий при
             // повторном переходе записи в publish или повторном сохранении.
@@ -561,11 +577,12 @@ class WP_Ru_Max_Post_Sender {
         // Немедленная отправка. Не теряем публикацию при единичной ошибке
         // API: сохраняем её в той же постоянной очереди, что и отложенные
         // задания, и передаём WP-Cron несколько попыток.
-        $sent = $this->send_post( $post, $is_new, $settings );
+        $sent_targets = array();
+        $sent = $this->send_post( $post, $is_new, $settings, array(), $sent_targets );
         if ( ! $sent ) {
             $job_key = $this->get_or_create_job_key( $post->ID, $is_new );
             $due     = time() + 5 * MINUTE_IN_SECONDS;
-            $this->queue_add( $job_key, $post->ID, $is_new, $due );
+            $this->queue_add( $job_key, $post->ID, $is_new, $due, false, $sent_targets, $this->get_post_generation( $post ) );
             wp_schedule_single_event( $due, 'wp_ru_max_delayed_send', array( $job_key ) );
             WP_Ru_Max_Logger::log( 'post_sender', 'warning', "Автоматическая отправка записи #{$post->ID} не завершена. Задание сохранено для повторной попытки через 5 минут.", array(
                 'post_id' => $post->ID,
@@ -638,12 +655,14 @@ class WP_Ru_Max_Post_Sender {
     /**
      * Отправляет запись во все настроенные каналы.
      */
-    private function send_post( $post, $is_new, $settings ) {
+    private function send_post( $post, $is_new, $settings, $skip_targets = array(), &$sent_targets = null ) {
         $channels   = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
         $message    = $this->build_post_message( $post, $is_new, $settings );
         $buttons    = $this->get_buttons( $settings, $post );
         $api        = new WP_Ru_Max_API();
         $send_image = isset( $settings['send_post_image'] ) ? (bool) $settings['send_post_image'] : true;
+        $skip_targets = array_map( 'sanitize_text_field', (array) $skip_targets );
+        $sent_targets = is_array( $sent_targets ) ? $sent_targets : array();
 
         // Настройки retry
         $max_retries = isset( $settings['retry_count'] ) ? (int) $settings['retry_count'] : 2;
@@ -653,6 +672,11 @@ class WP_Ru_Max_Post_Sender {
         foreach ( $channels as $channel ) {
             $chat_id = trim( $channel );
             if ( empty( $chat_id ) ) {
+                continue;
+            }
+
+            $target_key = hash( 'sha256', $chat_id );
+            if ( in_array( $target_key, $skip_targets, true ) ) {
                 continue;
             }
 
@@ -689,6 +713,7 @@ class WP_Ru_Max_Post_Sender {
                     'is_new'  => $is_new,
                 ) );
             } else {
+                $sent_targets[] = $target_key;
                 WP_Ru_Max_Logger::log( 'post_sender', 'success', "Запись #{$post->ID} успешно отправлена в канал $chat_id.", array(
                     'post_id' => $post->ID,
                     'chat_id' => $chat_id,
@@ -877,43 +902,140 @@ class WP_Ru_Max_Post_Sender {
     }
 
     public function send_post_manually( $post ) {
-        $settings   = get_option( 'wp_ru_max_settings', array() );
-        $channels   = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
-
-        if ( empty( $channels ) ) {
-            return new WP_Error( 'no_channels', 'Нет настроенных каналов. Добавьте канал на вкладке «Отправка публикаций».' );
+        $lock_token = '';
+        if ( ! $this->acquire_queue_lock( $lock_token ) ) {
+            return new WP_Error( 'send_busy', 'Очередь MAX сейчас обрабатывает другое задание. Повторите ручную отправку через несколько секунд.' );
         }
 
-        $message    = $this->build_post_message( $post, false, $settings );
-        $buttons    = $this->get_buttons( $settings, $post );
-        $api        = new WP_Ru_Max_API();
-        $send_image = isset( $settings['send_post_image'] ) ? (bool) $settings['send_post_image'] : true;
-        $max_retries = isset( $settings['retry_count'] ) ? (int) $settings['retry_count'] : 2;
-        $retry_delay = isset( $settings['retry_delay_seconds'] ) ? (int) $settings['retry_delay_seconds'] : 5;
-        $errors     = array();
+        try {
+            if ( ! $this->refresh_queue_lock( $lock_token ) ) {
+                return new WP_Error( 'send_busy', 'Не удалось закрепить очередь MAX за ручной отправкой. Повторите попытку.' );
+            }
 
-        foreach ( $channels as $channel ) {
-            $chat_id = trim( $channel );
-            if ( empty( $chat_id ) ) {
+            $settings   = get_option( 'wp_ru_max_settings', array() );
+            $channels   = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
+
+            if ( empty( $channels ) ) {
+                return new WP_Error( 'no_channels', 'Нет настроенных каналов. Добавьте канал на вкладке «Отправка публикаций».' );
+            }
+
+            $message      = $this->build_post_message( $post, false, $settings );
+            $buttons      = $this->get_buttons( $settings, $post );
+            $api          = new WP_Ru_Max_API();
+            $send_image   = isset( $settings['send_post_image'] ) ? (bool) $settings['send_post_image'] : true;
+            $max_retries  = isset( $settings['retry_count'] ) ? (int) $settings['retry_count'] : 2;
+            $retry_delay  = isset( $settings['retry_delay_seconds'] ) ? (int) $settings['retry_delay_seconds'] : 5;
+            $errors       = array();
+            $sent_targets = array();
+
+            foreach ( $channels as $channel ) {
+                $chat_id = trim( $channel );
+                if ( empty( $chat_id ) ) {
+                    continue;
+                }
+
+                $thumbnail_url = $send_image ? $this->get_post_image_url( $post ) : false;
+                $result        = $api->send_with_retry( $chat_id, $message, 'html', $buttons, $thumbnail_url ?: false, $max_retries, $retry_delay );
+
+                if ( is_wp_error( $result ) ) {
+                    $errors[] = $chat_id . ': ' . $result->get_error_message();
+                    WP_Ru_Max_Logger::log( 'post_sender', 'error', "Ручная отправка записи #{$post->ID} в канал $chat_id НЕУДАЧНА: " . $result->get_error_message() );
+                } else {
+                    $sent_targets[] = hash( 'sha256', $chat_id );
+                    WP_Ru_Max_Logger::log( 'post_sender', 'success', "Ручная отправка записи #{$post->ID} в канал $chat_id успешна." );
+                }
+            }
+
+            if ( count( $errors ) === count( $channels ) && ! empty( $errors ) ) {
+                return new WP_Error( 'send_failed', implode( '; ', $errors ) );
+            }
+
+            if ( ! empty( $sent_targets ) && ! empty( $errors ) ) {
+                $this->record_sent_targets_for_post( $post->ID, $sent_targets, $this->get_post_generation( $post ) );
+            }
+
+            if ( empty( $errors ) ) {
+                /*
+                 * A manual send may happen while the automatic retry for this
+                 * post is still waiting in the persistent queue. Once the manual
+                 * send is confirmed, remove that stale retry so it cannot publish
+                 * the same post again minutes later.
+                 */
+                $this->cancel_pending_jobs_for_post( $post->ID );
+            }
+
+            return true;
+        } finally {
+            $this->release_queue_lock( $lock_token );
+        }
+    }
+
+    /**
+     * Removes delayed/retry jobs for a post after a confirmed manual send.
+     *
+     * @param int $post_id WordPress post ID.
+     */
+    private function cancel_pending_jobs_for_post( $post_id ) {
+        $queue   = $this->get_queue();
+        $changed = false;
+        foreach ( $queue as $job_key => $job ) {
+            if ( (int) ( $job['post_id'] ?? 0 ) !== (int) $post_id ) {
                 continue;
             }
+            unset( $queue[ $job_key ] );
+            wp_clear_scheduled_hook( 'wp_ru_max_delayed_send', array( $job_key ) );
+            $changed = true;
+        }
 
-            $thumbnail_url = $send_image ? $this->get_post_image_url( $post ) : false;
-            $result = $api->send_with_retry( $chat_id, $message, 'html', $buttons, $thumbnail_url ?: false, $max_retries, $retry_delay );
+        if ( $changed ) {
+            $this->save_queue( $queue );
+            WP_Ru_Max_Logger::log( 'post_sender', 'info', "Ожидающая автоматическая отправка записи #{$post_id} удалена после подтверждённой ручной публикации.", array(
+                'post_id' => (int) $post_id,
+            ) );
+        }
+    }
 
-            if ( is_wp_error( $result ) ) {
-                $errors[] = $chat_id . ': ' . $result->get_error_message();
-                WP_Ru_Max_Logger::log( 'post_sender', 'error', "Ручная отправка записи #{$post->ID} в канал $chat_id НЕУДАЧНА: " . $result->get_error_message() );
-            } else {
-                WP_Ru_Max_Logger::log( 'post_sender', 'success', "Ручная отправка записи #{$post->ID} в канал $chat_id успешна." );
+    /**
+     * Records destinations already served manually so a pending retry only
+     * sends to the destinations that failed.
+     *
+     * @param int   $post_id WordPress post ID.
+     * @param array  $sent_targets Hashed destination identifiers.
+     * @param string $generation  Content generation sent manually.
+     */
+    private function record_sent_targets_for_post( $post_id, $sent_targets, $generation ) {
+        $queue   = $this->get_queue();
+        $changed = false;
+        foreach ( $queue as $job_key => $job ) {
+            if ( (int) ( $job['post_id'] ?? 0 ) !== (int) $post_id ) {
+                continue;
             }
+            $existing = isset( $job['generation'] ) && hash_equals( (string) $job['generation'], (string) $generation )
+                ? array_map( 'sanitize_text_field', (array) ( $job['sent_targets'] ?? array() ) )
+                : array();
+            $job['sent_targets'] = array_values( array_unique( array_merge( $existing, $sent_targets ) ) );
+            $job['generation']   = (string) $generation;
+            $queue[ $job_key ] = $job;
+            $changed = true;
         }
-
-        if ( count( $errors ) === count( $channels ) && ! empty( $errors ) ) {
-            return new WP_Error( 'send_failed', implode( '; ', $errors ) );
+        if ( $changed ) {
+            $this->save_queue( $queue );
         }
+    }
 
-        return true;
+    /**
+     * Produces a stable fingerprint for the exact content handled by a queue job.
+     *
+     * @param WP_Post $post WordPress post.
+     * @return string
+     */
+    private function get_post_generation( $post ) {
+        return hash( 'sha256', implode( "\n", array(
+            (string) $post->ID,
+            (string) ( $post->post_modified_gmt ?? '' ),
+            (string) ( $post->post_title ?? '' ),
+            (string) ( $post->post_content ?? '' ),
+        ) ) );
     }
 
     /**
