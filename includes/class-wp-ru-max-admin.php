@@ -35,6 +35,7 @@ class WP_Ru_Max_Admin {
         add_action( 'wp_ajax_wp_ru_max_send_push',       array( $this, 'ajax_send_push' ) );
         add_action( 'wp_ajax_wp_ru_max_direct_social',   array( $this, 'ajax_direct_social' ) );
         add_action( 'wp_ajax_wp_ru_max_save_social',      array( $this, 'ajax_save_social_settings' ) );
+        add_action( 'wp_ajax_wp_ru_max_telegram_test',    array( $this, 'ajax_test_telegram' ) );
         add_action( 'wp_ajax_wp_ru_max_import_vk_photo_token', array( $this, 'ajax_import_vk_photo_token' ) );
         add_action( 'admin_post_wp_ru_max_vk_start',     array( $this, 'vk_oauth_start' ) );
         add_action( 'admin_post_wp_ru_max_vk_callback',  array( $this, 'vk_oauth_callback' ) );
@@ -1421,6 +1422,15 @@ jQuery(function($){
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
             <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
+
+            <h4 style="margin-bottom:4px;">Версия 1.0.68</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Исправлено:</strong> ручная отправка MAX синхронизирована с WP-Cron; после успеха отменяются ожидающие повторы, а при частичной отправке повторяются только каналы с ошибкой.</li>
+                <li><strong>Добавлено:</strong> в настройках Telegram у каждого чата есть кнопка «Отправить тест» для проверки токена, адреса чата и сетевого маршрута.</li>
+                <li><strong>Добавлено:</strong> настройки Telegram-прокси — Cloudflare Worker, Google Apps Script, PHP relay и HTTP CONNECT прокси. Для relay добавлена проверка общего секрета и ссылка на примеры настройки.</li>
+                <li><strong>Изменено:</strong> тайм-аут Telegram-запроса увеличен до 45 секунд, ошибки соединения дополнены подсказками; полное тело ответа Telegram API больше не сохраняется в журнал.</li>
+                <li><strong>Внимание:</strong> relay получает токен бота и отправляемый текст; HTTP CONNECT-прокси видит сетевые метаданные. Используйте только доверенный сервер и на свой риск.</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">Версия 1.0.67</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -3805,6 +3815,15 @@ jQuery(function($){
 
         $social = get_option( 'wp_ru_max_social', array() );
 
+        // --- Telegram proxy ---
+        if ( isset( $_POST['telegram_proxy'] ) && is_array( $_POST['telegram_proxy'] ) ) {
+            $proxy_config = $this->normalize_telegram_proxy_config( wp_unslash( $_POST['telegram_proxy'] ) );
+            if ( is_wp_error( $proxy_config ) ) {
+                wp_send_json_error( $proxy_config->get_error_message() );
+            }
+            $social['telegram_proxy'] = $proxy_config;
+        }
+
         // --- Telegram боты ---
         if ( isset( $_POST['telegram_bots'] ) && is_array( $_POST['telegram_bots'] ) ) {
             $bots = array();
@@ -3929,6 +3948,117 @@ jQuery(function($){
         update_option( 'wp_ru_max_social', $social );
         WP_Ru_Max_Logger::log( 'social', 'info', 'Настройки социальных сетей обновлены.' );
         wp_send_json_success( 'Настройки сохранены.' );
+    }
+
+    /**
+     * Проверяет и нормализует настройки Telegram-прокси.
+     *
+     * @param array $input Raw settings from the admin form.
+     * @return array|WP_Error
+     */
+    private function normalize_telegram_proxy_config( $input ) {
+        $allowed_types = array( 'http', 'cloudflare_worker', 'google_script', 'php_proxy' );
+        $type = sanitize_key( $input['type'] ?? 'http' );
+        if ( ! in_array( $type, $allowed_types, true ) ) {
+            return new WP_Error( 'telegram_proxy_type', 'Выберите поддерживаемый тип Telegram-прокси.' );
+        }
+
+        $config = array(
+            'enabled'  => ! empty( $input['enabled'] ),
+            'type'     => $type,
+            'address'  => sanitize_text_field( $input['address'] ?? '' ),
+            'host'     => '',
+            'port'     => 0,
+            'username' => sanitize_text_field( $input['username'] ?? '' ),
+            'password' => substr( preg_replace( '/[\r\n\0]/', '', (string) ( $input['password'] ?? '' ) ), 0, 512 ),
+            'url'      => esc_url_raw( $input['url'] ?? '' ),
+            'secret'   => substr( preg_replace( '/[\r\n\0]/', '', (string) ( $input['secret'] ?? '' ) ), 0, 512 ),
+        );
+
+        if ( empty( $config['enabled'] ) ) {
+            return $config;
+        }
+
+        if ( 'http' === $type ) {
+            $address = trim( $config['address'] );
+            if ( preg_match( '/^\[([0-9a-f:]+)\]:(\d{1,5})$/i', $address, $matches ) ) {
+                $host = $matches[1];
+                $port = (int) $matches[2];
+            } elseif ( preg_match( '/^([a-z0-9.-]+):(\d{1,5})$/i', $address, $matches ) ) {
+                $host = $matches[1];
+                $port = (int) $matches[2];
+            } else {
+                return new WP_Error( 'telegram_proxy_address', 'Введите адрес HTTP-прокси в формате host:port, например 173.245.49.41:80.' );
+            }
+            if ( $port < 1 || $port > 65535 || ! preg_match( '/^[a-z0-9.:-]+$/i', $host ) ) {
+                return new WP_Error( 'telegram_proxy_address', 'Адрес HTTP-прокси или номер порта указан неверно.' );
+            }
+            $config['host'] = $host;
+            $config['port'] = $port;
+        } else {
+            $url_parts = wp_parse_url( $config['url'] );
+            if (
+                ! $url_parts
+                || empty( $url_parts['scheme'] )
+                || 'https' !== strtolower( $url_parts['scheme'] )
+                || empty( $url_parts['host'] )
+                || ! wp_http_validate_url( $config['url'] )
+            ) {
+                return new WP_Error( 'telegram_proxy_url', 'Для выбранного прокси укажите корректный HTTPS URL опубликованного relay-сервиса.' );
+            }
+            if ( strlen( $config['secret'] ) < 16 ) {
+                return new WP_Error( 'telegram_proxy_secret', 'Для relay-сервиса задайте общий секретный ключ длиной не менее 16 символов.' );
+            }
+        }
+
+        return $config;
+    }
+
+    /**
+     * Отправляет тестовое сообщение через указанные Telegram-настройки.
+     */
+    public function ajax_test_telegram() {
+        check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Нет прав доступа.' );
+        }
+        if ( ! WP_Ru_Max_License::is_active() ) {
+            wp_send_json_error( 'Сначала активируйте лицензию плагина.' );
+        }
+
+        $token   = sanitize_text_field( wp_unslash( $_POST['token'] ?? '' ) );
+        $chat_id = sanitize_text_field( wp_unslash( $_POST['chat_id'] ?? '' ) );
+        if ( ! preg_match( '/^\d+:[A-Za-z0-9_-]{20,}$/', $token ) ) {
+            wp_send_json_error( 'Проверьте токен Telegram-бота: ожидается токен из @BotFather.' );
+        }
+        if ( '' === $chat_id ) {
+            wp_send_json_error( 'Укажите ID канала или чата, куда отправить тест.' );
+        }
+
+        $proxy_config = $this->normalize_telegram_proxy_config( (array) wp_unslash( $_POST['telegram_proxy'] ?? array() ) );
+        if ( is_wp_error( $proxy_config ) ) {
+            wp_send_json_error( $proxy_config->get_error_message() );
+        }
+
+        $api = new WP_Ru_Max_Telegram_API( $token, $proxy_config );
+        $message = '<b>Тестовое сообщение WP Ru-max</b>' . "\n\n"
+            . 'Подключение Telegram работает.' . "\n"
+            . 'Сайт: ' . esc_url( home_url( '/' ) );
+        $result = $api->send_message( $chat_id, $message, 'HTML' );
+
+        if ( is_wp_error( $result ) ) {
+            WP_Ru_Max_Logger::log( 'test', 'error', '[Telegram] Тестовое сообщение не отправлено: ' . $result->get_error_message(), array(
+                'chat_id' => $chat_id,
+                'proxy'   => ! empty( $proxy_config['enabled'] ) ? $proxy_config['type'] : 'direct',
+            ) );
+            wp_send_json_error( $result->get_error_message() );
+        }
+
+        WP_Ru_Max_Logger::log( 'test', 'success', '[Telegram] Тестовое сообщение отправлено.', array(
+            'chat_id' => $chat_id,
+            'proxy'   => ! empty( $proxy_config['enabled'] ) ? $proxy_config['type'] : 'direct',
+        ) );
+        wp_send_json_success( 'Тестовое сообщение отправлено. Токен, чат и сетевое подключение проверены.' );
     }
 
     /**
@@ -4336,6 +4466,15 @@ jQuery(function($){
         $is_licensed = WP_Ru_Max_License::is_active();
         $social = get_option( 'wp_ru_max_social', array() );
         $tg_bots = $social['telegram_bots'] ?? array();
+        $tg_proxy = wp_parse_args( isset( $social['telegram_proxy'] ) && is_array( $social['telegram_proxy'] ) ? $social['telegram_proxy'] : array(), array(
+            'enabled'  => false,
+            'type'     => 'cloudflare_worker',
+            'address'  => '',
+            'username' => '',
+            'password' => '',
+            'url'      => '',
+            'secret'   => '',
+        ) );
         $active_social_tab = ! $is_licensed
             ? 'max'
             : ( ( ! empty( $_GET['vk_oauth'] ) || ! empty( $_GET['vk_oauth_error'] ) ) ? 'vk' : ( ! empty( $_GET['ok_oauth'] ) ? 'ok' : 'max' ) );
@@ -4393,7 +4532,9 @@ jQuery(function($){
                         <div class="tg-chat-row" style="display:flex;gap:8px;margin-top:8px;align-items:center;">
                             <input type="text" class="regular-text tg-chat-id" value="<?php echo esc_attr( $chat['chat_id'] ); ?>" placeholder="@channel или -100123456789" style="flex:1;" />
                             <input type="text" class="regular-text tg-chat-name" value="<?php echo esc_attr( $chat['name'] ); ?>" placeholder="Название (необязательно)" style="max-width:160px;" />
+                            <button type="button" class="button button-small tg-test-chat">Отправить тест</button>
                             <button type="button" class="button button-small tg-remove-chat" style="color:#d63638;">✕</button>
+                            <span class="tg-chat-test-result" aria-live="polite"></span>
                         </div>
                         <?php endforeach; ?>
                         <?php if ( empty( $bot['chats'] ) ) : ?>
@@ -4410,6 +4551,67 @@ jQuery(function($){
             <div style="margin-top:12px;">
                 <button type="button" class="button button-secondary" id="tg-add-bot-btn">+ Добавить бота</button>
             </div>
+        </div>
+        <div class="wp-ru-max-card" id="telegram-proxy-settings">
+            <h2>Настройки прокси Telegram</h2>
+            <p>Если сервер сайта не может подключиться к <code>api.telegram.org</code>, можно направить Telegram-запросы через прокси. Это не влияет на остальные социальные сети.</p>
+            <div style="display:flex;align-items:center;gap:10px;margin:12px 0;">
+                <label class="wp-ru-max-toggle">
+                    <input type="checkbox" id="telegram_proxy_enabled" <?php checked( ! empty( $tg_proxy['enabled'] ) ); ?> />
+                    <span class="wp-ru-max-toggle-slider"></span>
+                </label>
+                <strong>Включить прокси Telegram</strong>
+            </div>
+            <div id="telegram-proxy-fields" <?php echo empty( $tg_proxy['enabled'] ) ? 'hidden' : ''; ?>>
+                <table class="form-table">
+                    <tr>
+                        <th><label for="telegram_proxy_type">Метод прокси</label></th>
+                        <td>
+                            <select id="telegram_proxy_type">
+                                <option value="cloudflare_worker" <?php selected( $tg_proxy['type'], 'cloudflare_worker' ); ?>>Cloudflare Worker</option>
+                                <option value="google_script" <?php selected( $tg_proxy['type'], 'google_script' ); ?>>Google Script</option>
+                                <option value="php_proxy" <?php selected( $tg_proxy['type'], 'php_proxy' ); ?>>PHP-прокси</option>
+                                <option value="http" <?php selected( $tg_proxy['type'], 'http' ); ?>>HTTP-прокси (сервер:порт)</option>
+                            </select>
+                            <p class="description">Cloudflare Worker обычно предпочтительнее для собственного relay. Обычный HTTP-прокси требует PHP cURL на хостинге. После изменения сохраните настройки: этот маршрут будет использоваться автоматическими отправками.</p>
+                            <p class="description"><a href="<?php echo esc_url( WP_RU_MAX_PLUGIN_URL . 'docs/telegram-proxy-relay.md' ); ?>" target="_blank" rel="noopener">Открыть примеры настройки прокси и relay</a></p>
+                        </td>
+                    </tr>
+                    <tr class="telegram-proxy-relay-field">
+                        <th><label for="telegram_proxy_url">URL прокси-сервиса</label></th>
+                        <td>
+                            <input type="url" id="telegram_proxy_url" class="regular-text" value="<?php echo esc_attr( $tg_proxy['url'] ); ?>" placeholder="https://my-worker.example.workers.dev/" autocomplete="url" />
+                            <p class="description">Для выбранного relay нужен опубликованный HTTPS URL, совместимый с протоколом WP Ru-max. URL вида 2ip.io — это каталог, а не адрес прокси-сервера.</p>
+                        </td>
+                    </tr>
+                    <tr class="telegram-proxy-relay-field">
+                        <th><label for="telegram_proxy_secret">Общий секрет relay</label></th>
+                        <td>
+                            <input type="password" id="telegram_proxy_secret" class="regular-text" value="<?php echo esc_attr( $tg_proxy['secret'] ?? '' ); ?>" autocomplete="new-password" />
+                            <p class="description">Один и тот же секрет задаётся в коде прокси и здесь. Он защищает relay от использования посторонними.</p>
+                        </td>
+                    </tr>
+                    <tr class="telegram-proxy-http-field">
+                        <th><label for="telegram_proxy_address">Сервер прокси</label></th>
+                        <td>
+                            <input type="text" id="telegram_proxy_address" class="regular-text" value="<?php echo esc_attr( $tg_proxy['address'] ); ?>" placeholder="173.245.49.41:80" />
+                            <p class="description">Введите адрес прокси в формате <code>host:port</code>. Случайные бесплатные прокси могут быть недоступны, перехватывать трафик или быстро перестать работать.</p>
+                        </td>
+                    </tr>
+                    <tr class="telegram-proxy-http-field">
+                        <th><label for="telegram_proxy_username">Логин прокси</label></th>
+                        <td><input type="text" id="telegram_proxy_username" class="regular-text" value="<?php echo esc_attr( $tg_proxy['username'] ); ?>" autocomplete="off" /></td>
+                    </tr>
+                    <tr class="telegram-proxy-http-field">
+                        <th><label for="telegram_proxy_password">Пароль прокси</label></th>
+                        <td><input type="password" id="telegram_proxy_password" class="regular-text" value="<?php echo esc_attr( $tg_proxy['password'] ); ?>" autocomplete="new-password" /></td>
+                    </tr>
+                </table>
+                <div class="notice notice-warning inline" style="margin:10px 0;padding:8px 12px;">
+                    <p><strong>Внимание:</strong> используйте прокси на свой риск и только если доверяете его владельцу. В режимах Cloudflare Worker, Google Script и PHP relay токен бота и текст сообщений передаются указанному relay-сервису. В режиме HTTP CONNECT содержимое защищено TLS до Telegram, но владелец прокси видит сетевые метаданные; при HTTP-прокси с авторизацией логин и пароль могут передаваться без шифрования. Разработчик WP Ru-max не контролирует сторонние прокси и не отвечает за их доступность, безопасность или обработку данных. Не используйте открытые прокси для конфиденциальной переписки.</p>
+                </div>
+            </div>
+            <p id="telegram-proxy-test-result" class="description" aria-live="polite"></p>
         </div>
         </section>
 
@@ -4728,9 +4930,66 @@ jQuery(function($){
                 return '<div class="tg-chat-row" style="display:flex;gap:8px;margin-top:8px;align-items:center;">'
                     +'<input type="text" class="regular-text tg-chat-id" placeholder="@channel или -100123456789" style="flex:1;" />'
                     +'<input type="text" class="regular-text tg-chat-name" placeholder="Название (необязательно)" style="max-width:160px;" />'
+                    +'<button type="button" class="button button-small tg-test-chat">Отправить тест</button>'
                     +'<button type="button" class="button button-small tg-remove-chat" style="color:#d63638;">✕</button>'
+                    +'<span class="tg-chat-test-result" aria-live="polite"></span>'
                     +'</div>';
             };
+
+            var getTelegramProxyData = function(){
+                return {
+                    enabled: $('#telegram_proxy_enabled').is(':checked') ? 1 : 0,
+                    type: $('#telegram_proxy_type').val() || 'cloudflare_worker',
+                    address: $('#telegram_proxy_address').val() || '',
+                    username: $('#telegram_proxy_username').val() || '',
+                    password: $('#telegram_proxy_password').val() || '',
+                    url: $('#telegram_proxy_url').val() || '',
+                    secret: $('#telegram_proxy_secret').val() || ''
+                };
+            };
+
+            var updateTelegramProxyFields = function(){
+                var enabled = $('#telegram_proxy_enabled').is(':checked');
+                var type = $('#telegram_proxy_type').val();
+                $('#telegram-proxy-fields').prop('hidden', !enabled);
+                $('.telegram-proxy-http-field').toggle(enabled && type === 'http');
+                $('.telegram-proxy-relay-field').toggle(enabled && type !== 'http');
+            };
+            $('#telegram_proxy_enabled, #telegram_proxy_type').on('change', updateTelegramProxyFields);
+            updateTelegramProxyFields();
+
+            $(document).on('click', '.tg-test-chat', function(){
+                var $button = $(this);
+                var $row = $button.closest('.tg-chat-row');
+                var $bot = $button.closest('.wp-ru-max-sn-bot-card');
+                var token = ($bot.find('.tg-bot-token').val() || '').trim();
+                var chatId = ($row.find('.tg-chat-id').val() || '').trim();
+                var $result = $row.find('.tg-chat-test-result');
+                if (!token || !chatId) {
+                    $result.css('color', '#b32d2e').text('Укажите токен бота и ID чата.');
+                    return;
+                }
+                $button.prop('disabled', true).text('Отправляем…');
+                $result.css('color', '').text('');
+                $.post(wpRuMax.ajaxUrl, {
+                    action: 'wp_ru_max_telegram_test',
+                    nonce: wpRuMax.nonce,
+                    token: token,
+                    chat_id: chatId,
+                    telegram_proxy: getTelegramProxyData()
+                }).done(function(resp){
+                    var ok = !!(resp && resp.success);
+                    $result.css('color', ok ? '#008a20' : '#b32d2e')
+                        .text(resp && resp.data ? resp.data : (ok ? 'Тест отправлен.' : 'Не удалось отправить тест.'));
+                }).fail(function(xhr){
+                    var message = xhr && xhr.responseJSON && xhr.responseJSON.data
+                        ? xhr.responseJSON.data
+                        : 'Не удалось связаться с сайтом WordPress.';
+                    $result.css('color', '#b32d2e').text(message);
+                }).always(function(){
+                    $button.prop('disabled', false).text('Отправить тест');
+                });
+            });
 
             var botIdx = <?php echo (int) count( $tg_bots ); ?>;
 
@@ -4757,6 +5016,7 @@ jQuery(function($){
                     action : 'wp_ru_max_save_social',
                     nonce  : wpRuMax.nonce,
                     telegram_bots : [],
+                    telegram_proxy: getTelegramProxyData(),
                     ok_enabled   : $('#ok_enabled').is(':checked') ? 1 : 0,
                     ok_app_id    : $('#ok_app_id').val(),
                     ok_public_key: $('#ok_public_key').val(),
