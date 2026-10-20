@@ -1,4 +1,4 @@
-/* WP Ru-max PRO admin v1.0.65 — live chat disabled by default. */
+/* WP Ru-max PRO admin v1.0.67 — live chat disabled by default. */
 jQuery(function ($) {
   var liveChatPane = $('.wprmp-pane[data-wprmp-pane="livechat"]');
   if (liveChatPane.length && !liveChatPane.find('.wprmp-livechat-conversations').length) liveChatPane.append('<div class="wprmp-livechat-conversations"></div>');
