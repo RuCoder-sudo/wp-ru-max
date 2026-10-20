@@ -9,7 +9,7 @@
 
 **WP Ru-max** Плагин для WordPress, который подключает ваш сайт к российскому мессенджеру **MAX (max.ru)**. Автоматическая публикация записей, личные уведомления с любых форм и красивый чат-виджет.
 
-![Version](https://img.shields.io/badge/version-1.0.67-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.68-blue?style=flat-square)
 ![WordPress](https://img.shields.io/badge/WordPress-5.8%2B__7.1.3-21759b?style=flat-square&logo=wordpress)
 ![WooCommerce](https://img.shields.io/badge/WooCommerce-4.0%2B-96588a?style=flat-square)
 ![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4?style=flat-square&logo=php)
@@ -84,6 +84,16 @@
 | Звуковое уведомление | 3 варианта (синтез через Web Audio API) |
 | Задержка появления | 0 / 5 / 8 / 10 / 15 секунд |
 | Отступ от края | Слайдер 0–200 px |
+
+### Новое в версии 1.0.68
+
+- Ручная отправка статьи в MAX синхронизирована с WP-Cron; после успеха удаляются ожидающие повторы, а при частичном результате повторяются только каналы, где отправка не удалась.
+- В настройках Telegram рядом с каждым чатом появилась кнопка «Отправить тест» для проверки токена, чата и подключения.
+- Для Telegram добавлены Cloudflare Worker, Google Apps Script, PHP relay и HTTP CONNECT прокси. Прямое подключение остаётся вариантом по умолчанию.
+- Для HTTPS relay опубликованы единый формат запросов и примеры настройки: [`docs/telegram-proxy-relay.md`](docs/telegram-proxy-relay.md).
+- Для Telegram увеличен тайм-аут соединения; при сетевой ошибке показывается рекомендация проверить исходящий HTTPS на хостинге или включить прокси.
+- В журнале больше не сохраняется полное тело ответа Telegram API.
+- Добавлено предупреждение об обработке Telegram-токена и текста в relay-сервисах и о рисках использования сторонних HTTP-прокси.
 
 ### Новое в версии 1.0.67
 
