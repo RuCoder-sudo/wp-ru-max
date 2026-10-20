@@ -3,7 +3,7 @@
  * Plugin Name:       WP Ru-max
  * Plugin URI:        https://fixcoder.ru/wp-ru-max/
  * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Jetpack / Elementor и настраиваемый чат-виджет с анимацией и звуком. Поддерживает WordPress Multisite (мультисайт) и поддомены.
- * Version:           1.0.65
+ * Version:           1.0.67
  * Author:            Сергей Солошенко (RuCoder)
  * Author URI:        https://fixcoder.ru/
  * License:           GPL v2 or later
@@ -33,7 +33,7 @@
  *    (или «Сеть → Плагины» для сетевой активации на всех сайтах)
  * 3. Перейдите в «Ru-max → Активация»
  * 4. Введите лицензионный ключ или запросите его на вкладке «Активация»
- * 5. После активации настройте токен бота MAX на вкладке «Главная»
+ * 5. После активации откройте «Социальные сети → MAX» и настройте токен бота
  * 6. Проверьте подключение кнопкой «Проверить подключение»
  *
  * Multisite / Поддомены:
@@ -82,7 +82,7 @@ if ( class_exists( 'WP_Ru_Max', false ) || defined( 'WP_RU_MAX_BOOTSTRAPPED' ) )
 }
 if ( ! defined( 'WP_RU_MAX_BOOTSTRAPPED' ) ) define( 'WP_RU_MAX_BOOTSTRAPPED', true );
 
-if ( ! defined( 'WP_RU_MAX_VERSION' ) ) define( 'WP_RU_MAX_VERSION', '1.0.65' );
+if ( ! defined( 'WP_RU_MAX_VERSION' ) ) define( 'WP_RU_MAX_VERSION', '1.0.67' );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_FILE' ) ) define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_DIR' ) ) define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_URL' ) ) define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -92,9 +92,9 @@ if ( ! defined( 'WP_RU_MAX_API_BASE' ) ) define( 'WP_RU_MAX_API_BASE', 'https://
 // PRO is bundled into the main plugin. The option names stay compatible with
 // the standalone add-on so existing settings and conversations are preserved.
 if ( ! defined( 'WP_RU_MAX_PRO_BUNDLED' ) ) define( 'WP_RU_MAX_PRO_BUNDLED', true );
-// Version 1.0.65: keep the bundled module's cache-busting version aligned
+// Version 1.0.67: keep the bundled module's cache-busting version aligned
 // with the main plugin release.
-if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.65' );
+if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.67' );
 if ( ! defined( 'WP_RU_MAX_PRO_FILE' ) ) define( 'WP_RU_MAX_PRO_FILE', __FILE__ );
 if ( ! defined( 'WP_RU_MAX_PRO_DIR' ) ) define( 'WP_RU_MAX_PRO_DIR', WP_RU_MAX_PLUGIN_DIR );
 if ( ! defined( 'WP_RU_MAX_PRO_URL' ) ) define( 'WP_RU_MAX_PRO_URL', WP_RU_MAX_PLUGIN_URL . 'assets/pro/' );
