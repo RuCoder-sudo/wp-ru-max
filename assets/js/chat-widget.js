@@ -1,4 +1,4 @@
-/* WP Ru-max Chat Widget v1.0.65 — plugin release. */
+/* WP Ru-max Chat Widget v1.0.67 — plugin release. */
 (function () {
     'use strict';
 
