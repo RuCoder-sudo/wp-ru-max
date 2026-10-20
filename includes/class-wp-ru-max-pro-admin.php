@@ -22,9 +22,9 @@ class WP_Ru_Max_Pro_Admin {
         add_action( 'wp_ajax_wp_ru_max_pro_messages', array( $this, 'messages' ) );
     }
 
-    public function add_tab( $tabs ) { $tabs['contacts'] = 'Связь с клиентами'; return $tabs; }
+    public function add_tab( $tabs ) { $tabs['contacts'] = 'Виджет контакты'; return $tabs; }
     public function add_key( $keys ) { $keys[] = 'contacts'; return $keys; }
-    public function add_submenu( $items ) { $items[] = array( 'Связь с клиентами', 'manage_options', 'admin.php?page=wp-ru-max&tab=contacts' ); return $items; }
+    public function add_submenu( $items ) { $items[] = array( 'Виджет контакты', 'manage_options', 'admin.php?page=wp-ru-max&tab=contacts' ); return $items; }
 
     public function assets( $hook ) {
         if ( false === strpos( $hook, 'wp-ru-max' ) ) {
@@ -185,7 +185,7 @@ class WP_Ru_Max_Pro_Admin {
         $main = wp_ru_max_pro_main_widget_settings();
         ?>
         <div class="wprmp-admin" dir="ltr">
-            <div class="wprmp-heading"><div><span class="wprmp-kicker">WP RU-MAX</span><h1>Связь с клиентами</h1><p>Настройте красивый чат, принимайте заявки и отвечайте из MAX.</p></div><div class="wprmp-heading-actions"><span class="wprmp-live-status">● Модуль включён</span><button type="button" class="button button-primary" id="wprmp-save">Сохранить настройки</button></div></div>
+            <div class="wprmp-heading"><div><span class="wprmp-kicker">WP RU-MAX</span><h1>Виджет контакты</h1><p>Настройте красивый чат, принимайте заявки и отвечайте из MAX.</p></div><div class="wprmp-heading-actions"><span class="wprmp-live-status">● Модуль включён</span><button type="button" class="button button-primary" id="wprmp-save">Сохранить настройки</button></div></div>
             <nav class="wprmp-subtabs" aria-label="Разделы связи"><button type="button" class="wprmp-subtab is-active" data-wprmp-tab="settings">Настройки виджета</button><button type="button" class="wprmp-subtab" data-wprmp-tab="messages">Заявки с формы <b><?php echo count( $open_forms ); ?></b></button><button type="button" class="wprmp-subtab" data-wprmp-tab="livechat">Живой чат <span class="wprmp-online-pill"><b><?php echo (int) $live_count; ?></b> сообщений</span></button></nav>
             <section class="wprmp-pane is-active" data-wprmp-pane="settings">
                 <div class="wprmp-grid"><section class="wprmp-settings">
