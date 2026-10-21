@@ -182,7 +182,31 @@ class WP_Ru_Max_Post_Sender {
         );
 
         wp_cache_delete( self::QUEUE_LOCK, 'options' );
-        return 1 === (int) $updated;
+        if ( 1 === (int) $updated ) {
+            return true;
+        }
+
+        if ( false === $updated ) {
+            return false;
+        }
+
+        /*
+         * MySQL reports zero affected rows when the refreshed lease serializes
+         * to the same value as the current one. This can happen when acquire()
+         * and refresh() run during the same second, because both calculate the
+         * same expiry. Treat it as success only if the lock still belongs to
+         * this request and already has at least the requested expiry.
+         */
+        if ( 0 === (int) $updated ) {
+            $verified_lock = get_option( self::QUEUE_LOCK, array() );
+            return is_array( $verified_lock )
+                && ! empty( $verified_lock['token'] )
+                && hash_equals( (string) $verified_lock['token'], (string) $lock_token )
+                && isset( $verified_lock['expires'] )
+                && (int) $verified_lock['expires'] >= (int) $refreshed_lock['expires'];
+        }
+
+        return false;
     }
 
     /**
@@ -908,10 +932,6 @@ class WP_Ru_Max_Post_Sender {
         }
 
         try {
-            if ( ! $this->refresh_queue_lock( $lock_token ) ) {
-                return new WP_Error( 'send_busy', 'Не удалось закрепить очередь MAX за ручной отправкой. Повторите попытку.' );
-            }
-
             $settings   = get_option( 'wp_ru_max_settings', array() );
             $channels   = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
 
