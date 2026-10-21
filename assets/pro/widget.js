@@ -1,4 +1,4 @@
-/* WP Ru-max PRO frontend v1.0.68 — live chat disabled by default. */
+/* WP Ru-max PRO frontend v1.0.69 — live chat disabled by default. */
 (function () {
   var menu = document.getElementById('wp-ru-max-pro-menu');
   var icon = document.getElementById('wp-ru-max-icon');
