@@ -9,8 +9,8 @@
 
 **WP Ru-max** Плагин для WordPress, который подключает ваш сайт к российскому мессенджеру **MAX (max.ru)**. Автоматическая публикация записей, личные уведомления с любых форм и красивый чат-виджет.
 
-![Version](https://img.shields.io/badge/version-1.0.68-blue?style=flat-square)
-![WordPress](https://img.shields.io/badge/WordPress-5.8%2B__7.1.3-21759b?style=flat-square&logo=wordpress)
+![Version](https://img.shields.io/badge/version-1.0.69-blue?style=flat-square)
+![WordPress](https://img.shields.io/badge/WordPress-5.8%2B_7.1.3-21759b?style=flat-square&logo=wordpress)
 ![WooCommerce](https://img.shields.io/badge/WooCommerce-4.0%2B-96588a?style=flat-square)
 ![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4?style=flat-square&logo=php)
 ![License](https://img.shields.io/badge/license-GPLv2-green?style=flat-square)
@@ -84,6 +84,10 @@
 | Звуковое уведомление | 3 варианта (синтез через Web Audio API) |
 | Задержка появления | 0 / 5 / 8 / 10 / 15 секунд |
 | Отступ от края | Слайдер 0–200 px |
+
+### Новое в версии 1.0.69
+
+- Исправлена ошибка ручной отправки в MAX: плагин больше не пытается сразу продлить только что созданную блокировку; при последующем продлении проверяет её владельца и срок, даже если MySQL сообщает, что строка не изменилась.
 
 ### Новое в версии 1.0.68
 
@@ -266,7 +270,7 @@
 |---|---|
 | Telegram | [@RussCoder](https://t.me/RussCoder) |
 | Email | [rucoder.rf@yandex.ru](mailto:rucoder.rf@yandex.ru) |
-| Сайт | [рукодер.рф](https://рукодер.рф) |
+| Сайт | [ФиксКодер](https://fixcoder.ru) |
 | GitHub Issues | [github.com/RuCoder-sudo/wp-ru-max/issues](https://github.com/RuCoder-sudo/wp-ru-max/issues) |
 
 ---
@@ -294,6 +298,6 @@
 ---
 
 <div align="center">
-Разработано — <a href="https://рукодер.рф">РуКодер</a> · Сергей Солошенко
+Разработано — <a href="https://fixcoder.ru/">fixcoder</a> · Сергей Солошенко
 </div>
 
