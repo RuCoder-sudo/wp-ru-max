@@ -1423,6 +1423,11 @@ jQuery(function($){
             <h3>История версий</h3>
             <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
 
+            <h4 style="margin-bottom:4px;">Версия 1.0.69</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Исправлено:</strong> ручная отправка MAX больше не выполняет лишнее продление только что созданной блокировки; при последующем продлении подтверждаются владелец и срок блокировки.</li>
+            </ul>
+
             <h4 style="margin-bottom:4px;">Версия 1.0.68</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
                 <li><strong>Исправлено:</strong> ручная отправка MAX синхронизирована с WP-Cron; после успеха отменяются ожидающие повторы, а при частичной отправке повторяются только каналы с ошибкой.</li>
