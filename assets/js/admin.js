@@ -468,6 +468,10 @@
     $('#save_chat_widget').on('click', function () {
         var $btn = $(this).prop('disabled', true).text('Сохранение...');
         var chatUrl = $('#chat_widget_url').val().trim();
+        var displayPages = [];
+        $('.chat-widget-display-page:checked').each(function () {
+            displayPages.push($(this).val());
+        });
         doAjax('wp_ru_max_save_settings', {
             chat_widget_enabled:       $('#chat_widget_enabled').is(':checked') ? '1' : '0',
             chat_widget_size:          $('input[name="chat_widget_size"]:checked').val() || 'medium',
@@ -477,6 +481,8 @@
             chat_widget_position:      $('input[name="chat_widget_position"]:checked').val() || 'right',
             chat_widget_bottom_offset: parseInt($('#chat_widget_bottom_offset').val(), 10) || 20,
             chat_widget_show_delay:    parseInt($('input[name="chat_widget_show_delay"]:checked').val(), 10) || 0,
+            chat_widget_display_scope: $('input[name="chat_widget_display_scope"]:checked').val() || 'all',
+            chat_widget_display_pages_json: JSON.stringify(displayPages),
             chat_widget_hide_delay:    parseInt($('input[name="chat_widget_hide_delay"]:checked').val(), 10) || 0,
             chat_widget_repeat_delay:  parseInt($('input[name="chat_widget_repeat_delay"]:checked').val(), 10) || 0,
             chat_widget_sound:         $('input[name="chat_widget_sound"]:checked').val() || 'none',
