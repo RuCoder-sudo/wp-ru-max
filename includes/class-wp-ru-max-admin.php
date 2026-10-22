@@ -785,6 +785,24 @@ jQuery(function($){
                     $allowed_pages = array( 'all', 'home', 'specific' );
                     $settings[ $field ] = in_array( $value, $allowed_pages, true ) ? $value : 'all';
                     break;
+                case 'chat_widget_display_scope':
+                    $settings[ $field ] = 'selected' === $value ? 'selected' : 'all';
+                    break;
+                case 'chat_widget_display_pages_json':
+                    $page_values = json_decode( (string) $value, true );
+                    $page_values = is_array( $page_values ) ? $page_values : array();
+                    $page_values = array_map(
+                        function ( $page_value ) {
+                            if ( 'front' === (string) $page_value ) {
+                                return 'front';
+                            }
+                            $page_id = absint( $page_value );
+                            return $page_id > 0 ? (string) $page_id : '';
+                        },
+                        $page_values
+                    );
+                    $settings['chat_widget_display_pages'] = array_values( array_unique( array_filter( $page_values ) ) );
+                    break;
                 case 'chat_widget_sound_specific_pages':
                     $settings[ $field ] = sanitize_textarea_field( $value );
                     break;
@@ -840,7 +858,7 @@ jQuery(function($){
                     break;
             }
         } else {
-            $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages', 'max_oauth_bot_username', 'chat_widget_utm_source', 'chat_widget_utm_medium', 'chat_widget_utm_campaign', 'chat_widget_utm_content', 'chat_widget_ya_metrika_counter', 'chat_widget_ya_metrika_goal', 'hashtags_custom_mentions' );
+            $allowed_text     = array( 'bot_token', 'bot_name', 'notify_from_email', 'notify_format', 'chat_widget_size', 'chat_widget_url', 'chat_widget_message', 'chat_widget_position', 'chat_widget_sound', 'chat_widget_animation', 'chat_widget_retention_title', 'chat_widget_retention_stay_text', 'chat_widget_retention_leave_text', 'chat_widget_retention_text_align', 'chat_widget_retention_buttons_align', 'chat_widget_sound_pages', 'chat_widget_display_scope', 'max_oauth_bot_username', 'chat_widget_utm_source', 'chat_widget_utm_medium', 'chat_widget_utm_campaign', 'chat_widget_utm_content', 'chat_widget_ya_metrika_counter', 'chat_widget_ya_metrika_goal', 'hashtags_custom_mentions' );
             $allowed_textarea = array( 'notify_template', 'post_message_template', 'chat_widget_retention_message', 'chat_widget_sound_specific_pages' );
             $allowed_bool     = array( 'post_sender_enabled', 'send_new_post', 'send_updated_post', 'show_read_more', 'show_action_label', 'show_author_date', 'send_post_image', 'notifications_enabled', 'notify_user_registration', 'notify_customer_order', 'send_files_by_url', 'enable_bot_api_log', 'enable_post_sender_log', 'delete_on_uninstall', 'chat_widget_enabled', 'chat_widget_message_enabled', 'chat_widget_retention_enabled', 'chat_widget_sound_once_per_session', 'notify_plugin_updates', 'notify_site_errors', 'share_button_enabled', 'max_oauth_enabled', 'multisite_enabled', 'woo_filter_enabled', 'chat_widget_ya_metrika_enabled', 'general_dedup_enabled', 'hashtags_enabled' );
             $allowed_int      = array( 'excerpt_max_chars', 'chat_widget_bottom_offset', 'chat_widget_show_delay', 'chat_widget_sound_delay', 'chat_widget_retention_btn_radius', 'chat_widget_hide_delay', 'chat_widget_repeat_delay', 'send_delay_seconds', 'retry_count', 'retry_delay_seconds', 'general_dedup_ttl' );
@@ -894,6 +912,21 @@ jQuery(function($){
                     $val = sanitize_textarea_field( wp_unslash( $_POST[ $key ] ) );
                     $settings[ $key ] = array_map( 'trim', array_filter( explode( "\n", $val ) ) );
                 }
+            }
+            if ( isset( $_POST['chat_widget_display_pages_json'] ) ) {
+                $page_values = json_decode( wp_unslash( $_POST['chat_widget_display_pages_json'] ), true );
+                $page_values = is_array( $page_values ) ? $page_values : array();
+                $page_values = array_map(
+                    function ( $page_value ) {
+                        if ( 'front' === (string) $page_value ) {
+                            return 'front';
+                        }
+                        $page_id = absint( $page_value );
+                        return $page_id > 0 ? (string) $page_id : '';
+                    },
+                    $page_values
+                );
+                $settings['chat_widget_display_pages'] = array_values( array_unique( array_filter( $page_values ) ) );
             }
         }
 
@@ -1422,6 +1455,12 @@ jQuery(function($){
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
             <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
+
+            <h4 style="margin-bottom:4px;">Версия 1.0.70</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Добавлено:</strong> в настройках «Чат-виджет MAX» можно показывать виджет на всём сайте либо только на выбранных опубликованных страницах, включая главную.</li>
+                <li><strong>Изменено:</strong> при ограниченном показе виджет и его CSS/JavaScript не загружаются на остальных страницах сайта.</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">Версия 1.0.69</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -3067,6 +3106,17 @@ jQuery(function($){
         $position      = $settings['chat_widget_position']    ?? 'right';
         $bottom_offset = isset( $settings['chat_widget_bottom_offset'] ) ? (int) $settings['chat_widget_bottom_offset'] : 20;
         $show_delay    = isset( $settings['chat_widget_show_delay'] )    ? (int) $settings['chat_widget_show_delay']    : 0;
+        $display_scope = isset( $settings['chat_widget_display_scope'] ) && 'selected' === $settings['chat_widget_display_scope'] ? 'selected' : 'all';
+        $display_pages = isset( $settings['chat_widget_display_pages'] ) && is_array( $settings['chat_widget_display_pages'] )
+            ? array_map( 'strval', $settings['chat_widget_display_pages'] )
+            : array();
+        $published_pages = get_pages(
+            array(
+                'sort_column' => 'post_title',
+                'sort_order'  => 'ASC',
+                'post_status' => 'publish',
+            )
+        );
         $sound         = $settings['chat_widget_sound']       ?? 'none';
         $sound_delay   = isset( $settings['chat_widget_sound_delay'] )   ? (int) $settings['chat_widget_sound_delay']   : 3;
         $sound_pages          = $settings['chat_widget_sound_pages']           ?? 'all';
@@ -3273,6 +3323,53 @@ jQuery(function($){
                         </td>
                     </tr>
                 </table>
+            </div>
+
+            <div class="wp-ru-max-card">
+                <h3>Страницы показа виджета</h3>
+                <p>Выберите, где показывать плавающую кнопку MAX. В режиме «На всех страницах» виджет отображается по всему сайту. В режиме «Только на выбранных страницах» он будет скрыт на остальных страницах.</p>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">Показывать виджет</th>
+                        <td>
+                            <label style="display:block;margin-bottom:8px;">
+                                <input type="radio" name="chat_widget_display_scope" value="all" <?php checked( $display_scope, 'all' ); ?> />
+                                На всех страницах сайта
+                            </label>
+                            <label style="display:block;">
+                                <input type="radio" name="chat_widget_display_scope" value="selected" <?php checked( $display_scope, 'selected' ); ?> />
+                                Только на выбранных страницах
+                            </label>
+                            <div id="chat_widget_display_pages_wrap" style="margin-top:12px;max-width:640px;<?php echo 'selected' === $display_scope ? '' : 'display:none;'; ?>">
+                                <div style="max-height:260px;overflow:auto;border:1px solid #c3c4c7;background:#fff;padding:10px 12px;">
+                                    <label style="display:block;margin:4px 0 10px;font-weight:600;">
+                                        <input type="checkbox" class="chat-widget-display-page" value="front" <?php checked( in_array( 'front', $display_pages, true ) ); ?> />
+                                        Главная страница сайта
+                                    </label>
+                                    <?php if ( ! empty( $published_pages ) ) : ?>
+                                        <?php foreach ( $published_pages as $display_page ) : ?>
+                                            <?php
+                                            $display_page_id = (string) absint( $display_page->ID );
+                                            $display_page_uri = get_page_uri( $display_page->ID );
+                                            ?>
+                                            <label style="display:block;margin:5px 0;">
+                                                <input type="checkbox" class="chat-widget-display-page" value="<?php echo esc_attr( $display_page_id ); ?>" <?php checked( in_array( $display_page_id, $display_pages, true ) ); ?> />
+                                                <?php echo esc_html( get_the_title( $display_page->ID ) ); ?>
+                                                <?php if ( $display_page_uri ) : ?>
+                                                    <span style="color:#646970;">— /<?php echo esc_html( $display_page_uri ); ?></span>
+                                                <?php endif; ?>
+                                            </label>
+                                        <?php endforeach; ?>
+                                    <?php else : ?>
+                                        <p>Опубликованных страниц пока нет.</p>
+                                    <?php endif; ?>
+                                </div>
+                                <p class="description">Отметьте одну или несколько страниц. Если выбран этот режим, но ни одной страницы не отмечено, виджет не будет показываться нигде.</p>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+                <script>(function(){var radios=document.getElementsByName('chat_widget_display_scope');var wrap=document.getElementById('chat_widget_display_pages_wrap');for(var i=0;i<radios.length;i++){radios[i].addEventListener('change',function(){if(this.checked){wrap.style.display=this.value==='selected'?'':'none';}});}})();</script>
             </div>
 
             <div class="wp-ru-max-card">
