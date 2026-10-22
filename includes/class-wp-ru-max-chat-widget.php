@@ -20,9 +20,58 @@ class WP_Ru_Max_Chat_Widget {
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
     }
 
+    /**
+     * Check whether the widget is enabled for the current frontend page.
+     *
+     * @param array $settings Plugin settings.
+     * @return bool
+     */
+    private function is_widget_allowed_on_current_page( $settings ) {
+        if ( empty( $settings['chat_widget_enabled'] ) ) {
+            return false;
+        }
+
+        // Keep existing installations visible everywhere unless the site owner
+        // explicitly switches the display scope to selected pages.
+        if ( ! isset( $settings['chat_widget_display_scope'] ) || 'selected' !== $settings['chat_widget_display_scope'] ) {
+            return true;
+        }
+
+        $configured_pages = isset( $settings['chat_widget_display_pages'] ) && is_array( $settings['chat_widget_display_pages'] )
+            ? $settings['chat_widget_display_pages']
+            : array();
+        $page_ids = array();
+        $show_on_front = false;
+
+        foreach ( $configured_pages as $configured_page ) {
+            if ( 'front' === (string) $configured_page ) {
+                $show_on_front = true;
+                continue;
+            }
+            $page_id = absint( $configured_page );
+            if ( $page_id > 0 ) {
+                $page_ids[] = $page_id;
+            }
+        }
+
+        if ( $show_on_front && is_front_page() ) {
+            return true;
+        }
+        if ( ! empty( $page_ids ) && is_page( $page_ids ) ) {
+            return true;
+        }
+
+        // WordPress represents the configured posts page as the blog index,
+        // rather than as a singular page query.
+        $posts_page_id = (int) get_option( 'page_for_posts' );
+        return $posts_page_id > 0
+            && in_array( $posts_page_id, $page_ids, true )
+            && is_home();
+    }
+
     public function enqueue_scripts() {
         $settings = get_option( 'wp_ru_max_settings', array() );
-        if ( empty( $settings['chat_widget_enabled'] ) ) {
+        if ( ! $this->is_widget_allowed_on_current_page( $settings ) ) {
             return;
         }
         wp_enqueue_style(
@@ -55,7 +104,7 @@ class WP_Ru_Max_Chat_Widget {
     public function render_widget() {
         $settings = get_option( 'wp_ru_max_settings', array() );
 
-        if ( empty( $settings['chat_widget_enabled'] ) ) {
+        if ( ! $this->is_widget_allowed_on_current_page( $settings ) ) {
             return;
         }
 
