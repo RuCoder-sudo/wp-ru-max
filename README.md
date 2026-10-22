@@ -9,7 +9,7 @@
 
 **WP Ru-max** Плагин для WordPress, который подключает ваш сайт к российскому мессенджеру **MAX (max.ru)**. Автоматическая публикация записей, личные уведомления с любых форм и красивый чат-виджет.
 
-![Version](https://img.shields.io/badge/version-1.0.69-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.70-blue?style=flat-square)
 ![WordPress](https://img.shields.io/badge/WordPress-5.8%2B_7.1.3-21759b?style=flat-square&logo=wordpress)
 ![WooCommerce](https://img.shields.io/badge/WooCommerce-4.0%2B-96588a?style=flat-square)
 ![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4?style=flat-square&logo=php)
@@ -83,7 +83,13 @@
 | Анимации внимания | Пульс, рябь, подпрыгивание, встряска, свечение, вращение |
 | Звуковое уведомление | 3 варианта (синтез через Web Audio API) |
 | Задержка появления | 0 / 5 / 8 / 10 / 15 секунд |
+| Страницы показа | Весь сайт или выбранные опубликованные страницы, включая главную |
 | Отступ от края | Слайдер 0–200 px |
+
+### Новое в версии 1.0.70
+
+- В настройках «Чат-виджет MAX» можно выбрать показ виджета на всех страницах либо только на выбранных страницах сайта, включая главную.
+- При ограниченном показе виджет и его CSS/JavaScript не загружаются на остальных страницах.
 
 ### Новое в версии 1.0.69
 
