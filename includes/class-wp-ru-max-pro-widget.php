@@ -135,6 +135,9 @@ class WP_Ru_Max_Pro_Widget {
         }
         $faq = ! empty( $settings['chat']['faq_enabled'] ) && is_array( $settings['chat']['faq'] ?? null ) ? $settings['chat']['faq'] : array();
         $quick_buttons = is_array( $settings['chat']['quick_buttons'] ?? null ) ? $settings['chat']['quick_buttons'] : array();
+        $form_fields = is_array( $settings['chat']['form_fields'] ?? null ) ? $settings['chat']['form_fields'] : array();
+        $privacy_consent_enabled = ! empty( $settings['chat']['privacy_consent_enabled'] );
+        $mailing_consent_enabled = ! empty( $settings['chat']['mailing_consent_enabled'] );
         ?>
         <div id="wp-ru-max-pro-menu" class="wprmp-menu wprmp-layout-<?php echo esc_attr( $style['layout'] ?? 'circle' ); ?> wprmp-position-<?php echo esc_attr( $style['position'] ); ?> wprmp-attention-<?php echo esc_attr( $style['attention'] ?? '' ); ?><?php echo ! empty( $style['backdrop_blur'] ) ? ' wprmp-has-blur' : ''; ?>" style="--wprmp-bg:<?php echo esc_attr( $icon_background ); ?>;--wprmp-bg-glass:<?php echo esc_attr( $glass_background ); ?>;--wprmp-color:<?php echo esc_attr( $style['icon_color'] ); ?>;--wprmp-size:<?php echo (int) $style['size']; ?>px;--wprmp-bottom-offset:<?php echo (int) $main['bottom_offset']; ?>px;--wprmp-form-bg:#4f46e5;--wprmp-form-color:#ffffff;--wprmp-cta-bg:<?php echo esc_attr( $style['cta_background'] ?? '' ); ?>;--wprmp-cta-color:<?php echo esc_attr( $style['cta_text_color'] ?? '' ); ?>">
             <div class="wprmp-panel" data-mode="live_chat" aria-hidden="true">
@@ -142,9 +145,22 @@ class WP_Ru_Max_Pro_Widget {
                 <div class="wprmp-panel-brand"><img src="<?php echo esc_url( WP_RU_MAX_PRO_URL . 'roboform.svg' ); ?>" alt=""><div><h3><?php echo esc_html( $settings['chat']['title'] ); ?></h3><small><?php echo $live_available ? 'Менеджер онлайн' : 'Бот на связи 24/7'; ?></small></div></div>
                 <p class="wprmp-mode-note wprmp-live-only">Живой чат: сообщение увидит менеджер, а диалог можно продолжить здесь.</p>
                 <p class="wprmp-welcome"><?php echo esc_html( $settings['chat']['welcome'] ); ?></p><div class="wprmp-thread-live" aria-live="polite"></div>
-                <form class="wprmp-form"><input type="hidden" name="channel" value="live_chat"><div class="wprmp-identity"><?php if ( ! empty( $settings['chat']['contact_form_enabled'] ) ) : ?><div class="wprmp-form-row"><input name="name" placeholder="Имя" required><input name="email" type="email" placeholder="Email"></div><input name="phone" placeholder="Телефон"><?php else : ?><input name="name" placeholder="Имя" required><?php endif; ?></div>
-                    <div class="wprmp-consents"><label><input type="checkbox" name="consent" value="1" required><span>Да, я согласен(а) на обработку персональных данных в соответствии с Политикой конфиденциальности и принимаю условия Публичной оферты.</span></label><label><input type="checkbox" name="mailing" value="1"><span>Я согласен(а) получать информационные рассылки и уведомления об акциях. Подписку можно отменить в любое время.</span></label></div>
-                    <textarea name="message" placeholder="Сообщение" required></textarea><button type="submit">Отправить сообщение <span>→</span></button><span class="wprmp-form-status" role="status"></span>
+                <form class="wprmp-form"><input type="hidden" name="channel" value="live_chat"><div class="wprmp-identity">
+                    <?php foreach ( array( 'name' => 'text', 'email' => 'email', 'phone' => 'tel' ) as $field_key => $input_type ) : $field = $form_fields[ $field_key ] ?? array(); if ( empty( $field['visible'] ) ) continue; ?>
+                        <input name="<?php echo esc_attr( $field_key ); ?>" type="<?php echo esc_attr( $input_type ); ?>" aria-label="<?php echo esc_attr( $field['label'] ?? $field_key ); ?>" placeholder="<?php echo esc_attr( $field['placeholder'] ?? $field['label'] ?? $field_key ); ?>" autocomplete="<?php echo 'name' === $field_key ? 'name' : ( 'phone' === $field_key ? 'tel' : 'email' ); ?>" <?php echo ! empty( $field['required'] ) ? 'required' : ''; ?>>
+                    <?php endforeach; ?>
+                </div>
+                    <?php if ( $privacy_consent_enabled || $mailing_consent_enabled ) : ?>
+                        <div class="wprmp-consents">
+                            <?php if ( $privacy_consent_enabled ) : ?>
+                                <label><input type="checkbox" name="consent" value="1" required><span><?php echo esc_html( $settings['chat']['privacy_consent_text'] ); ?> <?php if ( ! empty( $settings['chat']['privacy_policy_url'] ) ) : ?><a href="<?php echo esc_url( $settings['chat']['privacy_policy_url'] ); ?>" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a><?php else : ?>Политика конфиденциальности<?php endif; ?></span></label>
+                            <?php endif; ?>
+                            <?php if ( $mailing_consent_enabled ) : ?>
+                                <label><input type="checkbox" name="mailing" value="1"><span><?php echo esc_html( $settings['chat']['mailing_consent_text'] ); ?></span></label>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                    <?php $message_field = $form_fields['message'] ?? array( 'label' => 'Сообщение', 'placeholder' => 'Напишите сообщение' ); ?><textarea name="message" aria-label="<?php echo esc_attr( $message_field['label'] ); ?>" placeholder="<?php echo esc_attr( $message_field['placeholder'] ); ?>" required></textarea><button type="submit">Отправить сообщение <span>→</span></button><span class="wprmp-form-status" role="status"></span>
                 </form>
                 <?php if ( ! empty( $faq ) ) : ?><div class="wprmp-faq"><strong>Частые вопросы</strong><?php foreach ( $faq as $item ) : ?><button type="button" class="wprmp-faq-item"><span><?php echo esc_html( $item['question'] ); ?></span><i><?php echo esc_html( $item['answer'] ); ?></i></button><?php endforeach; ?></div><?php endif; ?>
                 <?php if ( ! empty( $quick_buttons ) ) : ?><div class="wprmp-quick-buttons"><?php foreach ( $quick_buttons as $button ) : ?><button type="button" data-message="<?php echo esc_attr( $button['message'] ); ?>"><?php echo esc_html( $button['label'] ); ?></button><?php endforeach; ?></div><?php endif; ?>
@@ -185,11 +201,20 @@ class WP_Ru_Max_Pro_Widget {
             $conversation_id = wp_generate_uuid4();
         }
         $pending = get_option( 'wp_ru_max_pro_pending_messages', array() );
+        if ( ! is_array( $pending ) ) {
+            $pending = array();
+        }
         $found = false;
         foreach ( $pending as &$conversation ) {
             if ( ( $conversation['conversation_id'] ?? '' ) === $conversation_id && 'closed' !== ( $conversation['status'] ?? 'open' ) ) {
                 if ( '' === $name ) {
                     $name = $conversation['name'] ?? '';
+                }
+                if ( '' === $email ) {
+                    $email = $conversation['email'] ?? '';
+                }
+                if ( '' === $phone ) {
+                    $phone = $conversation['phone'] ?? '';
                 }
                 $conversation['messages'][] = array( 'role' => 'visitor', 'text' => $message, 'created_at' => current_time( 'mysql' ) );
                 $conversation['channel'] = $channel;
@@ -199,11 +224,39 @@ class WP_Ru_Max_Pro_Widget {
             }
         }
         unset( $conversation );
-        if ( '' === $name || '' === $message ) {
-            wp_send_json_error( 'Введите имя и сообщение.' );
+        // An unknown or expired conversation ID must not bypass the initial
+        // form's required-field and consent checks.
+        if ( ! $found ) {
+            $is_new_conversation = true;
         }
-        if ( $is_new_conversation && ! $consent ) {
-            wp_send_json_error( 'Необходимо принять условия обработки персональных данных.' );
+        $form_fields = $settings['chat']['form_fields'] ?? array();
+        if ( '' === $message ) wp_send_json_error( 'Введите сообщение.' );
+        if ( $is_new_conversation ) {
+            $submitted_fields = array(
+                'name' => $name,
+                'email' => $email,
+                'phone' => $phone,
+            );
+            foreach ( array( 'name' => 'имя', 'email' => 'email', 'phone' => 'телефон' ) as $field_key => $field_label ) {
+                $field = $form_fields[ $field_key ] ?? array();
+                if ( empty( $field['visible'] ) ) {
+                    $submitted_fields[ $field_key ] = '';
+                    continue;
+                }
+                if ( ! empty( $field['required'] ) && '' === trim( $submitted_fields[ $field_key ] ) ) {
+                    wp_send_json_error( 'Заполните обязательное поле: ' . $field_label . '.' );
+                }
+            }
+            $name  = $submitted_fields['name'];
+            $email = $submitted_fields['email'];
+            $phone = $submitted_fields['phone'];
+            if ( ! empty( $form_fields['email']['visible'] ) && '' !== $email && ! is_email( $email ) ) {
+                wp_send_json_error( 'Введите корректный email.' );
+            }
+            if ( '' === $name ) $name = 'Посетитель';
+            if ( ! empty( $settings['chat']['privacy_consent_enabled'] ) && ! $consent ) {
+                wp_send_json_error( 'Необходимо согласиться с обработкой персональных данных.' );
+            }
         }
         if ( ! $found ) {
             $pending[] = array(
@@ -223,17 +276,85 @@ class WP_Ru_Max_Pro_Widget {
             );
         }
         update_option( 'wp_ru_max_pro_pending_messages', array_slice( $pending, -100 ) );
-        if ( ! empty( $settings['chat']['target'] ) && class_exists( 'WP_Ru_Max_API' ) ) {
-            $base = get_option( 'wp_ru_max_settings', array() );
-            ( new WP_Ru_Max_API( $base['bot_token'] ?? '' ) )->send_message(
-                $settings['chat']['target'],
-                "<b>Новое сообщение с сайта</b>\nИмя: " . esc_html( $name ) . "\nEmail: " . esc_html( $email ) . "\nТелефон: " . esc_html( $phone ) . "\n\n" . esc_html( $message ),
-                'html'
+        $max_error = '';
+        $visible_contact_values = array(
+            'name' => array( 'label' => $form_fields['name']['label'] ?? 'Имя', 'value' => $name ),
+            'email' => array( 'label' => $form_fields['email']['label'] ?? 'Email', 'value' => $email ),
+            'phone' => array( 'label' => $form_fields['phone']['label'] ?? 'Телефон', 'value' => $phone ),
+        );
+        $details = array();
+        foreach ( $visible_contact_values as $field_key => $contact_field ) {
+            $field = $form_fields[ $field_key ] ?? array();
+            if ( ! empty( $field['visible'] ) && '' !== trim( (string) $contact_field['value'] ) ) {
+                $details[] = sanitize_text_field( $contact_field['label'] ) . ': ' . esc_html( $contact_field['value'] );
+            }
+        }
+        if ( $is_new_conversation && ! empty( $settings['chat']['privacy_consent_enabled'] ) ) {
+            $details[] = 'Согласие на обработку персональных данных: Да';
+        }
+        if ( $is_new_conversation && ! empty( $settings['chat']['mailing_consent_enabled'] ) ) {
+            $details[] = 'Согласие на рассылку: ' . ( $mailing ? 'Да' : 'Нет' );
+        }
+        $details[] = '';
+        $details[] = esc_html( $message );
+        $notice_title = 'contact_form' === $channel ? 'Новая заявка с сайта' : 'Новое сообщение с сайта';
+        $message_text = '<b>' . $notice_title . "</b>\n" . implode( "\n", $details );
+        $recipients = wp_ru_max_pro_get_delivery_recipients( $settings, $channel );
+        $delivery = wp_ru_max_pro_send_to_recipients( $recipients, $message_text, 'html' );
+        if ( 0 === $delivery['total'] ) {
+            $max_error = 'На сайте сохранено, но получатели MAX не настроены. Откройте «Виджет контакты / ЧАТ» → «Настройки подключения».';
+        } elseif ( $delivery['sent'] < $delivery['total'] ) {
+            $max_error = $delivery['sent'] > 0
+                ? 'На сайте сохранено; в MAX доставлено ' . $delivery['sent'] . ' из ' . $delivery['total'] . ' получателей. Проверьте недоставленные ID в журнале.'
+                : 'На сайте сохранено, но MAX не подтвердил доставку. Проверьте доступ бота к получателям и журнал ошибок.';
+        }
+        foreach ( $delivery['failures'] as $failure ) {
+            WP_Ru_Max_Logger::log(
+                'contacts',
+                'error',
+                'Не удалось передать обращение менеджеру в MAX.',
+                array(
+                    'channel' => $channel,
+                    'recipient_type' => $failure['type'],
+                    'recipient_id' => $failure['id'],
+                    'error_code' => $failure['code'] ?? '',
+                    'error' => $failure['message'],
+                )
             );
         }
-        $reply = ! empty( $settings['chat']['manager_online'] )
-            ? 'Менеджер уже видит ваше сообщение и скоро ответит.'
-            : ( ! empty( $settings['chat']['bot_enabled'] ) ? ( $settings['chat']['bot_offline_message'] ?: 'Сообщение принято. Мы скоро ответим.' ) : 'Сообщение отправлено. Мы скоро ответим.' );
+        if ( $delivery['sent'] > 0 ) {
+            WP_Ru_Max_Logger::log(
+                'contacts',
+                $delivery['sent'] === $delivery['total'] ? 'success' : 'warning',
+                'Результат доставки обращения в MAX.',
+                array(
+                    'channel' => $channel,
+                    'sent' => $delivery['sent'],
+                    'total' => $delivery['total'],
+                )
+            );
+        }
+        $pending = get_option( 'wp_ru_max_pro_pending_messages', array() );
+        if ( ! is_array( $pending ) ) {
+            $pending = array();
+        }
+        foreach ( $pending as &$conversation ) {
+            if ( ( $conversation['conversation_id'] ?? '' ) === $conversation_id ) {
+                $conversation['max_delivery'] = '' === $max_error
+                    ? 'sent'
+                    : ( $delivery['sent'] > 0 ? 'partial' : 'failed' );
+                break;
+            }
+        }
+        unset( $conversation );
+        update_option( 'wp_ru_max_pro_pending_messages', $pending );
+        $reply = '' !== $max_error
+            ? ( $delivery['sent'] > 0
+                ? 'Сообщение принято на сайте и передано части получателей. Менеджер проверит доставку.'
+                : 'Сообщение сохранено на сайте, но не доставлено менеджеру. Попробуйте отправить его позже.' )
+            : ( ! empty( $settings['chat']['manager_online'] )
+                ? 'Менеджер уже видит ваше сообщение и скоро ответит.'
+                : ( ! empty( $settings['chat']['bot_enabled'] ) ? ( $settings['chat']['bot_offline_message'] ?: 'Сообщение принято. Мы скоро ответим.' ) : 'Сообщение отправлено. Мы скоро ответим.' ) );
         $thread = array( array( 'role' => 'visitor', 'text' => $message ), array( 'role' => 'bot', 'text' => $reply, 'name' => $settings['chat']['bot_name'] ) );
         if ( ! empty( $settings['chat']['bot_enabled'] ) ) {
             $pending = get_option( 'wp_ru_max_pro_pending_messages', array() );
@@ -248,7 +369,7 @@ class WP_Ru_Max_Pro_Widget {
             update_option( 'wp_ru_max_pro_pending_messages', $pending );
         }
         wp_send_json_success( array(
-            'message' => 'Сообщение отправлено.',
+            'message' => '' === $max_error ? 'Сообщение передано менеджеру в MAX.' : $max_error,
             'conversation_id' => $conversation_id,
             'messages' => $thread,
             'bot_reply' => $reply,
