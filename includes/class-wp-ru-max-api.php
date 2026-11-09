@@ -340,6 +340,25 @@ class WP_Ru_Max_API {
 
     public function send_message( $chat_id, $text, $format = 'html', $buttons = array() ) {
         $chat_id = $this->normalize_chat_id( $chat_id );
+        return $this->send_message_to_recipient( 'chat_id', $chat_id, $text, $format, $buttons );
+    }
+
+    /**
+     * Send a message to one MAX user using the documented user_id recipient.
+     * The bot can only message users who are reachable by that bot.
+     */
+    public function send_message_to_user( $user_id, $text, $format = 'html', $buttons = array() ) {
+        $user_id = trim( (string) $user_id );
+        if ( preg_match( '/^id(\d+)(?:_\d+_bot)?$/i', $user_id, $matches ) ) {
+            $user_id = $matches[1];
+        }
+        if ( ! preg_match( '/^\d+$/', $user_id ) ) {
+            return new WP_Error( 'invalid_user_id', 'Укажите числовой ID пользователя MAX.' );
+        }
+        return $this->send_message_to_recipient( 'user_id', $user_id, $text, $format, $buttons );
+    }
+
+    private function send_message_to_recipient( $recipient_parameter, $recipient_id, $text, $format, $buttons ) {
         $text = $this->sanitize_utf8( $text, true );
 
         $payload = array(
@@ -352,7 +371,11 @@ class WP_Ru_Max_API {
             $payload['attachments'] = array( $keyboard );
         }
 
-        return $this->request( 'POST', '/messages?chat_id=' . urlencode( $chat_id ), $payload );
+        return $this->request(
+            'POST',
+            '/messages?' . $recipient_parameter . '=' . rawurlencode( (string) $recipient_id ),
+            $payload
+        );
     }
 
     /**
@@ -815,10 +838,10 @@ class WP_Ru_Max_API {
         }
         $bot_name = isset( $result['first_name'] ) ? $result['first_name'] : 'Unknown';
         $username = isset( $result['username'] ) ? '@' . $result['username'] : '';
-        WP_Ru_Max_Logger::log( 'api', 'success', "Тест подключения УСПЕШЕН. Бот: $bot_name $username" );
+        WP_Ru_Max_Logger::log( 'api', 'success', "Токен и доступ к MAX API проверены через GET /me. Бот: $bot_name $username. Доставка получателю не проверялась." );
         return array(
             'success'  => true,
-            'message'  => "Подключено! Бот: $bot_name $username",
+            'message'  => "Токен действителен. Бот: $bot_name $username. Доставка получателю проверяется отдельно.",
             'bot_info' => $result,
         );
     }
