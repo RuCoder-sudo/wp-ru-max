@@ -19,7 +19,8 @@ class WP_Ru_Max_License {
     const RECHECK_START_GUARD_SECONDS = 60;
     const INVALID_CONFIRMATIONS_REQUIRED = 3;
 
-    const VERIFY_URL  = 'https://fixcoder.ru/wp-json/wp-ru-max-km/v1/verify';
+    const VERIFY_URL  = 'https://xn--d1acnqieq.xn--p1ai/wp-json/wp-ru-max-km/v1/verify';
+    const VERIFY_FALLBACK_URL = 'https://fixcoder.ru/wp-json/wp-ru-max-km/v1/verify';
     const VERIFY_CA   = 'assets/fixcoder-root-yr.pem';
     const API_SECRET  = 'd0563fa8f8fce6879cdf697eed0460a82fa7977897fd364ec911c93ed8bb25b3';
     const OWNER_EMAIL = 'rucoder.rf@yandex.ru';
@@ -248,7 +249,7 @@ class WP_Ru_Max_License {
         $body .= "Согласие на рассылку: " . ( $mailing ? 'Да' : 'Нет' ) . "\n";
         $body .= "Подтверждение о боте (ИП/ООО): " . ( $bot_confirmed ? 'Да' : 'Нет' ) . "\n";
         $body .= "Дата запроса: " . current_time( 'd.m.Y H:i:s' ) . "\n\n";
-        $body .= "=== Выдайте ключ на https://fixcoder.ru/wp-admin/admin.php?page=rclm-keys ===\n";
+        $body .= "=== Выдайте ключ на https://xn--d1acnqieq.xn--p1ai/wp-admin/admin.php?page=rclm-keys ===\n";
 
         $headers = array(
             'Content-Type: text/plain; charset=UTF-8',
@@ -366,6 +367,37 @@ class WP_Ru_Max_License {
     }
 
     private function verify_key( $key ) {
+        $urls = array_unique( array( self::VERIFY_URL, self::VERIFY_FALLBACK_URL ) );
+        $invalid = null;
+        $unavailable = null;
+
+        foreach ( $urls as $url ) {
+            $result = $this->verify_key_at_url( $key, $url );
+            if ( true === $result ) {
+                return true;
+            }
+            if ( is_wp_error( $result ) ) {
+                if ( 'invalid_key' === $result->get_error_code() ) {
+                    $invalid = $result;
+                } else {
+                    $unavailable = $result;
+                }
+            }
+        }
+
+        // An explicit "not found" from one copy is not conclusive while the
+        // other copy is unreachable: keep the license in its cached state.
+        if ( $unavailable ) {
+            return new WP_Error(
+                'server_error',
+                'Серверы лицензий временно недоступны или не синхронизированы. Уже активная лицензия сохраняет текущий статус.'
+            );
+        }
+
+        return $invalid ?: new WP_Error( 'server_error', 'Сервер активации вернул неполный ответ. Лицензия оставлена активной.' );
+    }
+
+    private function verify_key_at_url( $key, $url ) {
         $request_args = array(
             'timeout'   => 15,
             'sslverify' => true,
@@ -379,7 +411,7 @@ class WP_Ru_Max_License {
         if ( $ca_file && is_readable( $ca_file ) ) {
             $request_args['sslcertificates'] = $ca_file;
         }
-        $response = wp_ru_max_remote_request_with_ssl_fallback( 'post', self::VERIFY_URL, $request_args );
+        $response = wp_ru_max_remote_request_with_ssl_fallback( 'post', $url, $request_args );
 
         if ( is_wp_error( $response ) ) {
             return new WP_Error(
