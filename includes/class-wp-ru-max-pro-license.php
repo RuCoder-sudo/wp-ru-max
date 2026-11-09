@@ -4,7 +4,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class WP_Ru_Max_Pro_License {
-    const VERIFY_URL = 'https://fixcoder.ru/wp-json/wp-ru-max-km/v1/verify';
+    const VERIFY_URL = 'https://xn--d1acnqieq.xn--p1ai/wp-json/wp-ru-max-km/v1/verify';
+    const VERIFY_FALLBACK_URL = 'https://fixcoder.ru/wp-json/wp-ru-max-km/v1/verify';
     const VERIFY_CA = 'assets/fixcoder-root-yr.pem';
     const SYNC_TRANSIENT = 'wp_ru_max_pro_license_sync';
     private static $instance;
@@ -50,9 +51,21 @@ class WP_Ru_Max_Pro_License {
         if ( $ca_file && is_readable( $ca_file ) ) {
             $request_args['sslcertificates'] = $ca_file;
         }
-        $response = wp_ru_max_remote_request_with_ssl_fallback( 'post', self::VERIFY_URL, $request_args );
-        $body = ! is_wp_error( $response ) ? json_decode( wp_remote_retrieve_body( $response ), true ) : array();
-        if ( is_wp_error( $response ) || ! is_array( $body ) || ! array_key_exists( 'valid', $body ) ) {
+        $body = array();
+        foreach ( array_unique( array( self::VERIFY_URL, self::VERIFY_FALLBACK_URL ) ) as $url ) {
+            $response = wp_ru_max_remote_request_with_ssl_fallback( 'post', $url, $request_args );
+            if ( is_wp_error( $response ) ) {
+                continue;
+            }
+            $candidate = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( is_array( $candidate ) && array_key_exists( 'valid', $candidate ) ) {
+                $body = $candidate;
+                if ( ! empty( $candidate['valid'] ) && ! empty( $candidate['pro_enabled'] ) ) {
+                    break;
+                }
+            }
+        }
+        if ( ! is_array( $body ) || ! array_key_exists( 'valid', $body ) ) {
             return false;
         }
         if ( empty( $body['valid'] ) || empty( $body['pro_enabled'] ) ) {
