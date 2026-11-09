@@ -1,17 +1,46 @@
-/* WP Ru-max PRO admin v1.0.70 — live chat disabled by default. */
+/* WP Ru-max PRO admin v1.0.71 — separate form recipient settings. */
 jQuery(function ($) {
   var liveChatPane = $('.wprmp-pane[data-wprmp-pane="livechat"]');
+  var messagesPane = $('.wprmp-pane[data-wprmp-pane="messages"]');
+  var pendingList = messagesPane.find('.wprmp-pending').first();
+  var pendingHash = pendingList.attr('data-pending-hash') || '';
   if (liveChatPane.length && !liveChatPane.find('.wprmp-livechat-conversations').length) liveChatPane.append('<div class="wprmp-livechat-conversations"></div>');
   function updateLiveChatCount(count) {
     if (typeof count !== 'number') return;
     $('#wprmp-livechat-count').text(count + ' сообщений');
     $('.wprmp-subtab[data-wprmp-tab="livechat"] .wprmp-online-pill').text(count + ' сообщений');
   }
+  function updateClosedLiveChatCount(count) {
+    if (typeof count !== 'number') return;
+    var button = $('#wprmp-clear-closed-livechat');
+    button.attr('data-count', count).prop('disabled', count < 1).text('Очистить завершённые (' + count + ')');
+    liveChatPane.find('[data-message-filter="closed"]').text('Завершённые (' + count + ')');
+  }
+  function applyMessageFilter(pane, filter) {
+    if (!pane || !pane.length) return;
+    pane.find('[data-message-filter]').removeClass('is-active').filter('[data-message-filter="' + filter + '"]').addClass('is-active');
+    var visible = 0;
+    pane.find('article[data-conversation-status]').each(function () {
+      var article = $(this), status = article.attr('data-conversation-status') || 'open';
+      var show = filter === 'all' || filter === status;
+      article.toggle(show);
+      if (show) visible++;
+    });
+    if (pane.attr('data-wprmp-pane') === 'livechat') {
+      var empty = pane.find('.wprmp-livechat-empty');
+      if (empty.length) {
+        empty.find('strong').text(filter === 'closed' ? 'Завершённых чатов нет' : 'Нет открытых чатов');
+        empty.prop('hidden', visible > 0);
+      }
+    }
+  }
   $('.wprmp-pending article').each(function () {
     var article = $(this);
-    if (article.find('.wprmp-message-meta small').text().indexOf('Живой чат') !== -1) article.appendTo('.wprmp-livechat-conversations');
+    if (article.attr('data-conversation-channel') === 'live_chat') article.appendTo('.wprmp-livechat-conversations');
   });
-  updateLiveChatCount($('.wprmp-livechat-conversations .wprmp-thread-message.from-visitor').length);
+  updateLiveChatCount($('.wprmp-livechat-conversations article[data-conversation-status="open"] .wprmp-thread-message.from-visitor').length);
+  updateClosedLiveChatCount(liveChatPane.find('article[data-conversation-status="closed"]').length);
+  applyMessageFilter(liveChatPane, 'open');
   function collect() {
     var out = { enabled: true, channels: {}, custom_channels: [], style: {}, chat: {}, channel_order: [] };
     $('.wprmp-channel-order [data-channel-item]').each(function () {
@@ -26,6 +55,23 @@ jQuery(function ($) {
     });
     $('[data-style]').each(function () { var v = $(this).is(':checkbox') ? ($(this).prop('checked') ? '1' : '0') : $(this).val(); out.style[$(this).data('style')] = v; });
     $('[data-chat]').each(function () { out.chat[$(this).data('chat')] = $(this).is(':checkbox') ? ($(this).prop('checked') ? '1' : '0') : $(this).val(); });
+    ['live_recipients', 'form_recipients'].forEach(function (listKey) {
+      out.chat[listKey] = [];
+      $('.wprmp-recipient-list[data-recipient-list="' + listKey + '"]').find('[data-recipient-row]').each(function () {
+        var row = $(this), id = String(row.find('[data-recipient-id]').val() || '').trim();
+        if (!id) return;
+        out.chat[listKey].push({
+          id: id,
+          type: row.find('[data-recipient-type]').val() === 'user' ? 'user' : 'chat'
+        });
+      });
+    });
+    out.chat.form_fields = {};
+    $('[data-form-field][data-form-property]').each(function () {
+      var field = String($(this).data('form-field')), property = String($(this).data('form-property'));
+      if (!out.chat.form_fields[field]) out.chat.form_fields[field] = {};
+      out.chat.form_fields[field][property] = $(this).is(':checkbox') ? ($(this).prop('checked') ? '1' : '0') : $(this).val();
+    });
     out.chat.schedule_days = [];
     $('[data-schedule-day]:checked').each(function () { out.chat.schedule_days.push(parseInt($(this).data('schedule-day'), 10)); });
     out.chat.faq = [];
@@ -85,6 +131,13 @@ jQuery(function ($) {
     widget.toggleClass('is-open-chat', isChat).find('.wprmp-preview-chat').toggleClass('is-visible', isChat && $('[data-style="mode"]').val() === 'chat');
   });
   $(document).on('input change', '.wprmp-admin input,.wprmp-admin select,.wprmp-admin textarea', preview);
+  $(document).on('change', '[data-chat="contact_form_enabled"]', function () {
+    var visible = $(this).prop('checked');
+    ['email', 'phone'].forEach(function (field) {
+      $('[data-form-field="' + field + '"][data-form-property="visible"]').prop('checked', visible);
+    });
+    preview();
+  });
   $(document).on('click', '.wprmp-enabled', function (event) {
     // Let the browser perform the native checkbox toggle. Do not let the
     // card/label click handlers cancel it or toggle it a second time.
@@ -102,11 +155,110 @@ jQuery(function ($) {
   $(document).on('dragover', '.wprmp-channel-order [data-channel-item]', function (event) { event.preventDefault(); if (draggedChannel && draggedChannel !== this) { var box = this.getBoundingClientRect(); $(this)[event.originalEvent.clientY < box.top + box.height / 2 ? 'before' : 'after'](draggedChannel); } });
   $(document).on('dragend', '.wprmp-drag-handle', function () { if (draggedChannel) $(draggedChannel).removeClass('is-dragging'); draggedChannel = null; });
   $(document).on('click', '.wprmp-subtab', function () { var tab = $(this).data('wprmp-tab'); $('.wprmp-subtab').removeClass('is-active'); $(this).addClass('is-active'); $('.wprmp-pane').removeClass('is-active'); $('.wprmp-pane[data-wprmp-pane="' + tab + '"]').addClass('is-active'); });
-  $(document).on('click', '[data-message-filter]', function () { var filter = $(this).data('message-filter'); $('[data-message-filter]').removeClass('is-active'); $(this).addClass('is-active'); $('.wprmp-pending article').each(function () { var status = $(this).data('conversation-status') || 'open'; $(this).toggle(filter === 'all' || filter === status); }); });
+  $(document).on('click', '[data-message-filter]', function () { var button = $(this), filter = button.data('message-filter'), pane = button.closest('.wprmp-pane'); applyMessageFilter(pane, filter); });
+  $(document).on('click', '[data-recipient-add]', function () {
+    var listKey = String($(this).attr('data-recipient-add') || '');
+    $('.wprmp-recipient-list[data-recipient-list="' + listKey + '"]').append(
+      '<div class="wprmp-recipient-row" data-recipient-row><label>Тип получателя<select data-recipient-type><option value="chat">Группа или канал (chat_id)</option><option value="user">Личный чат (user_id)</option></select></label><label>ID получателя<input type="text" data-recipient-id placeholder="chat_id или user_id"></label><div class="wprmp-recipient-actions"><button type="button" class="button wprmp-test-recipient">Проверить отправку</button><button type="button" class="button wprmp-remove-recipient">Удалить</button></div><small class="wprmp-recipient-status" role="status" aria-live="polite"></small></div>'
+    );
+  });
+  $(document).on('click', '.wprmp-remove-recipient', function () { $(this).closest('[data-recipient-row]').remove(); });
+  $(document).on('click', '.wprmp-test-recipient', function () {
+    var button = $(this), row = button.closest('[data-recipient-row]'), status = row.find('.wprmp-recipient-status');
+    var id = String(row.find('[data-recipient-id]').val() || '').trim();
+    if (!id) { status.text('Сначала укажите ID получателя.').removeClass('is-success'); return; }
+    var original = button.text();
+    button.prop('disabled', true).text('Проверяем…');
+    status.text('Отправляем тестовое сообщение…').removeClass('is-success');
+    $.post(wpRuMaxPro.ajaxUrl, {
+      action: 'wp_ru_max_pro_test_recipient',
+      nonce: wpRuMaxPro.nonce,
+      recipient_id: id,
+      recipient_type: row.find('[data-recipient-type]').val() || 'chat'
+    }).done(function (r) {
+      status.text(r && r.data ? r.data : (r && r.success ? 'MAX принял сообщение.' : 'MAX не подтвердил отправку.'));
+      status.toggleClass('is-success', !!(r && r.success));
+    }).fail(function (xhr) {
+      var response = xhr.responseJSON || {};
+      status.text(response.data || 'Не удалось проверить отправку. Проверьте соединение и журнал ошибок.');
+    }).always(function () {
+      button.prop('disabled', false).text(original || 'Проверить отправку');
+    });
+  });
   $(document).on('click', '#wprmp-save', function (event) { event.preventDefault(); event.stopImmediatePropagation(); var b = $(this), original = b.text(); b.prop('disabled', true).text('Сохранение…'); $.post(wpRuMaxPro.ajaxUrl, { action: 'wp_ru_max_pro_save', nonce: wpRuMaxPro.nonce, settings: collect() }).done(function (r) { window.alert(r && r.success ? (r.data || 'Настройки сохранены.') : ((r && r.data) || 'Ошибка сохранения.')); }).fail(function () { window.alert('Ошибка сети при сохранении.'); }).always(function () { b.prop('disabled', false).text(original || 'Сохранить настройки'); }); });
   $(document).on('click', '.wprmp-reply', function () { var b = $(this), box = b.closest('.wprmp-reply-box'), text = box.find('.wprmp-reply-text').val(), status = box.find('.wprmp-reply-status'); if (!text) return; b.prop('disabled', true); status.text('Отправляем…'); $.post(wpRuMaxPro.ajaxUrl, { action: 'wp_ru_max_pro_reply', nonce: wpRuMaxPro.nonce, message: text, message_id: b.data('message-id') }).done(function (r) { status.text(r.success ? 'Ответ отправлен — посетитель увидит его в чате.' : (r.data || 'Ошибка')); if (r.success) box.find('.wprmp-reply-text').val(''); }).always(function () { b.prop('disabled', false); }); });
   $('.wprmp-reply-box').each(function () { var box = $(this); if (box.find('.wprmp-close-chat').length) return; $('<button type="button" class="button wprmp-close-chat">Завершить чат</button>').insertAfter(box.find('.wprmp-reply')); });
-  $(document).on('click', '.wprmp-close-chat', function () { var b = $(this), id = b.siblings('.wprmp-reply').data('message-id'), status = b.siblings('.wprmp-reply-status'); if (!id || !window.confirm('Завершить этот чат?')) return; b.prop('disabled', true); $.post(wpRuMaxPro.ajaxUrl, { action: 'wp_ru_max_pro_close', nonce: wpRuMaxPro.nonce, message_id: id }).done(function (r) { status.text(r.success ? 'Чат завершён.' : (r.data || 'Ошибка')); if (r.success) b.closest('article').addClass('is-closed'); }).always(function () { b.prop('disabled', false); }); });
-  setInterval(function () { if (!window.wpRuMaxPro || !$('.wprmp-pane[data-wprmp-pane="messages"]').length) return; $.post(wpRuMaxPro.ajaxUrl, { action: 'wp_ru_max_pro_messages', nonce: wpRuMaxPro.nonce }).done(function (r) { if (r.success && r.data && $('.wprmp-message-count').text() !== r.data.count + ' новых') { $('.wprmp-message-count').text(r.data.count + ' новых'); $('.wprmp-subtab[data-wprmp-tab="messages"] b').text(r.data.count); } if (r.success && r.data) updateLiveChatCount(parseInt(r.data.live_count, 10) || 0); }); }, 15000);
+  $(document).on('click', '.wprmp-close-chat', function () {
+    var b = $(this), id = b.siblings('.wprmp-reply').data('message-id'), status = b.siblings('.wprmp-reply-status'), article = b.closest('article');
+    if (!id || !window.confirm('Завершить этот чат?')) return;
+    b.prop('disabled', true);
+    $.post(wpRuMaxPro.ajaxUrl, { action: 'wp_ru_max_pro_close', nonce: wpRuMaxPro.nonce, message_id: id }).done(function (r) {
+      status.text(r.success ? 'Чат завершён. Его можно удалить вместе с другими завершёнными.' : (r.data || 'Ошибка'));
+      if (!r.success) return;
+      article.attr('data-conversation-status', 'closed').addClass('is-closed');
+      if (article.attr('data-conversation-channel') === 'live_chat') {
+        updateLiveChatCount(liveChatPane.find('article[data-conversation-status="open"] .wprmp-thread-message.from-visitor').length);
+        updateClosedLiveChatCount(liveChatPane.find('article[data-conversation-status="closed"]').length);
+        applyMessageFilter(liveChatPane, liveChatPane.find('[data-message-filter].is-active').attr('data-message-filter') || 'open');
+      } else {
+        var pane = article.closest('.wprmp-pane');
+        applyMessageFilter(pane, pane.find('[data-message-filter].is-active').attr('data-message-filter') || 'all');
+      }
+    }).always(function () { b.prop('disabled', false); });
+  });
+  $(document).on('click', '#wprmp-clear-closed-livechat', function () {
+    var button = $(this), count = parseInt(button.attr('data-count'), 10) || 0;
+    if (!count || !window.confirm('Удалить все завершённые диалоги живого чата? Это действие нельзя отменить.')) return;
+    button.prop('disabled', true).text('Очищаем…');
+    $.post(wpRuMaxPro.ajaxUrl, { action: 'wp_ru_max_pro_clear_closed', nonce: wpRuMaxPro.nonce }).done(function (r) {
+      if (!r || !r.success) {
+        window.alert((r && r.data) || 'Не удалось очистить завершённые диалоги.');
+        updateClosedLiveChatCount(count);
+        return;
+      }
+      liveChatPane.find('article[data-conversation-channel="live_chat"][data-conversation-status="closed"]').remove();
+      updateClosedLiveChatCount(0);
+      applyMessageFilter(liveChatPane, 'open');
+      window.alert('Удалено завершённых диалогов: ' + (parseInt(r.data.deleted, 10) || 0) + '.');
+    }).fail(function () {
+      window.alert('Ошибка сети при очистке завершённых диалогов.');
+      updateClosedLiveChatCount(count);
+    }).always(function () { button.prop('disabled', (parseInt(button.attr('data-count'), 10) || 0) < 1); });
+  });
+  setInterval(function () {
+    if (!window.wpRuMaxPro || !messagesPane.length) return;
+    $.post(wpRuMaxPro.ajaxUrl, {
+      action: 'wp_ru_max_pro_messages',
+      nonce: wpRuMaxPro.nonce,
+      pending_hash: pendingHash
+    }).done(function (r) {
+      if (!r || !r.success || !r.data) return;
+      var count = parseInt(r.data.count, 10) || 0;
+      $('.wprmp-message-count').text(count + ' новых');
+      $('.wprmp-subtab[data-wprmp-tab="messages"] b').text(count);
+      updateLiveChatCount(parseInt(r.data.live_count, 10) || 0);
+      updateClosedLiveChatCount(parseInt(r.data.closed_live_count, 10) || 0);
+      if (r.data.pending_html && r.data.pending_hash !== pendingHash) {
+        var messageFilter = messagesPane.find('[data-message-filter].is-active').attr('data-message-filter') || 'all';
+        var liveFilter = liveChatPane.find('[data-message-filter].is-active').attr('data-message-filter') || 'open';
+        var replyDrafts = {};
+        $('.wprmp-reply-box').each(function () {
+          var box = $(this), id = String(box.find('.wprmp-reply').data('message-id') || '');
+          if (id) replyDrafts[id] = box.find('.wprmp-reply-text').val() || '';
+        });
+        pendingList.html(r.data.pending_html).attr('data-pending-hash', r.data.pending_hash);
+        pendingHash = r.data.pending_hash;
+        pendingList.find('article[data-conversation-channel="live_chat"]').appendTo(liveChatPane.find('.wprmp-livechat-conversations'));
+        $('.wprmp-reply-box').each(function () {
+          var box = $(this), id = String(box.find('.wprmp-reply').data('message-id') || '');
+          if (id && Object.prototype.hasOwnProperty.call(replyDrafts, id)) box.find('.wprmp-reply-text').val(replyDrafts[id]);
+        });
+        applyMessageFilter(messagesPane, messageFilter);
+        applyMessageFilter(liveChatPane, liveFilter);
+      } else if (r.data.pending_hash) {
+        pendingHash = r.data.pending_hash;
+      }
+    });
+  }, 15000);
   preview();
 });
