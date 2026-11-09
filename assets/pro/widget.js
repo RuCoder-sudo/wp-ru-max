@@ -1,4 +1,4 @@
-/* WP Ru-max PRO frontend v1.0.70 — live chat disabled by default. */
+/* WP Ru-max PRO frontend v1.0.71 — configurable fields and separate MAX form routing. */
 (function () {
   var menu = document.getElementById('wp-ru-max-pro-menu');
   var icon = document.getElementById('wp-ru-max-icon');
@@ -17,6 +17,11 @@
   function showPanel(mode) {
     mode = mode || 'live_chat';
     if (panel) {
+      if (mode === 'contact_form') {
+        panel.querySelectorAll('.wprmp-identity input').forEach(function (field) { field.disabled = false; });
+        var identity = panel.querySelector('.wprmp-identity');
+        if (identity) identity.style.display = '';
+      }
       panel.dataset.mode = mode;
       var heading = panel.querySelector('.wprmp-panel-brand h3');
       var status = panel.querySelector('.wprmp-panel-brand small');
@@ -70,8 +75,10 @@
       if (result.success && result.data) {
         status.textContent = result.data.message || 'Сообщение отправлено.';
         if (result.data.conversation_id && !contact) { conversationId = result.data.conversation_id; try { sessionStorage.setItem('wpRuMaxProConversation', conversationId); } catch (e) {} }
-        form.querySelector('.wprmp-identity').style.display = 'none'; form.querySelector('.wprmp-consents').style.display = 'none';
-        form.querySelectorAll('.wprmp-identity input').forEach(function (field) { field.disabled = true; field.required = false; });
+        form.querySelector('.wprmp-identity').style.display = 'none';
+        var submittedConsents = form.querySelector('.wprmp-consents');
+        if (submittedConsents) submittedConsents.style.display = 'none';
+         form.querySelectorAll('.wprmp-identity input').forEach(function (field) { field.disabled = true; });
         form.reset(); renderThread(result.data.messages || []);
       } else status.textContent = (result && result.data) || 'Не удалось отправить сообщение.';
     }).catch(function () { status.textContent = 'Не удалось отправить сообщение.'; });
