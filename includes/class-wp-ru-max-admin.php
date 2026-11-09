@@ -586,7 +586,7 @@ class WP_Ru_Max_Admin {
             array( 'Личные уведомления',        'manage_options', 'admin.php?page=wp-ru-max&tab=notifications' ),
             array( 'Автопостинг',                'manage_options', 'admin.php?page=wp-ru-max&tab=autoposting' ),
             array( 'Чат виджет MAX',             'manage_options', 'admin.php?page=wp-ru-max&tab=chat' ),
-            array( 'Виджет контакты',             'manage_options', 'admin.php?page=wp-ru-max&tab=contacts' ),
+            array( 'Виджет контакты / ЧАТ',      'manage_options', 'admin.php?page=wp-ru-max&tab=contacts' ),
             array( 'Прямой доступ',            'manage_options', 'admin.php?page=wp-ru-max&tab=direct_access' ),
             array( 'Настройки',                'manage_options', 'admin.php?page=wp-ru-max&tab=settings_social' ),
             array( 'Дополнительные',            'manage_options', 'admin.php?page=wp-ru-max&tab=advanced' ),
@@ -1322,6 +1322,12 @@ jQuery(function($){
                 .wp-ru-max-tab{display:block!important;width:100%!important;padding:12px 18px!important;font-size:13px!important;color:#475569!important;text-decoration:none!important;border-left:3px solid transparent!important;border-bottom:none!important;border-top:none!important;border-right:none!important;background:transparent!important;box-sizing:border-box!important;white-space:normal!important;line-height:1.4!important;transition:all .18s!important;}
                 .wp-ru-max-tab:hover{background:#e8edf5!important;color:#1e293b!important;text-decoration:none!important;}
                 .wp-ru-max-tab.nav-tab-active{background:#fff!important;border-left-color:#6366f1!important;color:#6366f1!important;font-weight:600!important;}
+                .wp-ru-max-tab-contacts{background:transparent!important;border-left-color:#22c55e!important;color:#166534!important;font-weight:700!important;}
+                .wp-ru-max-tab-contacts:hover{background:transparent!important;color:#14532d!important;}
+                .wp-ru-max-tab-contacts.nav-tab-active{background:transparent!important;border-left-color:#22c55e!important;border-bottom-color:transparent!important;color:#166534!important;}
+                .wp-ru-max-tab-chat{background:transparent!important;border-left-color:#4c1d95!important;color:#4c1d95!important;font-weight:700!important;}
+                .wp-ru-max-tab-chat:hover{background:transparent!important;color:#3b1675!important;}
+                .wp-ru-max-tab-chat.nav-tab-active{background:transparent!important;border-left-color:#4c1d95!important;border-bottom-color:transparent!important;color:#4c1d95!important;}
                 .wp-ru-max-content{flex:1!important;min-width:0!important;background:#fff!important;border:1px solid #e2e8f0!important;border-radius:0 8px 8px 0!important;padding:0!important;}
                 .wp-ru-max-tab-activation-alert{color:#d63638!important;border-left-color:#d63638!important;}
             </style>
@@ -1336,7 +1342,7 @@ jQuery(function($){
                         'notifications'   => 'Личные уведомления',
                         'autoposting'     => 'Автопостинг',
                         'chat'            => 'Чат виджет MAX',
-                        'contacts'        => 'Виджет контакты',
+                        'contacts'        => 'Виджет контакты / ЧАТ',
                         'direct_access'   => 'Прямой доступ',
                         'settings_social' => 'Настройки',
                         'advanced'        => 'Дополнительные',
@@ -1349,6 +1355,12 @@ jQuery(function($){
                     foreach ( $tabs as $tab_key => $tab_label ) {
                         if ( ! in_array( $tab_key, $tab_keys, true ) ) continue;
                         $class = ( $active_tab === $tab_key ) ? 'wp-ru-max-tab nav-tab-active' : 'wp-ru-max-tab';
+                        if ( 'contacts' === $tab_key ) {
+                            $class .= ' wp-ru-max-tab-contacts';
+                        }
+                        if ( 'chat' === $tab_key ) {
+                            $class .= ' wp-ru-max-tab-chat';
+                        }
                         if ( $tab_key === 'activation' && ! WP_Ru_Max_License::is_active() ) {
                             $class .= ' wp-ru-max-tab-activation-alert';
                         }
@@ -1456,10 +1468,19 @@ jQuery(function($){
             <h3>История версий</h3>
             <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
 
-            <h4 style="margin-bottom:4px;">Версия 1.0.70</h4>
+            <h4 style="margin-bottom:4px;">Версия 1.0.71</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Добавлено:</strong> отдельный получатель MAX для заявок контактной формы — личный user_id или групповой chat_id.</li>
+                <li><strong>Исправлено:</strong> настройки формы проверяются на сервере, а скрытые поля не блокируют отправку.</li>
                 <li><strong>Добавлено:</strong> в настройках «Чат-виджет MAX» можно показывать виджет на всём сайте либо только на выбранных опубликованных страницах, включая главную.</li>
                 <li><strong>Изменено:</strong> при ограниченном показе виджет и его CSS/JavaScript не загружаются на остальных страницах сайта.</li>
+                <li><strong>Исправлено:</strong> после отправки контактной формы её поля снова доступны при повторном открытии; автопостинг и отчёты используют прежние маршруты.</li>
+            </ul>
+
+            <h4 style="margin-bottom:4px;">Версия 1.0.70</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Добавлено:</strong> в настройках «Чат-виджет MAX» можно показывать виджет на всём сайте или только на выбранных опубликованных страницах, включая главную.</li>
+                <li><strong>Исправлено:</strong> при выборе отдельных страниц виджет, его стили и сценарии не загружаются на остальных страницах.</li>
             </ul>
 
             <h4 style="margin-bottom:4px;">Версия 1.0.69</h4>
@@ -2811,6 +2832,19 @@ jQuery(function($){
             </ul>
         </div>
         <div class="wp-ru-max-card">
+            <h3>Живой чат и контактная форма на сайте</h3>
+            <p>Форма отправляет посетительское сообщение с сайта. Плагин передаёт его в MAX через токен бота; получателем может быть ваш личный диалог с ботом или группа. Отправка от имени личного аккаунта MAX через официальный Bot API не поддерживается.</p>
+            <ol>
+                <li>Сначала сохраните токен бота на вкладке <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=social_networks' ) ); ?>"><strong>«Социальные сети» → «MAX»</strong></a> и проверьте подключение.</li>
+                <li>Для личного диалога укажите числовой <code>user_id</code> владельца MAX. Пользователь должен начать диалог с ботом; ID берётся из события MAX, полученного этим ботом.</li>
+                <li>Для группы или канала добавьте бота в нужное место и укажите его числовой <code>chat_id</code>. MAX передаёт этот ID в событии <code>bot_added</code> или <code>bot_started</code>; см. официальную <a href="https://dev.max.ru/docs-api/use-cases/getting-chat-id/" target="_blank" rel="noopener">инструкцию получения ID чата</a>.</li>
+                <li>Откройте <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-ru-max&tab=contacts' ) ); ?>"><strong>«Виджет контакты / ЧАТ»</strong></a>. Включите «Живой чат», вставьте ID получателя и выберите тип: личный пользователь (<code>user_id</code>) или группа/канал (<code>chat_id</code>).</li>
+                <li>Если нужна отдельная контактная форма, заполните отдельного получателя ниже в настройках формы. Там же можно скрыть email, включить телефон и сделать нужные поля обязательными. Пустой получатель использует настройки живого чата.</li>
+                <li>Сохраните настройки и отправьте тестовое сообщение с опубликованной страницы. Заявки формы идут только выбранному получателю; настройки автопостинга и системных отчётов не меняются.</li>
+            </ol>
+            <p><strong>Важно:</strong> приём сообщений на сайте и уведомление владельцу — разные вещи. Посетитель пишет в форму сайта, а бот отправляет уведомление в указанный чат MAX. Для доставки бот должен иметь доступ к получателю; статус успешной отправки отображается на сайте.</p>
+        </div>
+        <div class="wp-ru-max-card">
             <h3>Шаг 6 (необязательно): Настройка MAX-авторизации (Mini App)</h3>
             <p>Если вы хотите, чтобы посетители сайта могли входить через аккаунт мессенджера MAX — выполните следующие шаги. MAX использует систему Mini App, а не стандартный OAuth — Client ID и Secret <strong>не нужны</strong>.</p>
             <ol>
@@ -3593,6 +3627,7 @@ jQuery(function($){
                         'api'            => 'MAX / API',
                         'post_sender'    => 'Публикации MAX',
                         'notifications'  => 'Уведомления',
+                        'contacts'       => 'Формы и чаты',
                         'test'           => 'Тесты',
                         'settings'       => 'Настройки',
                         'direct_access'  => 'Прямой доступ',
