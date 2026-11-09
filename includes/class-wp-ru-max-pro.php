@@ -77,7 +77,15 @@ function wp_ru_max_pro_settings() {
             // Значок живого чата не показывается на сайте после установки,
             // пока владелец явно не включит его в настройках.
             'live_chat_enabled' => false,
+            'live_recipients' => array(),
+            'form_recipients' => array(),
             'target' => '',
+            'target_type' => 'chat',
+            // Empty keeps existing installs routed through the live-chat
+            // recipient until the administrator configures a separate form
+            // destination.
+            'form_target' => '',
+            'form_target_type' => 'chat',
             'title' => 'Живой чат',
             'welcome' => 'Здравствуйте! Чем можем помочь?',
             'manager_online' => false,
@@ -94,6 +102,11 @@ function wp_ru_max_pro_settings() {
                 array( 'question' => 'Можно ли обсудить заказ?', 'answer' => 'Да, напишите нам детали — мы подключим нужного специалиста.' ),
             ),
             'contact_form_enabled' => true,
+            'privacy_consent_enabled' => true,
+            'privacy_consent_text' => 'Да, я согласен(а) на обработку персональных данных и принимаю условия Публичной оферты. Подробнее:',
+            'privacy_policy_url' => '',
+            'mailing_consent_enabled' => true,
+            'mailing_consent_text' => 'Я согласен(а) получать информационные рассылки и уведомления об акциях. Подписку можно отменить в любое время.',
             'quick_buttons' => array(
                 array( 'label' => 'Позвать менеджера', 'message' => 'Хочу поговорить с менеджером' ),
                 array( 'label' => 'Узнать стоимость', 'message' => 'Подскажите, пожалуйста, стоимость' ),
@@ -103,6 +116,7 @@ function wp_ru_max_pro_settings() {
 
     $saved = get_option( WP_RU_MAX_PRO_OPTION, array() );
     $saved = is_array( $saved ) ? $saved : array();
+    $saved_chat = is_array( $saved['chat'] ?? null ) ? $saved['chat'] : array();
     $settings = wp_parse_args( $saved, $defaults );
     $settings['enabled'] = wp_ru_max_pro_bool( $settings['enabled'] ?? $defaults['enabled'], $defaults['enabled'] );
 
@@ -140,10 +154,56 @@ function wp_ru_max_pro_settings() {
         $settings['style']['backdrop_blur'] ?? $defaults['style']['backdrop_blur'],
         $defaults['style']['backdrop_blur']
     );
-    foreach ( array( 'live_chat_enabled', 'manager_online', 'bot_enabled', 'schedule_enabled', 'faq_enabled', 'contact_form_enabled' ) as $bool_key ) {
+    foreach ( array( 'live_chat_enabled', 'manager_online', 'bot_enabled', 'schedule_enabled', 'faq_enabled', 'contact_form_enabled', 'privacy_consent_enabled', 'mailing_consent_enabled' ) as $bool_key ) {
         $settings['chat'][ $bool_key ] = wp_ru_max_pro_bool(
             $settings['chat'][ $bool_key ] ?? $defaults['chat'][ $bool_key ],
             $defaults['chat'][ $bool_key ]
+        );
+    }
+    foreach ( array( 'privacy_consent_text', 'mailing_consent_text' ) as $text_key ) {
+        $settings['chat'][ $text_key ] = sanitize_text_field( $settings['chat'][ $text_key ] ?? $defaults['chat'][ $text_key ] );
+        if ( '' === $settings['chat'][ $text_key ] ) {
+            $settings['chat'][ $text_key ] = $defaults['chat'][ $text_key ];
+        }
+    }
+    $settings['chat']['privacy_policy_url'] = esc_url_raw( $settings['chat']['privacy_policy_url'] ?? '' );
+    $settings['chat']['target_type'] = in_array( $settings['chat']['target_type'] ?? 'chat', array( 'user', 'chat' ), true )
+        ? $settings['chat']['target_type']
+        : 'chat';
+    $legacy_live_recipients = '' !== trim( (string) ( $settings['chat']['target'] ?? '' ) )
+        ? array( array(
+            'id' => trim( (string) $settings['chat']['target'] ),
+            'type' => $settings['chat']['target_type'],
+        ) )
+        : array();
+    $settings['chat']['live_recipients'] = array_key_exists( 'live_recipients', $saved_chat )
+        ? wp_ru_max_pro_normalize_recipients( $saved_chat['live_recipients'] )
+        : wp_ru_max_pro_normalize_recipients( $legacy_live_recipients );
+    $settings['chat']['form_recipients'] = array_key_exists( 'form_recipients', $saved_chat )
+        ? wp_ru_max_pro_normalize_recipients( $saved_chat['form_recipients'] )
+        : wp_ru_max_pro_normalize_recipients(
+            '' !== trim( (string) ( $settings['chat']['form_target'] ?? '' ) )
+                ? array( array(
+                    'id' => trim( (string) $settings['chat']['form_target'] ),
+                    'type' => $settings['chat']['form_target_type'] ?? 'chat',
+                ) )
+                : array()
+        );
+    $form_field_defaults = array(
+        'name' => array( 'visible' => true, 'required' => true, 'label' => 'Имя', 'placeholder' => 'Ваше имя' ),
+        'email' => array( 'visible' => $settings['chat']['contact_form_enabled'], 'required' => false, 'label' => 'Email', 'placeholder' => 'Ваш email' ),
+        'phone' => array( 'visible' => $settings['chat']['contact_form_enabled'], 'required' => false, 'label' => 'Телефон', 'placeholder' => 'Ваш телефон' ),
+        'message' => array( 'visible' => true, 'required' => true, 'label' => 'Сообщение', 'placeholder' => 'Напишите сообщение' ),
+    );
+    $saved_form_fields = is_array( $settings['chat']['form_fields'] ?? null ) ? $settings['chat']['form_fields'] : array();
+    $settings['chat']['form_fields'] = array();
+    foreach ( $form_field_defaults as $field_key => $field_default ) {
+        $field = is_array( $saved_form_fields[ $field_key ] ?? null ) ? $saved_form_fields[ $field_key ] : array();
+        $settings['chat']['form_fields'][ $field_key ] = array(
+            'visible' => 'message' === $field_key ? true : wp_ru_max_pro_bool( $field['visible'] ?? $field_default['visible'], $field_default['visible'] ),
+            'required' => 'message' === $field_key ? true : wp_ru_max_pro_bool( $field['required'] ?? $field_default['required'], $field_default['required'] ),
+            'label' => sanitize_text_field( $field['label'] ?? $field_default['label'] ) ?: $field_default['label'],
+            'placeholder' => sanitize_text_field( $field['placeholder'] ?? $field_default['placeholder'] ) ?: $field_default['placeholder'],
         );
     }
 
@@ -183,6 +243,120 @@ function wp_ru_max_pro_settings() {
     ) ) );
 
     return $settings;
+}
+
+function wp_ru_max_pro_normalize_recipients( $recipients ) {
+    if ( ! is_array( $recipients ) ) {
+        return array();
+    }
+
+    $normalized = array();
+    $seen = array();
+    foreach ( $recipients as $recipient ) {
+        if ( ! is_array( $recipient ) ) {
+            continue;
+        }
+        $id = sanitize_text_field( trim( (string) ( $recipient['id'] ?? '' ) ) );
+        if ( '' === $id ) {
+            continue;
+        }
+        $type = 'user' === ( $recipient['type'] ?? 'chat' ) ? 'user' : 'chat';
+        $key = $type . '|' . strtolower( $id );
+        if ( isset( $seen[ $key ] ) ) {
+            continue;
+        }
+        $seen[ $key ] = true;
+        $normalized[] = array(
+            'id' => $id,
+            'type' => $type,
+        );
+    }
+
+    return $normalized;
+}
+
+function wp_ru_max_pro_get_delivery_recipients( $settings, $channel ) {
+    $chat = is_array( $settings['chat'] ?? null ) ? $settings['chat'] : array();
+    $recipients = 'contact_form' === $channel
+        ? ( $chat['form_recipients'] ?? array() )
+        : ( $chat['live_recipients'] ?? array() );
+
+    // Preserve the old behavior: form requests without a dedicated route use
+    // the live-chat recipients.
+    if ( 'contact_form' === $channel && empty( $recipients ) ) {
+        $recipients = $chat['live_recipients'] ?? array();
+    }
+
+    return wp_ru_max_pro_normalize_recipients( $recipients );
+}
+
+function wp_ru_max_pro_send_to_recipients( $recipients, $text, $format = 'html' ) {
+    $recipients = wp_ru_max_pro_normalize_recipients( $recipients );
+    $result = array(
+        'total' => count( $recipients ),
+        'sent' => 0,
+        'failures' => array(),
+    );
+
+    if ( empty( $recipients ) ) {
+        $result['failures'][] = array(
+            'type' => '',
+            'id' => '',
+            'message' => 'MAX получатели не настроены.',
+        );
+        return $result;
+    }
+
+    $base_settings = get_option( 'wp_ru_max_settings', array() );
+    $token = trim( (string) ( $base_settings['bot_token'] ?? '' ) );
+    if ( '' === $token || ! class_exists( 'WP_Ru_Max_API' ) ) {
+        foreach ( $recipients as $recipient ) {
+            $result['failures'][] = array(
+                'type' => $recipient['type'],
+                'id' => $recipient['id'],
+                'message' => '' === $token ? 'Токен бота MAX не задан.' : 'Класс API MAX не загружен.',
+            );
+        }
+        return $result;
+    }
+
+    $api = new WP_Ru_Max_API( $token );
+    foreach ( $recipients as $recipient ) {
+        $response = 'user' === $recipient['type']
+            ? $api->send_message_to_user( $recipient['id'], $text, $format )
+            : $api->send_message( $recipient['id'], $text, $format );
+
+        if ( is_wp_error( $response ) || false === $response || null === $response ) {
+            $error_data = is_wp_error( $response ) ? $response->get_error_data() : array();
+            $error_body = is_array( $error_data ) && is_array( $error_data['body'] ?? null )
+                ? $error_data['body']
+                : array();
+            $error_code = sanitize_text_field( $error_body['code'] ?? '' );
+            $error_message = is_wp_error( $response ) ? $response->get_error_message() : 'Пустой ответ MAX API.';
+
+            if ( 'error.not.found' === $error_code ) {
+                $error_message = 'MAX не нашёл получателя. ' . ( 'user' === $recipient['type']
+                    ? 'Проверьте, что это user_id получателя из события bot_started или message_created именно этого бота, а не ID самого бота. Пользователь должен открыть диалог с ботом.'
+                    : 'Проверьте, что это chat_id из события bot_added именно этого бота и что бот добавлен в чат или канал.' );
+            } elseif ( 'chat.denied' === $error_code ) {
+                $error_message = 'MAX запретил отправку. ' . ( 'user' === $recipient['type']
+                    ? 'Получатель должен открыть диалог с ботом.'
+                    : 'Добавьте бота в группу или канал и проверьте право отправки сообщений.' );
+            }
+
+            $result['failures'][] = array(
+                'type' => $recipient['type'],
+                'id' => $recipient['id'],
+                'message' => $error_message,
+                'code' => $error_code,
+            );
+            continue;
+        }
+
+        $result['sent']++;
+    }
+
+    return $result;
 }
 
 function wp_ru_max_pro_main_widget_settings() {
