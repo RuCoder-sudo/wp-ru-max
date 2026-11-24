@@ -8,6 +8,7 @@
     var el = wp.element.createElement;
     var useState = wp.element.useState;
     var useEffect = wp.element.useEffect;
+    var useRef = wp.element.useRef;
     var useSelect = wp.data.useSelect;
     var registerPlugin = wp.plugins.registerPlugin;
     var Button = wp.components.Button;
@@ -60,33 +61,58 @@
                 xhr.setRequestHeader('X-WP-Nonce', wpRuMaxGutenberg.restNonce);
             }
         }).done(function (res) {
-            onDone(res || {});
+            var ok = res && typeof res.on === 'boolean';
+            onDone(ok ? res : {}, !!ok);
         }).fail(function () {
             ajax('wp_ru_max_get_skip', { post_id: postId }, function (res) {
-                onDone(res && res.success ? (res.data || {}) : {});
+                var state = res && res.success ? res.data : null;
+                var ok = state && typeof state.on === 'boolean';
+                onDone(ok ? state : {}, !!ok);
             });
         });
     }
 
-    function saveSkipState(postId, value, excluded, onDone) {
-        $.ajax({
-            url: wpRuMaxGutenberg.restUrl + postId,
-            method: 'POST',
-            data: { on: value ? 1 : 0, excluded: excluded || [] },
-            beforeSend: function (xhr) {
-                xhr.setRequestHeader('X-WP-Nonce', wpRuMaxGutenberg.restNonce);
+    var skipSaveQueue = [];
+    var skipSaveRunning = false;
+
+    function runNextSkipSave() {
+        if (skipSaveRunning || !skipSaveQueue.length) {
+            return;
+        }
+        skipSaveRunning = true;
+        var task = skipSaveQueue.shift();
+        task.send(function (ok) {
+            try {
+                task.onDone(ok);
+            } finally {
+                skipSaveRunning = false;
+                runNextSkipSave();
             }
-        }).done(function () {
-            onDone(true);
-        }).fail(function () {
-            ajax('wp_ru_max_set_skip', {
-                post_id: postId,
-                on: value ? 1 : 0,
-                excluded: excluded || []
-            }, function (res) {
-                onDone(!!(res && res.success));
-            });
         });
+    }
+
+    function saveSkipState(postId, changes, onDone) {
+        var fallbackData = $.extend({ post_id: postId }, changes);
+        skipSaveQueue.push({
+            onDone: onDone,
+            send: function (finish) {
+                $.ajax({
+                    url: wpRuMaxGutenberg.restUrl + postId,
+                    method: 'POST',
+                    data: changes,
+                    beforeSend: function (xhr) {
+                        xhr.setRequestHeader('X-WP-Nonce', wpRuMaxGutenberg.restNonce);
+                    }
+                }).done(function () {
+                    finish(true);
+                }).fail(function () {
+                    ajax('wp_ru_max_set_skip', fallbackData, function (res) {
+                        finish(!!(res && res.success));
+                    });
+                });
+            }
+        });
+        runNextSkipSave();
     }
 
     function WpRuMaxPanel() {
@@ -100,6 +126,10 @@
         });
         var preferences = preferencesArr[0];
         var setPreferences = preferencesArr[1];
+        var skipLoadedArr = useState(false);
+        var skipLoaded = skipLoadedArr[0];
+        var setSkipLoaded = skipLoadedArr[1];
+        var skipLoadToken = useRef(0);
         var autoArr = useState({ networks: [], datetime: '', status: {} });
         var auto = autoArr[0];
         var setAuto = autoArr[1];
@@ -114,10 +144,13 @@
         var setNotice = noticeArr[1];
 
         useEffect(function () {
+            var requestToken = ++skipLoadToken.current;
             if (!postId) {
+                setSkipLoaded(false);
                 return;
             }
             setLoaded(false);
+            setSkipLoaded(false);
             ajax('wp_ru_max_autopost_get_meta', { post_id: postId }, function (res) {
                 if (res && res.success) {
                     var loadedConfig = res.data || { networks: [], datetime: '', status: {} };
@@ -126,11 +159,19 @@
                 }
                 setLoaded(true);
             });
-            loadSkipState(postId, function (state) {
+            loadSkipState(postId, function (state, ok) {
+                if (requestToken !== skipLoadToken.current) {
+                    return;
+                }
+                if (!ok) {
+                    setNotice('Не удалось загрузить состояние автоотправки. Обновите страницу перед изменением настройки.');
+                    return;
+                }
                 setPreferences({
                     on: !!state.on,
                     excluded: onlyConfiguredNetworks(state.excluded || [])
                 });
+                setSkipLoaded(true);
             });
         }, [postId]);
 
@@ -188,7 +229,7 @@
             }
             setPreferences($.extend({}, preferences, { excluded: excluded }));
             if (postId) {
-                saveSkipState(postId, !!preferences.on, excluded, function (ok) {
+                saveSkipState(postId, { excluded_json: JSON.stringify(excluded) }, function (ok) {
                     if (!ok) {
                         setNotice('Не удалось сохранить исключения сетей.');
                     }
@@ -219,6 +260,7 @@
             }, el('input', {
                 type: 'checkbox',
                 checked: (preferences.excluded || []).indexOf(network) !== -1,
+                disabled: !skipLoaded,
                 onChange: function () { toggleExcluded(network); }
             }), ' ', label));
         });
@@ -228,17 +270,20 @@
             key: 'auto-toggle',
             label: preferences.on ? 'Автоотправка: ВКЛ' : 'Автоотправка: ВЫКЛ',
             checked: preferences.on,
+            disabled: !skipLoaded,
+            help: skipLoaded
+                ? 'Общий переключатель применяется ко всем подключённым социальным сетям.'
+                : 'Загрузка состояния автоотправки…',
             onChange: function (value) {
                 setPreferences($.extend({}, preferences, { on: value }));
                 if (postId) {
-                    saveSkipState(postId, value, preferences.excluded || [], function (ok) {
+                    saveSkipState(postId, { on: value ? 1 : 0 }, function (ok) {
                         if (!ok) {
                             setNotice('Не удалось сохранить состояние автоотправки.');
                         }
                     });
                 }
-            },
-            help: 'Общий переключатель применяется ко всем подключённым социальным сетям.'
+            }
         }));
         content.push(el('div', {
             key: 'excluded',
