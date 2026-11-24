@@ -3,7 +3,7 @@
  * Plugin Name:       WP Ru-max
  * Plugin URI:        https://max-wp.ru
  * Description:       Интеграция WordPress с мессенджером MAX (max.ru) — автопубликация записей, пересылка уведомлений WooCommerce / CF7 / Jetpack / Elementor и настраиваемый чат-виджет с анимацией и звуком. Поддерживает WordPress Multisite (мультисайт) и поддомены.
- * Version:           1.0.71
+ * Version:           1.0.72
  * Author:            Сергей Солошенко (RuCoder)
  * Author URI:        https://fixcoder.ru/
  * License:           GPL v2 or later
@@ -82,7 +82,7 @@ if ( class_exists( 'WP_Ru_Max', false ) || defined( 'WP_RU_MAX_BOOTSTRAPPED' ) )
 }
 if ( ! defined( 'WP_RU_MAX_BOOTSTRAPPED' ) ) define( 'WP_RU_MAX_BOOTSTRAPPED', true );
 
-if ( ! defined( 'WP_RU_MAX_VERSION' ) ) define( 'WP_RU_MAX_VERSION', '1.0.71' );
+if ( ! defined( 'WP_RU_MAX_VERSION' ) ) define( 'WP_RU_MAX_VERSION', '1.0.72' );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_FILE' ) ) define( 'WP_RU_MAX_PLUGIN_FILE', __FILE__ );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_DIR' ) ) define( 'WP_RU_MAX_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 if ( ! defined( 'WP_RU_MAX_PLUGIN_URL' ) ) define( 'WP_RU_MAX_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -94,7 +94,7 @@ if ( ! defined( 'WP_RU_MAX_API_BASE' ) ) define( 'WP_RU_MAX_API_BASE', 'https://
 if ( ! defined( 'WP_RU_MAX_PRO_BUNDLED' ) ) define( 'WP_RU_MAX_PRO_BUNDLED', true );
 // Keep the bundled module's cache-busting version aligned
 // with the main plugin release.
-if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.71' );
+if ( ! defined( 'WP_RU_MAX_PRO_VERSION' ) ) define( 'WP_RU_MAX_PRO_VERSION', '1.0.72' );
 if ( ! defined( 'WP_RU_MAX_PRO_FILE' ) ) define( 'WP_RU_MAX_PRO_FILE', __FILE__ );
 if ( ! defined( 'WP_RU_MAX_PRO_DIR' ) ) define( 'WP_RU_MAX_PRO_DIR', WP_RU_MAX_PLUGIN_DIR );
 if ( ! defined( 'WP_RU_MAX_PRO_URL' ) ) define( 'WP_RU_MAX_PRO_URL', WP_RU_MAX_PLUGIN_URL . 'assets/pro/' );
