@@ -1,4 +1,4 @@
-/* WP Ru-max PRO admin v1.0.71 — separate form recipient settings. */
+/* WP Ru-max PRO admin v1.0.72 — separate form recipient settings. */
 jQuery(function ($) {
   var liveChatPane = $('.wprmp-pane[data-wprmp-pane="livechat"]');
   var messagesPane = $('.wprmp-pane[data-wprmp-pane="messages"]');
