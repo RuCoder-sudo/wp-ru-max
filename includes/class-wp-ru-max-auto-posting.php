@@ -816,11 +816,14 @@ class WP_Ru_Max_Auto_Posting {
         }
         $all_sent = true;
         $had_error = false;
+        $skipped_networks = array();
         $max_attempts = max( 1, min( self::MAX_ATTEMPTS, (int) ( $settings['retry_attempts'] ?? self::MAX_ATTEMPTS ) ) );
         foreach ( (array) $job['networks'] as $network ) {
             if ( $this->is_network_excluded( $post->ID, $network ) ) {
                 $job['statuses'][ $network ] = 'skipped';
+                $job['errors'][ $network ]   = 'Сеть исключена в настройках записи; публикация не выполнялась.';
                 $config['status'][ $network ] = 'skipped';
+                $skipped_networks[] = $network;
                 update_post_meta( $post->ID, self::META_KEY, $config );
                 continue;
             }
@@ -851,7 +854,7 @@ class WP_Ru_Max_Auto_Posting {
                  * отправленная сеть не будет вызвана повторно.
                  */
                 $config['status'][ $network ] = 'sent';
-                WP_Ru_Max_Logger::log( 'autopost', 'success', 'Автопостинг #' . $post->ID . ' → ' . $network . ': опубликовано.', array( 'post_id' => $post->ID, 'network' => $network ) );
+                WP_Ru_Max_Logger::log( 'autopost', 'success', 'Автопостинг #' . $post->ID . ' → ' . $network . ': API подтвердил отправку.', array( 'post_id' => $post->ID, 'network' => $network ) );
             }
             update_post_meta( $post->ID, self::META_KEY, $config );
         }
@@ -863,6 +866,15 @@ class WP_Ru_Max_Auto_Posting {
         if ( $all_sent && ! empty( $job['networks'] ) ) {
             unset( $queue[ $key ] );
             $this->save_queue( $queue );
+            if ( ! empty( $skipped_networks ) ) {
+                WP_Ru_Max_Logger::log( 'autopost', 'warning', 'Автопостинг #' . $post->ID . ' завершён без отправки в исключённые сети.', array(
+                    'post_id'  => $post->ID,
+                    'skipped'  => $skipped_networks,
+                    'statuses' => $job['statuses'],
+                ) );
+                $this->send_notification( $post, 'error', $job );
+                return;
+            }
             $this->send_notification( $post, 'success', $job );
             return;
         }
@@ -891,7 +903,10 @@ class WP_Ru_Max_Auto_Posting {
 
     private function all_attempts_exhausted( $job, $max_attempts = self::MAX_ATTEMPTS ) {
         foreach ( (array) $job['networks'] as $network ) {
-            if ( 'sent' !== ( $job['statuses'][ $network ] ?? '' ) && (int) ( $job['attempts'][ $network ] ?? 0 ) < $max_attempts ) {
+            if (
+                ! in_array( $job['statuses'][ $network ] ?? '', array( 'sent', 'skipped' ), true )
+                && (int) ( $job['attempts'][ $network ] ?? 0 ) < $max_attempts
+            ) {
                 return false;
             }
         }
@@ -973,11 +988,11 @@ class WP_Ru_Max_Auto_Posting {
         }
         $title = get_the_title( $post );
         if ( 'success' === $type ) {
-            $subject = 'WP Ru-max: запись опубликована в социальных сетях';
-            $body    = 'Запись «' . $title . '» (#' . $post->ID . ') опубликована: ' . implode( ', ', (array) $job['networks'] );
+            $subject = 'WP Ru-max: API подтвердили отправку записи';
+            $body    = 'API подтвердили отправку записи «' . $title . '» (#' . $post->ID . ') в выбранные сети: ' . implode( ', ', (array) $job['networks'] );
         } else {
             $subject = 'WP Ru-max: ошибка автопостинга';
-            $body    = 'Запись «' . $title . '» (#' . $post->ID . ') не удалось опубликовать во все сети.' . "\n\n" . print_r( $job['errors'], true );
+            $body    = 'Запись «' . $title . '» (#' . $post->ID . ') не была опубликована во все выбранные сети.' . "\n\n" . print_r( $job['errors'], true );
         }
         wp_mail( $emails, $subject, $body );
     }
@@ -1185,7 +1200,43 @@ class WP_Ru_Max_Auto_Posting {
                 'config'   => $this->get_post_config( $post_id ),
             ) );
         }
-        wp_send_json_success( $this->get_post_config( $post_id ) );
+        $result_config = $this->get_post_config( $post_id );
+        $queue         = $this->get_queue();
+        $job           = $queue[ $this->job_key( $post_id ) ] ?? array();
+        $errors        = isset( $job['errors'] ) && is_array( $job['errors'] ) ? $job['errors'] : array();
+        $unconfirmed   = array();
+        $state_labels  = array(
+            'pending' => 'ещё не подтверждена',
+            'error'   => 'ошибка отправки',
+            'skipped' => 'пропущена настройками записи',
+        );
+        $network_labels = self::networks();
+        foreach ( $run_config['networks'] as $network ) {
+            $state = $result_config['status'][ $network ] ?? 'pending';
+            if ( 'sent' === $state ) {
+                continue;
+            }
+            $label = $network_labels[ $network ] ?? $network;
+            $detail = $label . ': ' . ( $state_labels[ $state ] ?? $state );
+            if ( ! empty( $errors[ $network ] ) ) {
+                $detail .= ' — ' . $errors[ $network ];
+            }
+            $unconfirmed[] = $detail;
+        }
+        if ( ! $processed || ! empty( $unconfirmed ) ) {
+            $message = ! $processed
+                ? 'Запуск не обработал задание. Проверьте историю отправки и повторите попытку.'
+                : 'Отправка не подтверждена для всех выбранных сетей: ' . implode( '; ', $unconfirmed );
+            wp_send_json_error( array(
+                'message'  => $message,
+                'statuses' => $result_config['status'],
+                'errors'   => $errors,
+            ) );
+        }
+        wp_send_json_success( array(
+            'message'  => 'API подтвердили отправку во все выбранные сети.',
+            'statuses' => $result_config['status'],
+        ) );
     }
 
     public function ajax_save_settings() {
