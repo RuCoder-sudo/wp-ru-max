@@ -681,6 +681,14 @@ class WP_Ru_Max_Post_Sender {
      */
     private function send_post( $post, $is_new, $settings, $skip_targets = array(), &$sent_targets = null ) {
         $channels   = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
+        $channels   = array_values( array_filter( array_map(
+            function( $channel ) {
+                return is_scalar( $channel ) ? trim( (string) $channel ) : '';
+            },
+            $channels
+        ), function( $channel ) {
+            return '' !== $channel;
+        } ) );
         $message    = $this->build_post_message( $post, $is_new, $settings );
         $buttons    = $this->get_buttons( $settings, $post );
         $api        = new WP_Ru_Max_API();
@@ -738,7 +746,7 @@ class WP_Ru_Max_Post_Sender {
                 ) );
             } else {
                 $sent_targets[] = $target_key;
-                WP_Ru_Max_Logger::log( 'post_sender', 'success', "Запись #{$post->ID} успешно отправлена в канал $chat_id.", array(
+                WP_Ru_Max_Logger::log( 'post_sender', 'success', "MAX API подтвердил отправку записи #{$post->ID} в канал $chat_id.", array(
                     'post_id' => $post->ID,
                     'chat_id' => $chat_id,
                     'is_new'  => $is_new,
@@ -934,6 +942,14 @@ class WP_Ru_Max_Post_Sender {
         try {
             $settings   = get_option( 'wp_ru_max_settings', array() );
             $channels   = isset( $settings['channels'] ) ? (array) $settings['channels'] : array();
+            $channels   = array_values( array_filter( array_map(
+                function( $channel ) {
+                    return is_scalar( $channel ) ? trim( (string) $channel ) : '';
+                },
+                $channels
+            ), function( $channel ) {
+                return '' !== $channel;
+            } ) );
 
             if ( empty( $channels ) ) {
                 return new WP_Error( 'no_channels', 'Нет настроенных каналов. Добавьте канал на вкладке «Отправка публикаций».' );
@@ -962,28 +978,31 @@ class WP_Ru_Max_Post_Sender {
                     WP_Ru_Max_Logger::log( 'post_sender', 'error', "Ручная отправка записи #{$post->ID} в канал $chat_id НЕУДАЧНА: " . $result->get_error_message() );
                 } else {
                     $sent_targets[] = hash( 'sha256', $chat_id );
-                    WP_Ru_Max_Logger::log( 'post_sender', 'success', "Ручная отправка записи #{$post->ID} в канал $chat_id успешна." );
+                    WP_Ru_Max_Logger::log( 'post_sender', 'success', "MAX API подтвердил ручную отправку записи #{$post->ID} в канал $chat_id." );
                 }
-            }
-
-            if ( count( $errors ) === count( $channels ) && ! empty( $errors ) ) {
-                return new WP_Error( 'send_failed', implode( '; ', $errors ) );
             }
 
             if ( ! empty( $sent_targets ) && ! empty( $errors ) ) {
                 $this->record_sent_targets_for_post( $post->ID, $sent_targets, $this->get_post_generation( $post ) );
             }
 
-            if ( empty( $errors ) ) {
-                /*
-                 * A manual send may happen while the automatic retry for this
-                 * post is still waiting in the persistent queue. Once the manual
-                 * send is confirmed, remove that stale retry so it cannot publish
-                 * the same post again minutes later.
-                 */
-                $this->cancel_pending_jobs_for_post( $post->ID );
+            if ( ! empty( $errors ) ) {
+                $message = ! empty( $sent_targets )
+                    ? 'MAX подтвердил отправку только в часть каналов. Успешные каналы сохранены; ошибки: '
+                    : 'MAX не подтвердил отправку ни в один канал. Ошибки: ';
+                return new WP_Error(
+                    ! empty( $sent_targets ) ? 'partial_send' : 'send_failed',
+                    $message . implode( '; ', $errors )
+                );
             }
 
+            /*
+             * A manual send may happen while the automatic retry for this
+             * post is still waiting in the persistent queue. Once the manual
+             * send is confirmed, remove that stale retry so it cannot publish
+             * the same post again minutes later.
+             */
+            $this->cancel_pending_jobs_for_post( $post->ID );
             return true;
         } finally {
             $this->release_queue_lock( $lock_token );
