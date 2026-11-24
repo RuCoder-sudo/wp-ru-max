@@ -77,7 +77,9 @@ class WP_Ru_Max_Admin {
                             return is_numeric( $value );
                         },
                     ),
-                    'on'      => array( 'required' => true ),
+                    'on'      => array( 'required' => false ),
+                    'excluded'      => array( 'required' => false ),
+                    'excluded_json' => array( 'required' => false ),
                 ),
             ),
         ) );
@@ -95,41 +97,61 @@ class WP_Ru_Max_Admin {
 
     public function rest_set_skip( $request ) {
         $post_id = (int) $request['post_id'];
-        $on_raw  = $request->get_param( 'on' );
-
-        $is_on = ( $on_raw === true || $on_raw === 1 || $on_raw === '1' || $on_raw === 'true' || $on_raw === 'on' );
-        $value = $is_on ? '0' : '1';
-
-        update_post_meta( $post_id, self::SKIP_META_KEY, $value );
-        delete_post_meta( $post_id, self::SKIP_META_KEY_LEGACY );
-        if ( null !== $request->get_param( 'excluded' ) ) {
-            update_post_meta( $post_id, self::EXCLUDE_META_KEY, $this->sanitize_excluded_networks( $request->get_param( 'excluded' ) ) );
+        $has_on = $request->has_param( 'on' );
+        if ( $has_on ) {
+            $on_raw = $request->get_param( 'on' );
+            $is_on  = ( $on_raw === true || $on_raw === 1 || $on_raw === '1' || $on_raw === 'true' || $on_raw === 'on' );
+            $value  = $is_on ? '0' : '1';
+            update_post_meta( $post_id, self::SKIP_META_KEY, $value );
+            delete_post_meta( $post_id, self::SKIP_META_KEY_LEGACY );
+        }
+        $has_excluded = $request->has_param( 'excluded_json' ) || $request->has_param( 'excluded' );
+        if ( $has_excluded ) {
+            $excluded = $request->has_param( 'excluded_json' )
+                ? json_decode( (string) $request->get_param( 'excluded_json' ), true )
+                : $request->get_param( 'excluded' );
+            if ( ! is_array( $excluded ) ) {
+                return new WP_Error( 'invalid_excluded_networks', 'Не удалось разобрать список исключённых сетей.', array( 'status' => 400 ) );
+            }
+            update_post_meta( $post_id, self::EXCLUDE_META_KEY, $this->sanitize_excluded_networks( $excluded ) );
         }
 
         wp_cache_delete( $post_id, 'post_meta' );
         $stored = get_post_meta( $post_id, self::SKIP_META_KEY, true );
 
-        WP_Ru_Max_Logger::log(
-            'post_sender',
-            'info',
-            sprintf(
-                'Тумблер #%d через свой REST: запрошено %s → сохранено "%s" → в БД "%s" (%s)',
-                $post_id,
-                $is_on ? 'ВКЛ' : 'ВЫКЛ',
-                $value,
-                (string) $stored,
-                $stored === '0' ? 'ВКЛ' : 'ВЫКЛ'
-            ),
-            array(
-                'post_id'      => $post_id,
-                'requested_on' => $is_on,
-                'sent_value'   => $value,
-                'stored'       => $stored,
-            )
-        );
+        if ( $has_on ) {
+            WP_Ru_Max_Logger::log(
+                'post_sender',
+                'info',
+                sprintf(
+                    'Тумблер #%d через свой REST: запрошено %s → сохранено "%s" → в БД "%s" (%s)',
+                    $post_id,
+                    $is_on ? 'ВКЛ' : 'ВЫКЛ',
+                    $value,
+                    (string) $stored,
+                    $stored === '0' ? 'ВКЛ' : 'ВЫКЛ'
+                ),
+                array(
+                    'post_id'      => $post_id,
+                    'requested_on' => $is_on,
+                    'sent_value'   => $value,
+                    'stored'       => $stored,
+                )
+            );
+        }
+        if ( $has_excluded ) {
+            WP_Ru_Max_Logger::log(
+                'post_sender',
+                'info',
+                sprintf( 'Список исключённых сетей записи #%d обновлён.', $post_id ),
+                array(
+                    'post_id'  => $post_id,
+                    'excluded' => $this->get_excluded_networks( $post_id ),
+                )
+            );
+        }
 
         $preferences = $this->get_autopost_preferences( $post_id );
-        $preferences['sent'] = $value;
         return rest_ensure_response( $preferences );
     }
 
@@ -139,37 +161,58 @@ class WP_Ru_Max_Admin {
         if ( ! $post_id || ! current_user_can( 'edit_post', $post_id ) ) {
             wp_send_json_error( 'Нет прав доступа.' );
         }
-        $on_raw = isset( $_POST['on'] ) ? wp_unslash( $_POST['on'] ) : '0';
-        $is_on  = ( $on_raw === true || $on_raw === 1 || $on_raw === '1' || $on_raw === 'true' || $on_raw === 'on' );
-        $value  = $is_on ? '0' : '1';
-
-        update_post_meta( $post_id, self::SKIP_META_KEY, $value );
-        delete_post_meta( $post_id, self::SKIP_META_KEY_LEGACY );
-        if ( isset( $_POST['excluded'] ) ) {
-            $excluded = wp_unslash( $_POST['excluded'] );
+        $has_on = isset( $_POST['on'] );
+        if ( $has_on ) {
+            $on_raw = wp_unslash( $_POST['on'] );
+            $is_on  = ( $on_raw === true || $on_raw === 1 || $on_raw === '1' || $on_raw === 'true' || $on_raw === 'on' );
+            $value  = $is_on ? '0' : '1';
+            update_post_meta( $post_id, self::SKIP_META_KEY, $value );
+            delete_post_meta( $post_id, self::SKIP_META_KEY_LEGACY );
+        }
+        $has_excluded = isset( $_POST['excluded_json'] ) || isset( $_POST['excluded'] );
+        if ( $has_excluded ) {
+            $excluded = isset( $_POST['excluded_json'] )
+                ? json_decode( wp_unslash( $_POST['excluded_json'] ), true )
+                : wp_unslash( $_POST['excluded'] );
+            if ( ! is_array( $excluded ) ) {
+                wp_send_json_error( 'Не удалось разобрать список исключённых сетей.' );
+            }
             update_post_meta( $post_id, self::EXCLUDE_META_KEY, $this->sanitize_excluded_networks( $excluded ) );
         }
 
         wp_cache_delete( $post_id, 'post_meta' );
         $stored = get_post_meta( $post_id, self::SKIP_META_KEY, true );
 
-        WP_Ru_Max_Logger::log(
-            'post_sender',
-            'info',
-            sprintf(
-                'Тумблер #%d через AJAX-fallback: запрошено %s → сохранено "%s" → в БД "%s" (%s)',
-                $post_id,
-                $is_on ? 'ВКЛ' : 'ВЫКЛ',
-                $value,
-                (string) $stored,
-                $stored === '0' ? 'ВКЛ' : 'ВЫКЛ'
-            ),
-            array(
-                'post_id'    => $post_id,
-                'sent_value' => $value,
-                'stored'     => $stored,
-            )
-        );
+        if ( $has_on ) {
+            WP_Ru_Max_Logger::log(
+                'post_sender',
+                'info',
+                sprintf(
+                    'Тумблер #%d через AJAX-fallback: запрошено %s → сохранено "%s" → в БД "%s" (%s)',
+                    $post_id,
+                    $is_on ? 'ВКЛ' : 'ВЫКЛ',
+                    $value,
+                    (string) $stored,
+                    $stored === '0' ? 'ВКЛ' : 'ВЫКЛ'
+                ),
+                array(
+                    'post_id'    => $post_id,
+                    'sent_value' => $value,
+                    'stored'     => $stored,
+                )
+            );
+        }
+        if ( $has_excluded ) {
+            WP_Ru_Max_Logger::log(
+                'post_sender',
+                'info',
+                sprintf( 'Список исключённых сетей записи #%d обновлён через AJAX-fallback.', $post_id ),
+                array(
+                    'post_id'  => $post_id,
+                    'excluded' => $this->get_excluded_networks( $post_id ),
+                )
+            );
+        }
 
         wp_send_json_success( $this->get_autopost_preferences( $post_id ) );
     }
@@ -279,13 +322,11 @@ class WP_Ru_Max_Admin {
         $post_types = get_post_types( array( 'public' => true ) );
         foreach ( $post_types as $post_type ) {
             register_post_meta( $post_type, self::SKIP_META_KEY, array(
-                'show_in_rest'      => array(
-                    'schema' => array(
-                        'type'    => 'string',
-                        'enum'    => array( '0', '1' ),
-                        'context' => array( 'view', 'edit' ),
-                    ),
-                ),
+                // Gutenberg uses the dedicated /skip REST route below. Do not
+                // expose this value through the post editor's generic REST
+                // payload: stale editor data can overwrite a newer toggle
+                // value when the article itself is saved.
+                'show_in_rest'      => false,
                 'single'            => true,
                 'type'              => 'string',
                 'sanitize_callback' => array( $this, 'sanitize_skip_meta' ),
@@ -294,11 +335,6 @@ class WP_Ru_Max_Admin {
                 },
             ) );
 
-            add_action(
-                'rest_after_insert_' . $post_type,
-                array( $this, 'persist_skip_meta_from_rest' ),
-                10, 3
-            );
         }
     }
 
@@ -310,54 +346,6 @@ class WP_Ru_Max_Admin {
             return '0';
         }
         return '1';
-    }
-
-    public function persist_skip_meta_from_rest( $post, $request, $creating ) {
-        if ( ! ( $request instanceof WP_REST_Request ) ) {
-            return;
-        }
-        if ( ! is_object( $post ) || empty( $post->ID ) ) {
-            return;
-        }
-        if ( ! current_user_can( 'edit_post', $post->ID ) ) {
-            return;
-        }
-
-        $meta = $request->get_param( 'meta' );
-        if ( ! is_array( $meta ) ) {
-            return;
-        }
-
-        if ( ! array_key_exists( self::SKIP_META_KEY, $meta ) ) {
-            return;
-        }
-
-        $raw        = $meta[ self::SKIP_META_KEY ];
-        $normalized = $this->sanitize_skip_meta( $raw );
-
-        update_post_meta( $post->ID, self::SKIP_META_KEY, $normalized );
-
-        wp_cache_delete( $post->ID, 'post_meta' );
-        $stored = get_post_meta( $post->ID, self::SKIP_META_KEY, true );
-
-        WP_Ru_Max_Logger::log(
-            'post_sender',
-            'info',
-            sprintf(
-                'Тумблер «Автоотправка в MAX» для записи #%d: пришло "%s" → нормализовано "%s" → в БД "%s" (%s)',
-                $post->ID,
-                is_scalar( $raw ) ? (string) $raw : gettype( $raw ),
-                $normalized,
-                (string) $stored,
-                $stored === '0' ? 'ВКЛ' : 'ВЫКЛ'
-            ),
-            array(
-                'post_id'    => $post->ID,
-                'raw'        => $raw,
-                'normalized' => $normalized,
-                'stored'     => $stored,
-            )
-        );
     }
 
     public function persist_skip_meta_on_save( $post_id, $post ) {
@@ -390,10 +378,31 @@ class WP_Ru_Max_Admin {
             $value = wp_unslash( $_POST[ self::SKIP_META_KEY_LEGACY ] );
         }
 
-        if ( $value === null ) {
-            $value = null;
-        } else {
-            update_post_meta( $post_id, self::SKIP_META_KEY, $this->sanitize_skip_meta( $value ) );
+        if ( null !== $value ) {
+            $previous   = get_post_meta( $post_id, self::SKIP_META_KEY, true );
+            $normalized = $this->sanitize_skip_meta( $value );
+            update_post_meta( $post_id, self::SKIP_META_KEY, $normalized );
+            delete_post_meta( $post_id, self::SKIP_META_KEY_LEGACY );
+            wp_cache_delete( $post_id, 'post_meta' );
+            $stored = get_post_meta( $post_id, self::SKIP_META_KEY, true );
+            WP_Ru_Max_Logger::log(
+                'post_sender',
+                'info',
+                sprintf(
+                    'Тумблер автоотправки записи #%d сохранён из редактора: пришло "%s" → в БД "%s" (%s).',
+                    (int) $post_id,
+                    is_scalar( $value ) ? (string) $value : gettype( $value ),
+                    (string) $stored,
+                    '0' === (string) $stored ? 'ВКЛ' : 'ВЫКЛ'
+                ),
+                array(
+                    'post_id'    => (int) $post_id,
+                    'previous'   => $previous,
+                    'raw'        => $value,
+                    'normalized' => $normalized,
+                    'stored'     => $stored,
+                )
+            );
         }
 
         if ( isset( $_POST['wp_ru_max_autopost_excluded_networks'] ) ) {
@@ -562,7 +571,7 @@ class WP_Ru_Max_Admin {
             wp_send_json_error( $result->get_error_message() );
         }
 
-        wp_send_json_success( 'Запись успешно отправлена в MAX!' );
+        wp_send_json_success( 'MAX API подтвердил отправку записи во все настроенные каналы.' );
     }
 
     public function add_menu() {
@@ -706,6 +715,33 @@ jQuery(function($){
         );
     }
 
+    /**
+     * Keep safe HTML formatting supported by MAX publication messages.
+     *
+     * @param string $value Template submitted from the publication settings.
+     * @return string
+     */
+    private function sanitize_post_message_template( $value ) {
+        return wp_kses(
+            (string) $value,
+            array(
+                'b'          => array(),
+                'strong'     => array(),
+                'i'          => array(),
+                'em'         => array(),
+                'u'          => array(),
+                's'          => array(),
+                'strike'     => array(),
+                'del'        => array(),
+                'code'       => array(),
+                'pre'        => array(),
+                'blockquote' => array(),
+                'br'         => array(),
+                'a'          => array( 'href' => true ),
+            )
+        );
+    }
+
     public function ajax_save_settings() {
         check_ajax_referer( 'wp_ru_max_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -713,6 +749,7 @@ jQuery(function($){
         }
 
         $settings = get_option( 'wp_ru_max_settings', array() );
+        $post_message_template_submitted = false;
 
         if ( isset( $_POST['field'] ) ) {
             // wp_unslash обязателен перед sanitize_text_field для корректной
@@ -812,6 +849,10 @@ jQuery(function($){
                 case 'notify_template':
                     $settings[ $field ] = $this->sanitize_notification_template( $value );
                     break;
+                case 'post_message_template':
+                    $settings[ $field ] = $this->sanitize_post_message_template( $value );
+                    $post_message_template_submitted = true;
+                    break;
                 case 'post_sender_enabled':
                 case 'send_new_post':
                 case 'send_updated_post':
@@ -889,9 +930,13 @@ jQuery(function($){
             }
             foreach ( $allowed_textarea as $key ) {
                 if ( isset( $_POST[ $key ] ) ) {
-                    $settings[ $key ] = 'notify_template' === $key
-                        ? $this->sanitize_notification_template( wp_unslash( $_POST[ $key ] ) )
-                        : sanitize_textarea_field( wp_unslash( $_POST[ $key ] ) );
+                    if ( 'notify_template' === $key ) {
+                        $settings[ $key ] = $this->sanitize_notification_template( wp_unslash( $_POST[ $key ] ) );
+                    } elseif ( 'post_message_template' === $key ) {
+                        $settings[ $key ] = $this->sanitize_post_message_template( wp_unslash( $_POST[ $key ] ) );
+                    } else {
+                        $settings[ $key ] = sanitize_textarea_field( wp_unslash( $_POST[ $key ] ) );
+                    }
                 }
             }
             foreach ( $allowed_bool as $key ) {
@@ -969,7 +1014,8 @@ jQuery(function($){
 
         // Шаблон сообщения публикации
         if ( isset( $_POST['post_message_template'] ) ) {
-            $settings['post_message_template'] = sanitize_textarea_field( wp_unslash( $_POST['post_message_template'] ) );
+            $settings['post_message_template'] = $this->sanitize_post_message_template( wp_unslash( $_POST['post_message_template'] ) );
+            $post_message_template_submitted = true;
         }
 
         // JSON preserves an intentionally empty recipient list. Empty HTML
@@ -1030,6 +1076,28 @@ jQuery(function($){
         }
 
         update_option( 'wp_ru_max_settings', $settings );
+        if ( $post_message_template_submitted ) {
+            $saved_settings   = get_option( 'wp_ru_max_settings', array() );
+            $expected_template = (string) ( $settings['post_message_template'] ?? '' );
+            $stored_template  = is_array( $saved_settings ) && array_key_exists( 'post_message_template', $saved_settings )
+                ? (string) $saved_settings['post_message_template']
+                : null;
+            if ( null === $stored_template || $stored_template !== $expected_template ) {
+                WP_Ru_Max_Logger::log(
+                    'settings',
+                    'error',
+                    'Сохранение шаблона публикации в MAX не прошло проверку чтением.',
+                    array( 'expected_length' => strlen( $expected_template ) )
+                );
+                wp_send_json_error( 'Не удалось подтвердить сохранение шаблона публикации. Обновите страницу и попробуйте ещё раз.' );
+            }
+            WP_Ru_Max_Logger::log(
+                'settings',
+                'info',
+                'Шаблон публикаций MAX сохранён и проверен.',
+                array( 'template_length' => strlen( $stored_template ) )
+            );
+        }
         WP_Ru_Max_Logger::log( 'settings', 'info', 'Настройки обновлены.' );
         wp_send_json_success( 'Настройки сохранены.' );
     }
@@ -1467,6 +1535,15 @@ jQuery(function($){
         <div class="wp-ru-max-card">
             <h3>История версий</h3>
             <p>Полную историю версий можно посмотреть в <a href="https://github.com/RuCoder-sudo/wp-ru-max/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
+
+            <h4 style="margin-bottom:4px;">Версия 1.0.72</h4>
+            <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
+                <li><strong>Исправлено:</strong> переключатель автоотправки и исключения отдельных сетей сохраняются независимо; изменение списка исключений не выключает общую отправку, а тумблер ждёт загрузки сохранённого состояния.</li>
+                <li><strong>Исправлено:</strong> общий REST-сейв статьи больше не может перезаписать состояние автоотправки устаревшими данными редактора.</li>
+                <li><strong>Исправлено:</strong> ручной запуск расписания и ручная отправка в MAX показывают ошибку или частичный результат, если не все выбранные каналы подтвердили отправку.</li>
+                <li><strong>Исправлено:</strong> шаблон публикации сохраняет безопасное форматирование MAX, а ответ «сохранено» выдаётся только после проверки сохранённого значения.</li>
+                <li><strong>Улучшено:</strong> журнал показывает, какое значение переключателя автоотправки редактор действительно сохранил.</li>
+            </ul>
 
             <h4 style="margin-bottom:4px;">Версия 1.0.71</h4>
             <ul style="margin-left:20px;list-style:disc;margin-bottom:16px;">
@@ -2094,7 +2171,7 @@ jQuery(function($){
                             <textarea id="post_message_template" name="post_message_template" rows="8" class="large-text code"><?php echo esc_textarea( $settings['post_message_template'] ?? '' ); ?></textarea>
                             <p class="description">
                                 Доступные переменные: <code>{title}</code> <code>{excerpt}</code> <code>{url}</code> <code>{author}</code> <code>{date}</code> <code>{status}</code> <code>{site_name}</code> <code>{post_type}</code><br>
-                                Поля записи: <code>{meta_FIELDNAME}</code> — стандартные мета-поля, <code>{acf_FIELDNAME}</code> — поля ACF.
+                                Поля записи: <code>{meta_FIELDNAME}</code> — стандартные мета-поля, <code>{acf_FIELDNAME}</code> — поля ACF. Поддерживаются безопасные HTML-теги: <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;u&gt;</code>, <code>&lt;a href="..."&gt;</code>.
                             </p>
                         </td>
                     </tr>
