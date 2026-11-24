@@ -5,22 +5,51 @@
     var currentPage = 1;
     var perPage = 50;
     var historyType = typeof wpRuMaxHistoryType !== 'undefined' ? wpRuMaxHistoryType : '';
+    var settingsSaveQueue = [];
+    var settingsSaveRunning = false;
 
     /* -- Helper: AJAX -- */
+    function runNextSettingsSave() {
+        if (settingsSaveRunning || !settingsSaveQueue.length) {
+            return;
+        }
+        settingsSaveRunning = true;
+        var task = settingsSaveQueue.shift();
+        task.send().always(function () {
+            settingsSaveRunning = false;
+            task.deferred.resolve();
+            runNextSettingsSave();
+        });
+    }
+
     function doAjax(action, data, callback, failCallback) {
         data = $.extend({ action: action, nonce: wpRuMax.nonce }, data);
-        return $.post(wpRuMax.ajaxUrl, data, function (res) {
-            callback(res);
-        }).fail(function (xhr) {
-            // Обработка сетевых ошибок (500, таймаут и т.д.) — без этого
-            // кнопки могли зависнуть навсегда в состоянии «Сохранение...»
-            var msg = 'Ошибка сети: ' + (xhr.status || 'нет ответа');
-            if (typeof failCallback === 'function') {
-                failCallback(msg);
-            } else {
-                console.error('[wp-ru-max] doAjax failed:', action, msg);
-            }
-        });
+        var send = function () {
+            return $.post(wpRuMax.ajaxUrl, data, function (res) {
+                callback(res);
+            }).fail(function (xhr) {
+                // Обработка сетевых ошибок (500, таймаут и т.д.) — без этого
+                // кнопки могли зависнуть навсегда в состоянии «Сохранение...»
+                var msg = 'Ошибка сети: ' + (xhr.status || 'нет ответа');
+                if (typeof failCallback === 'function') {
+                    failCallback(msg);
+                } else {
+                    console.error('[wp-ru-max] doAjax failed:', action, msg);
+                }
+            });
+        };
+
+        // Settings are stored together in one WordPress option. Serialize saves
+        // so a quick toggle cannot finish after a full form save and restore an
+        // older copy of the template or other settings.
+        if ('wp_ru_max_save_settings' === action) {
+            var deferred = $.Deferred();
+            settingsSaveQueue.push({ send: send, deferred: deferred });
+            runNextSettingsSave();
+            return deferred.promise();
+        }
+
+        return send();
     }
 
     /* -- Helper: Show Notice -- */
@@ -175,6 +204,9 @@
         doAjax('wp_ru_max_save_settings', data, function (res) {
             $btn.prop('disabled', false).text('Сохранить');
             showNotice($('#post_sender_result'), res.success ? 'success' : 'error', res.success ? 'Сохранено!' : res.data);
+        }, function (message) {
+            $btn.prop('disabled', false).text('Сохранить');
+            showNotice($('#post_sender_result'), 'error', message);
         });
     });
 
