@@ -1,4 +1,4 @@
-/* WP Ru-max PRO frontend v1.0.71 — configurable fields and separate MAX form routing. */
+/* WP Ru-max PRO frontend v1.0.72 — configurable fields and separate MAX form routing. */
 (function () {
   var menu = document.getElementById('wp-ru-max-pro-menu');
   var icon = document.getElementById('wp-ru-max-icon');
